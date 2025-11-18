@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.file.FileWriter;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.XmlUtil;
+import cn.hutool.core.util.ZipUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
@@ -78,6 +79,7 @@ public class ImportFpsProblemManager {
         }
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        List<ProblemDTO> problemDTOList = new ArrayList<ProblemDTO>();
         if("zip".toUpperCase().contains(suffix.toUpperCase())){
             String fileDirId = IdUtil.simpleUUID();
             String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
@@ -88,7 +90,7 @@ public class ImportFpsProblemManager {
                 file.transferTo(new File(filePath));
             } catch (IOException e) {
                 FileUtil.del(fileDir);
-                throw new StatusSystemErrorException("服务器异常：FPS题目上传失败！");
+                throw new StatusFailException("服务器异常：FPS题目上传失败！");
             }
 
             // 将压缩包压缩到指定文件夹
@@ -104,7 +106,6 @@ public class ImportFpsProblemManager {
                 FileUtil.del(fileDir);
                 throw new StatusFailException("压缩包里文件不能为空！");
             }
-            List<ProblemDTO> problemDTOList = new List<ProblemDTO>();
             // 逐个解析xml文件，
             for (File tmp : files) {
             // 首先检查是否为xml文件
