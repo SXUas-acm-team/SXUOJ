@@ -73,13 +73,52 @@ public class ImportFpsProblemManager {
      */
     public void importFPSProblem(MultipartFile file) throws IOException, StatusFailException {
         String suffix = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf(".") + 1);
-        if (!"xml".toUpperCase().contains(suffix.toUpperCase())) {
-            throw new StatusFailException("请上传xml后缀格式的fps题目文件！");
+        if (!"xml".toUpperCase().contains(suffix.toUpperCase()) || !"zip".toUpperCase().contains(suffix.toUpperCase())) {
+            throw new StatusFailException("请上传xml或zip后缀格式的fps题目文件！");
         }
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        if("zip".toUpperCase().contains(suffix.toUpperCase())){
+            String fileDirId = IdUtil.simpleUUID();
+            String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
+            String filePath = fileDir + File.separator + file.getOriginalFilename();
+            // 文件夹不存在就新建
+            FileUtil.mkdir(fileDir);
+            try {
+                file.transferTo(new File(filePath));
+            } catch (IOException e) {
+                FileUtil.del(fileDir);
+                throw new StatusSystemErrorException("服务器异常：FPS题目上传失败！");
+            }
 
-        List<ProblemDTO> problemDTOList = parseFps(file.getInputStream(), userRolesVo.getUsername());
+            // 将压缩包压缩到指定文件夹
+            ZipUtil.unzip(filePath, fileDir);
+
+            // 删除zip文件
+            FileUtil.del(filePath);
+
+            // 检查文件是否存在
+            File xmlFileList = new File(fileDir);
+            File[] files = xmlFileList.listFiles();
+            if (files == null || files.length == 0) {
+                FileUtil.del(fileDir);
+                throw new StatusFailException("压缩包里文件不能为空！");
+            }
+            List<ProblemDTO> problemDTOList = new List<ProblemDTO>();
+            // 逐个解析xml文件，
+            for (File tmp : files) {
+            // 首先检查是否为xml文件
+                if(tmp.isDirectory() || !tmp.getName().endsWith("xml")){
+                    throw new StatusFailException("请确保压缩包由xml文件组成");
+                }
+                List<ProblemDTO> praisedXml = parseFps(file.getInputStream(), userRolesVo.getUsername());
+                // 解析xml后添加到问题提交列表中
+                problemDTOList.add(praisedXml.get(0));
+            }
+        }else{
+            problemDTOList = parseFps(file.getInputStream(), userRolesVo.getUsername());
+        }
+
         if (problemDTOList.size() == 0) {
             throw new StatusFailException("警告：未成功导入一道以上的题目，请检查文件格式是否正确！");
         } else {
