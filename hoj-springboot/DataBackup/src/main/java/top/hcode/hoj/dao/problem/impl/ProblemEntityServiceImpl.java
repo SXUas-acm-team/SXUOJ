@@ -6,6 +6,7 @@ import cn.hutool.core.io.file.FileReader;
 import cn.hutool.core.io.file.FileWriter;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.CharsetUtil;
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
@@ -550,7 +551,8 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
                                    String tmpTestcaseDir,
                                    List<ProblemCase> problemCaseList) {
 
-        String testCasesDir = Constants.File.TESTCASE_BASE_FOLDER.getPath() + File.separator + "problem_" + problemId;
+        String baseDir = resolveTestcaseBaseDir();
+        String testCasesDir = baseDir + File.separator + "problem_" + problemId;
 
         // 将之前的临时文件夹里面的评测文件全部复制到指定文件夹(覆盖)
         if (!StringUtils.isEmpty(tmpTestcaseDir)
@@ -664,7 +666,8 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
 
         JSONArray testCaseList = new JSONArray(problemCaseList.size());
 
-        String testCasesDir = Constants.File.TESTCASE_BASE_FOLDER.getPath() + File.separator + "problem_" + problemId;
+        String baseDir = resolveTestcaseBaseDir();
+        String testCasesDir = baseDir + File.separator + "problem_" + problemId;
         FileUtil.del(testCasesDir);
         for (int index = 0; index < problemCaseList.size(); index++) {
             JSONObject jsonObject = new JSONObject();
@@ -816,5 +819,34 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
             }
         }
         return sumScore;
+    }
+
+    /**
+     * 解析正式测试点根目录，优先使用 Constants 配置，失败则回退到用户目录 ~/hoj/file/testcase。
+     */
+    private String resolveTestcaseBaseDir() {
+        String preferred = Constants.File.TESTCASE_BASE_FOLDER.getPath();
+        String fallback = System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "testcase";
+        String dir = tryEnsureWritable(preferred);
+        if (dir != null) return dir;
+        String fb = tryEnsureWritable(fallback);
+        if (fb != null) return fb;
+        // 都不可写，仍返回优先路径，后续操作可能抛错，便于暴露问题
+        return preferred;
+    }
+
+    private String tryEnsureWritable(String path) {
+        try {
+            FileUtil.mkdir(path);
+            java.io.File probe = new java.io.File(path, ".probe_" + IdUtil.fastSimpleUUID());
+            if (probe.createNewFile()) {
+                FileWriter fw = new FileWriter(probe);
+                fw.write("ok");
+                probe.delete();
+            }
+            return path;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

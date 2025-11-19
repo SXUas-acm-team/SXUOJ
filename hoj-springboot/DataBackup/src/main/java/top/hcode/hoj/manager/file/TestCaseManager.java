@@ -163,6 +163,19 @@ public class TestCaseManager {
                 .map();
     }
 
+    /**
+     * 解析正式测试点根目录，优先 Constants 配置，如不存在则回退到用户目录。
+     * 下载读取场景以“存在性”为主，避免强行创建不可写目录。
+     */
+    private String resolveTestcaseBaseDir() {
+        String preferred = Constants.File.TESTCASE_BASE_FOLDER.getPath();
+        String fallback = System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "testcase";
+        if (FileUtil.exist(preferred)) return preferred;
+        if (FileUtil.exist(fallback)) return fallback;
+        // 都不存在则返回优先路径，后续流程会按需创建
+        return preferred;
+    }
+
 
     public void downloadTestcase(Long pid, HttpServletResponse response) throws StatusFailException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -185,7 +198,7 @@ public class TestCaseManager {
             }
         }
 
-        String workDir = Constants.File.TESTCASE_BASE_FOLDER.getPath() + File.separator + "problem_" + pid;
+        String workDir = resolveTestcaseBaseDir() + File.separator + "problem_" + pid;
         File file = new File(workDir);
         if (!file.exists()) { // 本地为空 尝试去数据库查找
             QueryWrapper<ProblemCase> problemCaseQueryWrapper = new QueryWrapper<>();

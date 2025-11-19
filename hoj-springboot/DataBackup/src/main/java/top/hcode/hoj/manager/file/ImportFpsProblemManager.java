@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.file.FileWriter;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.XmlUtil;
+import cn.hutool.core.util.ZipUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
@@ -46,7 +47,6 @@ import java.util.*;
 public class ImportFpsProblemManager {
 
     private final static List<String> timeUnits = Arrays.asList("ms", "s");
-    private final static List<String> memoryUnits = Arrays.asList("kb", "mb");
     private static final Map<String, String> fpsMapHOJ = new HashMap<String, String>() {
         {
             put("Python", "Python3");
@@ -64,6 +64,7 @@ public class ImportFpsProblemManager {
     @Resource
     private ProblemEntityService problemEntityService;
 
+
     /**
      * @param file
      * @MethodName importFpsProblem
@@ -72,15 +73,102 @@ public class ImportFpsProblemManager {
      * @Since 2021/10/06
      */
     public void importFPSProblem(MultipartFile file) throws IOException, StatusFailException {
-        String suffix = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf(".") + 1);
-        if (!"xml".toUpperCase().contains(suffix.toUpperCase())) {
-            throw new StatusFailException("请上传xml后缀格式的fps题目文件！");
+        String originalName = file.getOriginalFilename();
+        String suffix = originalName != null && originalName.contains(".")
+                ? originalName.substring(originalName.lastIndexOf('.') + 1)
+                : "";
+        if (!("xml".equalsIgnoreCase(suffix) || "zip".equalsIgnoreCase(suffix))) {
+            throw new StatusFailException("请上传 xml 或 zip 后缀格式的 FPS 题目文件！");
         }
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        List<ProblemDTO> problemDTOList = new ArrayList<ProblemDTO>();
+        // 收集因缺失 test_input 或 test_output 而被跳过的题目标题
+        List<String> skippedNoTestCase = new ArrayList<>();
+        // 收集无法解析的XML文件名称
+        List<String> failedXmlFiles = new ArrayList<>();
+        if ("zip".equalsIgnoreCase(suffix)){
+            String fileDirId = IdUtil.simpleUUID();
+                String testcaseTmpBase = ensureWritableDir(Constants.File.TESTCASE_TMP_FOLDER.getPath(), 
+                    System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "zip");
+                log.info("[FPS-Upload] testcaseTmpBase: {}", testcaseTmpBase);
+            String fileDir = testcaseTmpBase + File.separator + fileDirId;
+            String filePath = fileDir + File.separator + file.getOriginalFilename();
+            // 文件夹不存在就新建
+            FileUtil.mkdir(fileDir);
+                log.info("[FPS-Upload] unzip dir: {}", fileDir);
+            try (InputStream in = file.getInputStream()) {
+                FileUtil.writeFromStream(in, filePath);
+            } catch (IOException e) {
+                log.error("保存上传的 ZIP 文件失败: {}", e.getMessage(), e);
+                FileUtil.del(fileDir);
+                throw new StatusFailException("服务器异常：FPS题目上传失败！");
+            }
 
-        List<ProblemDTO> problemDTOList = parseFps(file.getInputStream(), userRolesVo.getUsername());
+            // 将压缩包压缩到指定文件夹
+            ZipUtil.unzip(filePath, fileDir);
+
+            // 删除zip文件
+            FileUtil.del(filePath);
+
+            // 递归收集 xml 文件
+            List<File> allFiles = FileUtil.loopFiles(new File(fileDir));
+            List<File> xmlFiles = new ArrayList<>();
+            for (File f : allFiles) {
+                if (f.isFile() && f.getName().toLowerCase().endsWith(".xml")) {
+                    xmlFiles.add(f);
+                }
+            }
+            if (xmlFiles.isEmpty()) {
+                FileUtil.del(fileDir);
+                throw new StatusFailException("压缩包中未找到任何 XML 文件！");
+            }
+            for (File xml : xmlFiles) {
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(xml)) {
+                    try {
+                        List<ProblemDTO> parsed = parseFps(fis, userRolesVo.getUsername(), skippedNoTestCase);
+                        problemDTOList.addAll(parsed);
+                    } catch (StatusFailException e) {
+                        String msg = e.getMessage();
+                        if (msg != null && msg.startsWith("读取xml失败")) {
+                            log.warn("[FPS-Upload] 跳过无法解析的XML文件: {} 原因: {}", xml.getName(), msg);
+                            failedXmlFiles.add(xml.getName());
+                            // 继续处理其他文件
+                        } else {
+                            // 非单纯解析失败，抛出维持原逻辑
+                            throw e;
+                        }
+                    }
+                }
+            }
+        }else{
+            try (InputStream in = file.getInputStream()) {
+                try {
+                    problemDTOList = parseFps(in, userRolesVo.getUsername(), skippedNoTestCase);
+                } catch (StatusFailException e) {
+                    if (e.getMessage() != null && e.getMessage().startsWith("读取xml失败")) {
+                        log.warn("[FPS-Upload] 单文件导入解析失败，文件名:{} 原因:{}", originalName, e.getMessage());
+                        failedXmlFiles.add(originalName == null ? "uploaded.xml" : originalName);
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+        }
+
         if (problemDTOList.size() == 0) {
+            // 如果所有XML都解析失败
+            if (!failedXmlFiles.isEmpty() && skippedNoTestCase.isEmpty()) {
+                throw new StatusFailException("未导入任何题目：所有 XML 解析失败 -> " + failedXmlFiles);
+            }
+            // 如果全部因为没有测试数据而被跳过
+            if (!skippedNoTestCase.isEmpty() && failedXmlFiles.isEmpty()) {
+                throw new StatusFailException("未导入任何题目：以下题目缺少 test_input 或 test_output -> " + skippedNoTestCase);
+            }
+            // 混合情况：既有解析失败又有无测试数据
+            if (!skippedNoTestCase.isEmpty() || !failedXmlFiles.isEmpty()) {
+                throw new StatusFailException("未导入任何题目：解析失败的XML=" + failedXmlFiles + ", 缺少测试数据的题目=" + skippedNoTestCase);
+            }
             throw new StatusFailException("警告：未成功导入一道以上的题目，请检查文件格式是否正确！");
         } else {
             HashSet<String> repeatProblemTitleSet = new HashSet<>();
@@ -103,18 +191,37 @@ public class ImportFpsProblemManager {
             }
             if (failedCount > 0) {
                 int successCount = problemDTOList.size() - failedCount;
-                String errMsg = "[导入结果] 成功数：" + successCount + ",  失败数：" + failedCount +
-                        ",  重复失败的题目标题：" + repeatProblemTitleSet;
-                if (failedProblemTitleSet.size() > 0) {
-                    errMsg = errMsg + "<br/>未知失败的题目标题：" + failedProblemTitleSet;
+                String errMsg = "[导入结果] 成功数：" + successCount + ", 失败数：" + failedCount +
+                        ", 重复失败的题目标题：" + repeatProblemTitleSet;
+                if (!failedProblemTitleSet.isEmpty()) {
+                    errMsg += "<br/>未知失败的题目标题：" + failedProblemTitleSet;
+                }
+                if (!skippedNoTestCase.isEmpty()) {
+                    errMsg += "<br/>因缺少评测数据被跳过的题目：" + skippedNoTestCase;
+                }
+                if (!failedXmlFiles.isEmpty()) {
+                    errMsg += "<br/>解析失败的XML文件：" + failedXmlFiles;
                 }
                 throw new StatusFailException(errMsg);
+            } else {
+                if (!skippedNoTestCase.isEmpty() || !failedXmlFiles.isEmpty()) {
+                    String warnComponents = "";
+                    if (!skippedNoTestCase.isEmpty()) {
+                        warnComponents += "因缺少评测数据跳过的题目：" + skippedNoTestCase;
+                    }
+                    if (!failedXmlFiles.isEmpty()) {
+                        if (!warnComponents.isEmpty()) warnComponents += "；";
+                        warnComponents += "解析失败的XML文件：" + failedXmlFiles;
+                    }
+                    String warnMsg = "[导入完成] " + warnComponents + "，其余题目已成功导入。";
+                    throw new StatusFailException(warnMsg);
+                }
             }
         }
 
     }
 
-    private List<ProblemDTO> parseFps(InputStream inputStream, String username) throws StatusFailException {
+    private List<ProblemDTO> parseFps(InputStream inputStream, String username, List<String> skippedNoTestCase) throws StatusFailException {
 
         Document document = null;
         try {
@@ -139,7 +246,20 @@ public class ImportFpsProblemManager {
         List<ProblemDTO> problemDTOList = new ArrayList<>();
 
         String fileDirId = IdUtil.simpleUUID();
-        String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
+        String testcaseTmpBase = ensureWritableDir(Constants.File.TESTCASE_TMP_FOLDER.getPath(), 
+            System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "zip");
+        log.info("[FPS-Parse] testcaseTmpBase: {}", testcaseTmpBase);
+        String fileDir = testcaseTmpBase + File.separator + fileDirId;
+        // 确保基础目录存在
+        String markdownDir = ensureWritableDir(Constants.File.MARKDOWN_FILE_FOLDER.getPath(),
+                System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "md");
+        log.info("[FPS-Parse] markdownDir: {}", markdownDir);
+        try {
+            FileUtil.mkdir(fileDir);
+        } catch (Exception e) {
+            log.error("创建测试数据临时目录失败: {}", e.getMessage(), e);
+            throw new StatusFailException("服务器异常：创建测试数据目录失败！");
+        }
 
         int index = 1;
         for (Element item : XmlUtil.getElements(rootElement, "item")) {
@@ -175,14 +295,14 @@ public class ImportFpsProblemManager {
                 byte[] decode = Base64.getDecoder().decode(base64);
                 String fileName = IdUtil.fastSimpleUUID() + "." + split[split.length - 1];
 
-                FileUtil.writeBytes(decode, Constants.File.MARKDOWN_FILE_FOLDER.getPath() + File.separator + fileName);
+                FileUtil.writeBytes(decode, markdownDir + File.separator + fileName);
                 srcMapUrl.put(src, Constants.File.IMG_API.getPath() + fileName);
             }
 
             Element descriptionElement = XmlUtil.getElement(item, "description");
             String description = descriptionElement.getTextContent();
             for (Map.Entry<String, String> entry : srcMapUrl.entrySet()) {
-                description = description.replaceAll(entry.getKey(), entry.getValue());
+                description = description.replace(entry.getKey(), entry.getValue());
             }
             // 题目描述
             problem.setDescription(description);
@@ -190,7 +310,7 @@ public class ImportFpsProblemManager {
             Element inputElement = XmlUtil.getElement(item, "input");
             String input = inputElement.getTextContent();
             for (Map.Entry<String, String> entry : srcMapUrl.entrySet()) {
-                input = input.replaceAll(entry.getKey(), entry.getValue());
+                input = input.replace(entry.getKey(), entry.getValue());
             }
             // 输入描述
             problem.setInput(input);
@@ -198,7 +318,7 @@ public class ImportFpsProblemManager {
             Element outputElement = XmlUtil.getElement(item, "output");
             String output = outputElement.getTextContent();
             for (Map.Entry<String, String> entry : srcMapUrl.entrySet()) {
-                output = output.replaceAll(entry.getKey(), entry.getValue());
+                output = output.replace(entry.getKey(), entry.getValue());
             }
             // 输出描述
             problem.setOutput(output);
@@ -207,7 +327,7 @@ public class ImportFpsProblemManager {
             Element hintElement = XmlUtil.getElement(item, "hint");
             String hint = hintElement.getTextContent();
             for (Map.Entry<String, String> entry : srcMapUrl.entrySet()) {
-                hint = hint.replaceAll(entry.getKey(), entry.getValue());
+                hint = hint.replace(entry.getKey(), entry.getValue());
             }
             problem.setHint(hint);
 
@@ -228,7 +348,8 @@ public class ImportFpsProblemManager {
             List<Element> sampleInputs = XmlUtil.getElements(item, "sample_input");
             List<Element> sampleOutputs = XmlUtil.getElements(item, "sample_output");
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < sampleInputs.size(); i++) {
+            int exampleCount = Math.min(sampleInputs.size(), sampleOutputs.size());
+            for (int i = 0; i < exampleCount; i++) {
                 sb.append("<input>").append(sampleInputs.get(i).getTextContent()).append("</input>");
                 sb.append("<output>").append(sampleOutputs.get(i).getTextContent()).append("</output>");
             }
@@ -281,18 +402,35 @@ public class ImportFpsProblemManager {
 
             List<ProblemCase> problemSamples = new LinkedList<>();
             String problemTestCaseDir = fileDir + File.separator + index;
+            FileUtil.mkdir(problemTestCaseDir);
+            log.info("[FPS-Parse] problemTestCaseDir: {}", problemTestCaseDir);
             for (int i = 0; i < testInputs.size(); i++) {
                 String infileName = (i + 1) + ".in";
                 String outfileName = (i + 1) + ".out";
-                FileWriter infileWriter = new FileWriter(problemTestCaseDir + File.separator + infileName);
-                FileWriter outfileWriter = new FileWriter(problemTestCaseDir + File.separator + outfileName);
-                infileWriter.write(testInputs.get(i).getTextContent());
-                outfileWriter.write(isNotOutputTestCase ? "" : testOutputs.get(i).getTextContent());
+                File inFile = new File(problemTestCaseDir, infileName);
+                File outFile = new File(problemTestCaseDir, outfileName);
+                // 确保父目录存在
+                FileUtil.mkParentDirs(inFile);
+                FileUtil.mkParentDirs(outFile);
+                log.info("[FPS-Parse] write files in:{} out:{}", inFile.getAbsolutePath(), outFile.getAbsolutePath());
+                try {
+                    FileWriter infileWriter = new FileWriter(inFile);
+                    FileWriter outfileWriter = new FileWriter(outFile);
+                    infileWriter.write(testInputs.get(i).getTextContent());
+                    String outContent = (isNotOutputTestCase || i >= testOutputs.size()) ? "" : testOutputs.get(i).getTextContent();
+                    outfileWriter.write(outContent);
+                } catch (cn.hutool.core.io.IORuntimeException ioEx) {
+                    log.error("写入用例文件失败: in={} out={} error={}", inFile.getAbsolutePath(), outFile.getAbsolutePath(), ioEx.getMessage(), ioEx);
+                    throw new StatusFailException("服务器异常：写入用例文件失败！");
+                }
                 problemSamples.add(new ProblemCase()
                         .setInput(infileName).setOutput(outfileName));
             }
             if (CollectionUtils.isEmpty(problemSamples)) {
-                throw new StatusFailException("[" + problem.getTitle() + "] 题目的评测数据不能为空，请检查FPS文件内该题目是否有test_input和test_output!");
+                log.warn("[FPS-Parse] 题目 '{}' 缺少评测数据（test_input/test_output），已跳过。", problem.getTitle());
+                skippedNoTestCase.add(problem.getTitle());
+                // 跳过生成 DTO
+                continue;
             }
             String mode = Constants.JudgeMode.DEFAULT.getMode();
             if (problem.getSpjLanguage() != null) {
@@ -338,14 +476,55 @@ public class ImportFpsProblemManager {
         Element memoryLimitNode = XmlUtil.getElement(item, "memory_limit");
         String memoryUnit = memoryLimitNode.getAttribute("unit");
         String memoryLimit = memoryLimitNode.getTextContent();
-        int index;
-        index = memoryUnits.indexOf(memoryUnit.toLowerCase());
+        String unit = memoryUnit == null ? "" : memoryUnit.trim().toLowerCase();
         if ("1.1".equals(version)) {
-            index = 1;
+            // 旧版本视为 MB 数值
+            return Integer.parseInt(memoryLimit);
         }
-        if (index == -1) {
+        if (StringUtils.isEmpty(unit) || "mb".equals(unit)) {
+            return (int) Math.ceil(Double.parseDouble(memoryLimit));
+        } else if ("kb".equals(unit)) {
+            return (int) Math.ceil(Double.parseDouble(memoryLimit) / 1024.0);
+        } else {
             throw new RuntimeException("Invalid memory limit unit:" + memoryUnit);
         }
-        return Integer.parseInt(memoryLimit) * (int) Math.pow(1000, index - 1);
     }
+
+    /**
+     * 确保可写目录：优先使用 preferredPath，不可用或创建失败时回退到 fallbackPath。
+     */
+    private String ensureWritableDir(String preferredPath, String fallbackPath) throws StatusFailException {
+        // 先尝试优先目录：创建并写入探针文件验证
+        if (isWritable(preferredPath)) {
+            return preferredPath;
+        } else {
+            log.warn("preferredPath 不可写，回退到用户目录: {} -> {}", preferredPath, fallbackPath);
+        }
+        // 回退目录：创建并写入探针文件验证
+        if (isWritable(fallbackPath)) {
+            return fallbackPath;
+        }
+        throw new StatusFailException("服务器异常：无法创建工作目录！");
+    }
+
+    private boolean isWritable(String dirPath) {
+        try {
+            FileUtil.mkdir(dirPath);
+            File probe = new File(dirPath, ".probe_" + IdUtil.fastSimpleUUID());
+            // Hutool 的 touch 在父目录不存在时会抛错；这里父目录已创建
+            boolean created = probe.createNewFile();
+            if (created) {
+                // 尝试写点内容
+                FileWriter fw = new FileWriter(probe);
+                fw.write("ok");
+                // 清理
+                probe.delete();
+            }
+            return true;
+        } catch (Exception e) {
+            log.warn("目录不可写: {} , 原因: {}", dirPath, e.getMessage());
+            return false;
+        }
+    }
+
 }
