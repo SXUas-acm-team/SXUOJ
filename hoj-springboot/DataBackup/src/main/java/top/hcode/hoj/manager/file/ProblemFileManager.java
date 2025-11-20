@@ -292,6 +292,9 @@ public class ProblemFileManager {
 
         String workDir = Constants.File.FILE_DOWNLOAD_TMP_FOLDER.getPath() + File.separator + IdUtil.simpleUUID();
 
+        // 解析正式测试点根目录（存在则用，不存在则回退）
+        final String testcaseBaseDir = resolveTestcaseBaseDir();
+
         // 使用线程池
         ExecutorService threadPool = new ThreadPoolExecutor(
                 2, // 核心线程数
@@ -309,7 +312,7 @@ public class ProblemFileManager {
             futureTasks.add(new FutureTask<>(new Callable<Void>() {
                 @Override
                 public Void call() throws Exception {
-                    String testcaseWorkDir = Constants.File.TESTCASE_BASE_FOLDER.getPath() + File.separator + "problem_" + pid;
+                    String testcaseWorkDir = testcaseBaseDir + File.separator + "problem_" + pid;
                     File file = new File(testcaseWorkDir);
 
                     List<HashMap<String, Object>> problemCases = new LinkedList<>();
@@ -439,6 +442,19 @@ public class ProblemFileManager {
             FileUtil.del(workDir);
             FileUtil.del(Constants.File.FILE_DOWNLOAD_TMP_FOLDER.getPath() + File.separator + fileName);
         }
+    }
+
+    /**
+     * 解析正式测试点根目录，优先 Constants 配置，如不存在则回退到用户目录。
+     * 导出读取场景以“存在性”为主，避免强行创建不可写目录。
+     */
+    private String resolveTestcaseBaseDir() {
+        String preferred = Constants.File.TESTCASE_BASE_FOLDER.getPath();
+        String fallback = System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "testcase";
+        if (FileUtil.exist(preferred)) return preferred;
+        if (FileUtil.exist(fallback)) return fallback;
+        // 都不存在则返回优先路径，后续流程会按需创建
+        return preferred;
     }
 
 }
