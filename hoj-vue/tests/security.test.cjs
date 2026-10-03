@@ -165,7 +165,7 @@ test('upgraded Axios keeps API headers, JSON bodies, token refresh and multipart
   assert.equal(captured.headers.get('Authorization'),'regression-test-token');
   assert.equal(captured.headers.get('Url-Type'),'admin');
   assert.deepEqual(JSON.parse(captured.data),{title:'安全测试'});
-  assert.deepEqual(commits[0],['changeUserToken','new-regression-token']);
+  assert.deepEqual(commits[0],['refreshUserToken','new-regression-token']);
   await axios.get('https://outside.example/api/problem',{adapter});
   assert.equal(captured.headers.get('Authorization'),undefined);
   await axios.post('/api/login',{username:'test'},{adapter});

@@ -60,6 +60,9 @@ public class JudgeRun {
         }
 
         JSONArray testcaseList = (JSONArray) testCasesInfo.get("testCases");
+        if (testcaseList == null || testcaseList.isEmpty()) {
+            throw new SystemError("The evaluation data of the problem does not exist", null, null);
+        }
 
         // 默认给题目限制时间+200ms用来测评
         Long testTime = (long) problem.getTimeLimit() + 200;
@@ -331,7 +334,7 @@ public class JudgeRun {
                         elseJudgeRes.set("inputFileName", elseJudgeDTO.getTestCaseInputFileName());
                         elseJudgeRes.set("outputFileName", elseJudgeDTO.getTestCaseOutputFileName());
                         elseJudgeRes.set("groupNum", groupNum);
-                        elseJudgeRes.set("seq", judgeDTO.getTestCaseNum());
+                        elseJudgeRes.set("seq", elseJudgeDTO.getTestCaseNum());
                         judgeResList.add(elseJudgeRes);
                     }
                     break;

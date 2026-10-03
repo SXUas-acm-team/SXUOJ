@@ -369,19 +369,22 @@ export default {
       });
     },
     getChangeEmailCode(){
+      if (this.loading.btnSendEmail) return;
       if(!this.formEmail.newEmail){
         myMessage.error(this.$i18n.t('m.The_new_email_cannot_be_empty'));
+        return;
       }
       var emailReg = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
       if (!emailReg.test(this.formEmail.newEmail)) {
-        mMessage.error(this.$i18n.t('m.Email_Check_Format'));
+        myMessage.error(this.$i18n.t('m.Email_Check_Format'));
         return;
       }
       if (this.formEmail.oldEmail === this.formEmail.newEmail) {
         myMessage.error(this.$i18n.t('m.The_new_email_does_not_change'));
+        return;
       }
       this.loading.btnSendEmail = true;
-      api.getChangeEmailCode(this.formEmail.newEmail).then((res)=>{
+      return api.getChangeEmailCode(this.formEmail.newEmail).then((res)=>{
         myMessage.success(this.$i18n.t('m.Change_Send_Email_Msg'));
         this.$notify.success({
           title: this.$i18n.t('m.Success'),

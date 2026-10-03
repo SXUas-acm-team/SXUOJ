@@ -4,7 +4,6 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.file.FileReader;
 import cn.hutool.core.io.file.FileWriter;
 import cn.hutool.core.util.CharsetUtil;
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
@@ -17,13 +16,13 @@ import top.hcode.hoj.common.exception.SystemError;
 import top.hcode.hoj.dao.ProblemCaseEntityService;
 import top.hcode.hoj.pojo.entity.problem.ProblemCase;
 import top.hcode.hoj.util.Constants;
+import top.hcode.hoj.util.JudgeUtils;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * @Author: Himit_ZH
@@ -35,8 +34,6 @@ public class ProblemTestCaseUtils {
 
     @Autowired
     private ProblemCaseEntityService problemCaseEntityService;
-
-    private final static Pattern EOL_PATTERN = Pattern.compile("[^\\S\\n]+(?=\\n)");
 
     // 本地无文件初始化测试数据，写成json文件
     public JSONObject initTestCase(List<HashMap<String, Object>> testCases,
@@ -243,7 +240,6 @@ public class ProblemTestCaseUtils {
 
     // 去除每行末尾的空白符
     public static String rtrim(String value) {
-        if (value == null) return null;
-        return EOL_PATTERN.matcher(StrUtil.trimEnd(value)).replaceAll("");
+        return JudgeUtils.trimLineEnds(value);
     }
 }

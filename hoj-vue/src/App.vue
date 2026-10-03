@@ -126,6 +126,7 @@ import { LOGO, MOTTO } from "@/common/logo";
 import storage from "@/common/storage";
 import utils from "@/common/utils";
 import { languages, getLangLabelByValue } from '@/i18n';
+import { normalizeLanguage, resolveLanguage } from '@/i18n/language';
 export default {
   name: "app-content",
   components: {
@@ -149,38 +150,9 @@ export default {
       this.$store.commit("changeWebLanguage", { language: language });
     },
     autoChangeLanguge() {
-      /**
-       * 语言自动转换优先级：路径参数 > 本地存储 > 浏览器自动识别
-       */
-      let lang = this.$route.query.l;
-      if (lang) {
-        lang = lang.toLowerCase();
-        if (lang == "zh-cn") {
-          this.$store.commit("changeWebLanguage", { language: "zh-CN" });
-        } else if (lang == 'zh-tw'){
-          this.$store.commit("changeWebLanguage", { language: "zh-TW" });
-        } else if (lang == 'ja-jp' || lang == 'ja'){
-          this.$store.commit("changeWebLanguage", { language: "ja-JP" });
-        } else if (lang == 'ko-kr' || lang == 'ko'){
-          this.$store.commit("changeWebLanguage", { language: "ko-KR" });
-        } else {
-          this.$store.commit("changeWebLanguage", { language: "en-US" });
-        }
-        return;
-      }
-
-      lang = storage.get("Web_Language");
-      if (lang) {
-        return;
-      }
-
-      lang = navigator.userLanguage || window.navigator.language;
-      lang = lang.toLowerCase();
-      if (lang == "zh-cn") {
-        this.$store.commit("changeWebLanguage", { language: "zh-CN" });
-      } else {
-        this.$store.commit("changeWebLanguage", { language: "en-US" });
-      }
+      this.$store.commit("changeWebLanguage", {
+        language: resolveLanguage(this.$route.query.l),
+      });
     },
     autoRefreshUserInfo() {
       this.$store.dispatch("setUserInfo", storage.get("userInfo"));
@@ -220,6 +192,9 @@ export default {
   },
   watch: {
     $route(newVal, oldVal) {
+      if (newVal.query.l !== oldVal.query.l && normalizeLanguage(newVal.query.l)) {
+        this.autoChangeLanguge();
+      }
       this.changeDomTitle();
       if (newVal !== oldVal && newVal.path.split("/")[1] == "admin") {
         this.isAdminView = true;
@@ -241,6 +216,7 @@ export default {
     ...mapGetters(["webLanguage", "token", "isAuthenticated"]),
   },
   created: function () {
+    this.autoChangeLanguge();
     this.$nextTick(function () {
       try {
         document.body.removeChild(document.getElementById("app-loader"));
@@ -254,17 +230,19 @@ export default {
     }
 
     if(this.isAuthenticated){
-      this.$store.dispatch("refreshUserAuthInfo");
+      this.$store.dispatch("refreshUserAuthInfo").catch(() => {});
     }
 
     this.showFooter = !(this.$route.name == 'ProblemDetails'|| utils.isFocusModePage(this.$route.name));
     window.addEventListener("visibilitychange", this.autoRefreshUserInfo);
   },
+  beforeDestroy() {
+    window.removeEventListener("visibilitychange", this.autoRefreshUserInfo);
+  },
   mounted() {
     this.languages = languages;
     console.log(LOGO);
     console.log(MOTTO);
-    this.autoChangeLanguge();
     this.getWebsiteConfig();
   },
 };

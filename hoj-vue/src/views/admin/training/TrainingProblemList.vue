@@ -366,9 +366,9 @@ export default {
     },
     downloadTestCase(problemID) {
       let url = '/api/file/download-testcase?pid=' + problemID;
-      utils.downloadFile(url).then(() => {
+      return utils.downloadFile(url).then(() => {
         this.$alert(this.$i18n.t('m.Download_Testcase_Success'), 'Tips');
-      });
+      }).catch(() => {});
     },
     filterByKeyword() {
       this.currentChange(1);

@@ -177,7 +177,9 @@ public class GroupTrainingManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        trainingDto.getTraining().setIsGroup(true);
+        validateCategory(trainingDto.getTrainingCategory(), gid);
+        trainingDto.getTraining().setId(null).setIsGroup(true).setAuthor(userRolesVo.getUsername())
+                .setGmtCreate(null).setGmtModified(null);
 
         Training training = trainingDto.getTraining();
         trainingEntityService.save(training);
@@ -193,9 +195,14 @@ public class GroupTrainingManager {
                 trainingCategoryEntityService.save(trainingCategory);
             } catch (Exception ignored) {
                 QueryWrapper<TrainingCategory> queryWrapper = new QueryWrapper<>();
-                queryWrapper.eq("name", trainingCategory.getName());
+                queryWrapper.eq("name", trainingCategory.getName())
+                        .and(scope -> scope.isNull("gid").or().eq("gid", gid));
                 trainingCategory = trainingCategoryEntityService.getOne(queryWrapper, false);
             }
+        }
+
+        if (trainingCategory == null || trainingCategory.getId() == null) {
+            throw new StatusFailException("添加失败，训练分类不存在或无法创建！");
         }
 
         boolean isOk = mappingTrainingCategoryEntityService.save(new MappingTrainingCategory()
@@ -244,7 +251,9 @@ public class GroupTrainingManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        trainingDto.getTraining().setIsGroup(training.getIsGroup());
+        validateCategory(trainingDto.getTrainingCategory(), gid);
+        trainingDto.getTraining().setIsGroup(training.getIsGroup()).setGid(gid)
+                .setAuthor(training.getAuthor()).setGmtCreate(training.getGmtCreate());
 
         trainingEntityService.updateById(trainingDto.getTraining());
 
@@ -268,9 +277,14 @@ public class GroupTrainingManager {
                 trainingCategoryEntityService.save(trainingCategory);
             } catch (Exception ignored) {
                 QueryWrapper<TrainingCategory> queryWrapper = new QueryWrapper<>();
-                queryWrapper.eq("name", trainingCategory.getName());
+                queryWrapper.eq("name", trainingCategory.getName())
+                        .and(scope -> scope.isNull("gid").or().eq("gid", gid));
                 trainingCategory = trainingCategoryEntityService.getOne(queryWrapper, false);
             }
+        }
+
+        if (trainingCategory == null || trainingCategory.getId() == null) {
+            throw new StatusFailException("修改失败，训练分类不存在或无法创建！");
         }
 
         MappingTrainingCategory mappingTrainingCategory = mappingTrainingCategoryEntityService
@@ -326,6 +340,25 @@ public class GroupTrainingManager {
         boolean isOk = trainingEntityService.removeById(tid);
         if (!isOk) {
             throw new StatusFailException("删除失败！");
+        }
+    }
+
+    private void validateCategory(TrainingCategory category, Long gid)
+            throws StatusFailException, StatusForbiddenException {
+        if (category == null) {
+            throw new StatusFailException("训练分类不能为空！");
+        }
+        if (category.getGid() != null && !Objects.equals(category.getGid(), gid)) {
+            throw new StatusForbiddenException("对不起，您无权限使用其他团队的训练分类！");
+        }
+        if (category.getId() != null) {
+            TrainingCategory stored = trainingCategoryEntityService.getById(category.getId());
+            if (stored == null) {
+                throw new StatusFailException("该训练分类不存在！");
+            }
+            if (stored.getGid() != null && !Objects.equals(stored.getGid(), gid)) {
+                throw new StatusForbiddenException("对不起，您无权限使用其他团队的训练分类！");
+            }
         }
     }
 

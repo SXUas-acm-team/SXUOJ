@@ -16,6 +16,7 @@ import top.hcode.hoj.pojo.vo.AnnouncementVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.validator.CommonValidator;
 import top.hcode.hoj.validator.GroupValidator;
+import java.util.Objects;
 
 /**
  * @Author: LengYun
@@ -108,6 +109,8 @@ public class GroupAnnouncementManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
+        announcement.setId(null).setUid(userRolesVo.getUid());
+        announcement.setGmtCreate(null).setGmtModified(null);
         boolean isOk = announcementEntityService.save(announcement);
         if (!isOk) {
             throw new StatusFailException("添加失败");
@@ -131,7 +134,11 @@ public class GroupAnnouncementManager {
             throw new StatusFailException("修改失败，该公告已不存在！");
         }
 
-        Long gid = announcement.getGid();
+        Long gid = oriAnnouncement.getGid();
+
+        if (!Objects.equals(gid, announcement.getGid())) {
+            throw new StatusForbiddenException("修改失败，不可更改公告所属团队！");
+        }
 
         if (gid == null){
             throw new StatusForbiddenException("修改失败，不可操作非团队内的公告！");
@@ -149,7 +156,9 @@ public class GroupAnnouncementManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        boolean isOk = announcementEntityService.updateById(announcement);
+        Announcement update = new Announcement().setId(oriAnnouncement.getId())
+                .setTitle(announcement.getTitle()).setContent(announcement.getContent()).setStatus(announcement.getStatus());
+        boolean isOk = announcementEntityService.updateById(update);
         if (!isOk) {
             throw new StatusFailException("修改失败");
         }

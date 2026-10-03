@@ -311,20 +311,25 @@ public class PassportManager {
         }
 
         String codeKey = Constants.Email.RESET_PASSWORD_KEY_PREFIX.getValue() + username;
-        if (!redisUtils.hasKey(codeKey)) {
+        Object cachedCode = redisUtils.get(codeKey);
+        if (cachedCode == null) {
             throw new StatusFailException("重置密码链接不存在或已过期，请重新发送重置邮件");
         }
 
-        if (!redisUtils.get(codeKey).equals(code)) { //验证码判断
+        if (!cachedCode.equals(code)) { //验证码判断
             throw new StatusFailException("重置密码的验证码不正确，请重新输入");
         }
 
+        UserInfo user = userInfoEntityService.getOne(new QueryWrapper<UserInfo>()
+                .eq("username", username).select("uuid"), false);
+        if (user == null) throw new StatusFailException("重置密码失败");
         UpdateWrapper<UserInfo> userInfoUpdateWrapper = new UpdateWrapper<>();
-        userInfoUpdateWrapper.eq("username", username).set("password", SecureUtil.md5(password));
+        userInfoUpdateWrapper.eq("uuid", user.getUuid()).set("password", SecureUtil.md5(password));
         boolean isOk = userInfoEntityService.update(userInfoUpdateWrapper);
         if (!isOk) {
             throw new StatusFailException("重置密码失败");
         }
+        jwtUtils.cleanToken(user.getUuid());
         redisUtils.del(codeKey);
     }
 

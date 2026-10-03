@@ -6,15 +6,9 @@
         :router="true"
         :default-active="currentPath"
       >
-        <el-tooltip
-            :content="$t('m.Click_To_Change_Web_Language')"
-            placement="bottom"
-            effect="dark"
-          >
-          <div class="logo" @click="changeWebLanguage(webLanguage == 'zh-CN' ? 'en-US' : 'zh-CN')">
-            <img :src="imgUrl" alt="Online Judge Admin" />
-          </div>
-        </el-tooltip>
+        <div class="logo">
+          <img :src="imgUrl" alt="Online Judge Admin" />
+        </div>
         <el-menu-item index="/admin/">
           <i class="fa fa-tachometer fa-size" aria-hidden="true"></i
           >{{ $t('m.Dashboard') }}

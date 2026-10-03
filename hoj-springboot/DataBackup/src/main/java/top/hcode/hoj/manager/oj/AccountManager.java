@@ -29,6 +29,7 @@ import top.hcode.hoj.pojo.entity.user.UserInfo;
 import top.hcode.hoj.pojo.vo.*;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.JwtUtils;
 import top.hcode.hoj.utils.RedisUtils;
 import top.hcode.hoj.utils.RequestLimits;
 import top.hcode.hoj.validator.CommonValidator;
@@ -47,6 +48,9 @@ public class AccountManager {
 
     @Autowired
     private RedisUtils redisUtils;
+
+    @Autowired
+    private JwtUtils jwtUtils;
 
     @Autowired
     private UserInfoEntityService userInfoEntityService;
@@ -267,6 +271,7 @@ public class AccountManager {
                     .eq("uuid", userRolesVo.getUid());
             boolean isOk = userInfoEntityService.update(updateWrapper);
             if (isOk) {
+                jwtUtils.cleanToken(userRolesVo.getUid());
                 resp.setCode(200);
                 resp.setMsg("修改密码成功！您将于5秒钟后退出进行重新登录操作！");
                 // 清空记录

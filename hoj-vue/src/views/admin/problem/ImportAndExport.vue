@@ -298,7 +298,7 @@ export default {
         params.push('pid=' + p.id);
       }
       let url = '/api/file/export-problem?' + params.join('&');
-      utils.downloadFile(url);
+      return utils.downloadFile(url).catch(() => {});
     },
     submitUpload(ref) {
       this.loading[ref] = true;

@@ -10,7 +10,7 @@ import vxeZhCN from 'vxe-table/lib/locale/lang/zh-CN'
 import vxeZhTW from 'vxe-table/lib/locale/lang/zh-TW'
 import vxeJaJP from 'vxe-table/lib/locale/lang/ja-JP'
 import vxeKoKR from 'vxe-table/lib/locale/lang/en-US'
-import storage from '@/common/storage'
+import { DEFAULT_LANGUAGE, resolveLanguage } from './language'
 Vue.use(VueI18n)
 
 const languages = [
@@ -34,7 +34,8 @@ for (let lang of languages) {
 
 // load language packages
 export default new VueI18n({
-  locale: storage.get('Web_Language') || 'zh-CN',
+  locale: resolveLanguage(),
+  fallbackLocale: DEFAULT_LANGUAGE,
   messages: messages
 })
 

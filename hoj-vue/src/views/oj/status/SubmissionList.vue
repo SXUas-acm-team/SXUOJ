@@ -528,6 +528,9 @@ export default {
       groupID: null,
       routeName: "",
       checkStatusNum: 0,
+      submissionListRequestId: 0,
+      statusPollRequestId: 0,
+      refreshStatus: null,
       JUDGE_STATUS: "",
       JUDGE_STATUS_LIST: "",
       CHANGE_JUDGE_STATUS_LIST: "",
@@ -619,7 +622,9 @@ export default {
       return utils.submissionLengthFormat(length);
     },
     reSubmit(row) {
+      const requestId = this.submissionListRequestId;
       api.reSubmitRemoteJudge(row.submitId).then((res) => {
+        if (requestId !== this.submissionListRequestId) return;
         let xTable = this.$refs.xTable;
         // 重新提交开始，需要将该提交的部分参数初始化
         row.status = res.data.data.status;
@@ -645,6 +650,8 @@ export default {
       });
     },
     getSubmissions() {
+      const requestId = ++this.submissionListRequestId;
+      this.stopSubmissionPolling();
       let params = this.buildQuery();
       params.contestID = this.contestID;
       params.gid = this.groupID;
@@ -663,6 +670,7 @@ export default {
           this.formFilter.username = "";
         } else {
           this.formFilter.onlyMine = false;
+          this.loadingTable = false;
           myMessage.error(this.$i18n.t("m.Please_login_first"));
           return;
         }
@@ -674,8 +682,9 @@ export default {
       let func = this.contestID
         ? "getContestSubmissionList"
         : "getSubmissionList";
-      api[func](this.limit, utils.filterEmptyValue(params))
+      return api[func](this.limit, utils.filterEmptyValue(params))
         .then((res) => {
+          if (requestId !== this.submissionListRequestId) return;
           let data = res.data.data;
           let index = 0;
           for (let v of data.records) {
@@ -698,24 +707,23 @@ export default {
           }
         })
         .catch(() => {
+          if (requestId !== this.submissionListRequestId) return;
           this.loadingTable = false;
         });
     },
     // 对当前提交列表 状态为Pending（6）和Judging（7）的提交记录每2秒查询一下最新结果
     checkSubmissionsStatus() {
-      // 使用setTimeout避免一些问题
-      if (this.refreshStatus) {
-        // 如果之前的提交状态检查还没有停止,则停止,否则将会失去timeout的引用造成无限请求
-        clearTimeout(this.refreshStatus);
-        this.autoCheckOpen = false;
-      }
+      this.stopSubmissionPolling();
+      const requestId = this.statusPollRequestId;
       const checkStatus = () => {
-        let submitIds = this.needCheckSubmitIds;
+        if (requestId !== this.statusPollRequestId) return;
+        let submitIds = Object.assign({}, this.needCheckSubmitIds);
         let func = this.contestID
           ? "checkContestSubmissonsStatus"
           : "checkSubmissonsStatus";
         api[func](Object.keys(submitIds), this.contestID).then(
           (res) => {
+            if (requestId !== this.statusPollRequestId) return;
             let result = res.data.data;
             if (!this.$refs.xTable) {
               // 避免请求一半退出view保错
@@ -724,7 +732,8 @@ export default {
             let viewData = this.$refs.xTable.getTableData().tableData;
             for (let key in submitIds) {
               let submitId = parseInt(key);
-              if (!result[submitId]) {
+              if (!result[submitId] || !viewData[submitIds[key]] ||
+                  String(viewData[submitIds[key]].submitId) !== key) {
                 continue;
               }
               // 更新数据列表
@@ -760,6 +769,7 @@ export default {
             }
           },
           (res) => {
+            if (requestId !== this.statusPollRequestId) return;
             clearTimeout(this.refreshStatus);
             this.autoCheckOpen = false;
           }
@@ -769,6 +779,12 @@ export default {
       this.checkStatusNum += 1;
       this.refreshStatus = setTimeout(checkStatus, 2000);
       this.autoCheckOpen = true;
+    },
+    stopSubmissionPolling() {
+      this.statusPollRequestId++;
+      clearTimeout(this.refreshStatus);
+      this.refreshStatus = null;
+      this.autoCheckOpen = false;
     },
     onPageSizeChange(pageSize) {
       this.limit = pageSize;
@@ -836,9 +852,11 @@ export default {
       this.changeRoute();
     },
     handleRejudge(row) {
+      const requestId = this.submissionListRequestId;
       this.submissions[row.index].loading = true;
       api.submissionRejudge(row.submitId).then(
         (res) => {
+          if (requestId !== this.submissionListRequestId) return;
           let xTable = this.$refs.xTable;
           // 重判开始，需要将该提交的部分参数初始化
           row.status = res.data.data.status;
@@ -865,6 +883,7 @@ export default {
           }
         },
         () => {
+          if (requestId !== this.submissionListRequestId) return;
           this.submissions[row.index].loading = false;
         }
       );
@@ -1058,9 +1077,6 @@ export default {
   watch: {
     $route(newVal, oldVal) {
       if (newVal !== oldVal) {
-        if (this.autoCheckOpen) {
-          clearInterval(this.refreshStatus);
-        }
         this.init();
         this.getData();
       }
@@ -1070,9 +1086,14 @@ export default {
       this.getData();
     },
   },
+  beforeDestroy() {
+    this.submissionListRequestId++;
+    this.stopSubmissionPolling();
+  },
   beforeRouteLeave(to, from, next) {
     // 防止切换组件后仍然不断请求
-    clearInterval(this.refreshStatus);
+    this.submissionListRequestId++;
+    this.stopSubmissionPolling();
     next();
   },
 };

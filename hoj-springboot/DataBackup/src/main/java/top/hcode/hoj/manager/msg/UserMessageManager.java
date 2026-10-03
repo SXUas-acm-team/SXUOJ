@@ -23,6 +23,7 @@ import top.hcode.hoj.pojo.entity.msg.UserSysNotice;
 import top.hcode.hoj.pojo.vo.UserMsgVO;
 import top.hcode.hoj.pojo.vo.UserUnreadMsgCountVO;
 import top.hcode.hoj.shiro.AccountProfile;
+import top.hcode.hoj.utils.RequestLimits;
 
 import javax.annotation.Resource;
 import java.util.Collection;
@@ -84,8 +85,8 @@ public class UserMessageManager {
     public IPage<UserMsgVO> getCommentMsg(Integer limit, Integer currentPage) {
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 5;
+        currentPage = RequestLimits.pageNumber(currentPage);
+        limit = RequestLimits.pageSize(limit, 5);
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
@@ -96,8 +97,8 @@ public class UserMessageManager {
     public IPage<UserMsgVO> getReplyMsg(Integer limit, Integer currentPage) {
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 5;
+        currentPage = RequestLimits.pageNumber(currentPage);
+        limit = RequestLimits.pageSize(limit, 5);
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -109,8 +110,8 @@ public class UserMessageManager {
     public IPage<UserMsgVO> getLikeMsg(Integer limit, Integer currentPage) {
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 5;
+        currentPage = RequestLimits.pageNumber(currentPage);
+        limit = RequestLimits.pageSize(limit, 5);
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -120,7 +121,9 @@ public class UserMessageManager {
 
 
     private boolean cleanMsgByType(String type, Long id, String uid) {
-
+        if (type == null) {
+            return false;
+        }
         switch (type) {
             case "Like":
             case "Discuss":
@@ -129,13 +132,19 @@ public class UserMessageManager {
                 updateWrapper1
                         .eq(id != null, "id", id)
                         .eq("recipient_id", uid);
+                if ("Like".equals(type)) {
+                    updateWrapper1.in("action", "Like_Post", "Like_Discuss");
+                } else {
+                    updateWrapper1.eq("action", type);
+                }
                 return msgRemindEntityService.remove(updateWrapper1);
             case "Sys":
             case "Mine":
                 UpdateWrapper<UserSysNotice> updateWrapper2 = new UpdateWrapper<>();
                 updateWrapper2
                         .eq(id != null, "id", id)
-                        .eq("recipient_id", uid);
+                        .eq("recipient_id", uid)
+                        .eq("type", type);
                 return userSysNoticeEntityService.remove(updateWrapper2);
         }
         return false;

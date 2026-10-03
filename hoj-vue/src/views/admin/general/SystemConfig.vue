@@ -412,7 +412,7 @@ export default {
       this.dialogVisible = true;
     },
     handleDownload(file) {
-      utils.downloadFile(file.url);
+      return utils.downloadFile(file.url).catch(() => {});
     },
     saveSMTPConfig() {
       api.admin_editSMTPConfig(this.smtp).then(

@@ -194,7 +194,8 @@ public class GroupContestManager {
             contest.setAwardConfig(awardConfigJson.toString());
         }
 
-        contest.setIsGroup(true);
+        contest.setId(null).setIsGroup(true).setUid(userRolesVo.getUid()).setAuthor(userRolesVo.getUsername())
+                .setGmtCreate(null).setGmtModified(null);
 
         boolean isOk = contestEntityService.save(contest);
         if (!isOk) {
@@ -240,6 +241,8 @@ public class GroupContestManager {
         }
 
         Contest contest = BeanUtil.copyProperties(adminContestVo, Contest.class, "starAccount");
+        contest.setGid(oldContest.getGid())
+                .setUid(oldContest.getUid()).setAuthor(oldContest.getAuthor()).setGmtCreate(oldContest.getGmtCreate());
         JSONObject accountJson = new JSONObject();
         accountJson.set("star_account", adminContestVo.getStarAccount());
         contest.setStarAccount(accountJson.toString());

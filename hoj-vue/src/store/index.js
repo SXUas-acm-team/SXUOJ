@@ -6,6 +6,7 @@ import training from "@/store/training"
 import group from "@/store/group"
 import api from '@/common/api'
 import i18n from '@/i18n'
+import { LANGUAGE_STORAGE_KEY, normalizeLanguage } from '@/i18n/language'
 import storage from '@/common/storage'
 import moment from 'moment'
 Vue.use(Vuex)
@@ -26,7 +27,7 @@ const rootState = {
   },
   registerTimeOut: 60,
   resetTimeOut: 90,
-  language:storage.get('Web_Language') || 'zh-CN',
+  language: i18n.locale,
 }
 
 const rootGetters = {
@@ -87,12 +88,13 @@ const rootMutations = {
     state.websiteConfig = payload.websiteConfig
   },
   changeWebLanguage (state, {language}) {
-    if (language) {
-      state.language = language
-      i18n.locale = language
-      moment.locale(language);
-    }
-    storage.set('Web_Language', language)
+    const locale = normalizeLanguage(language)
+    if (!locale) return
+    state.language = locale
+    i18n.locale = locale
+    moment.locale(locale)
+    document.documentElement.lang = locale
+    storage.set(LANGUAGE_STORAGE_KEY, locale)
   }
 }
 const rootActions = {

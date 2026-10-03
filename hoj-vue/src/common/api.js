@@ -19,6 +19,26 @@ const isMobile = /ipad|iphone|midp|rv:1.2.3.4|ucweb|android|windows ce|windows m
 // 请求超时时间
 axios.defaults.timeout = 90000;
 
+function localApiPath(config) {
+  if (!config || !isLocalApiUrl(config.url, config.baseURL)) return '';
+  return new URL(config.url, new URL(config.baseURL || window.location.href, window.location.href)).pathname;
+}
+
+function isCurrentSessionResponse(response) {
+  return !!localApiPath(response.config) &&
+    response.config._hojToken === localStorage.getItem('token');
+}
+
+function refreshSessionToken(response) {
+  const token = response.headers['authorization'];
+  if (isCurrentSessionResponse(response) && response.config._hojToken &&
+      response.headers['refresh-token'] && typeof token === 'string' && token.trim()) {
+    store.commit('refreshUserToken', token);
+  }
+}
+
+let authRefreshPending = null;
+
 axios.interceptors.request.use(
 
   config => {
@@ -28,14 +48,13 @@ axios.interceptors.request.use(
     // 如果存在，则统一在http请求的header都加上token，这样后台根据token判断你的登录情况
     // 即使本地存在token，也有可能token是过期的，所以在响应拦截器中要对返回状态进行判断
     const token = localStorage.getItem('token')
-    if (isLocalApiUrl(config.url, config.baseURL) && config.url !== '/api/login' && config.url !== '/api/admin/login') {
+    const path = localApiPath(config);
+    if (path && path !== '/api/login' && path !== '/api/admin/login') {
+      config._hojToken = token;
       token && (config.headers.Authorization = token);
     }
-    let type = config.url.split("/")[2];
-    if (type === 'admin') { // 携带请求区别是否为admin
-      config.headers['Url-Type'] = type
-    } else {
-      config.headers['Url-Type'] = 'general'
+    if (path) {
+      config.headers['Url-Type'] = path.startsWith('/api/admin/') ? 'admin' : 'general';
     }
 
     return config;
@@ -58,10 +77,8 @@ axios.interceptors.request.use(
 axios.interceptors.response.use(
   response => {
     // NProgress.done();
-    if (response.headers['refresh-token']) { // token续约！
-      store.commit('changeUserToken', response.headers['authorization'])
-    }
-    if (response.data.status === 200 || response.data.status == undefined) {
+    refreshSessionToken(response);
+    if (response.data == null || response.data.status === 200 || response.data.status == undefined) {
       return Promise.resolve(response);
     } else {
       mMessage.error(response.data.msg);
@@ -81,9 +98,8 @@ axios.interceptors.response.use(
   error => {
     // NProgress.done();
     if (error.response) {
-      if (error.response.headers['refresh-token']) { // token续约！！
-        store.commit('changeUserToken', error.response.headers['authorization'])
-      }
+      const currentSession = isCurrentSessionResponse(error.response);
+      if (error.response.status !== 401) refreshSessionToken(error.response);
       if (error.response.data instanceof Blob) { // 如果是文件操作的返回，由后续进行处理
         return Promise.resolve(error.response);
       }
@@ -92,7 +108,8 @@ axios.interceptors.response.use(
         // 未登录则跳转登录页面，并携带当前页面的路径
         // 在登录成功后返回当前页面，这一步需要在登录页操作。
         case 401:
-          if (error.response.data.msg) {
+          if (!currentSession) break;
+          if (error.response.data && error.response.data.msg) {
             mMessage.error(error.response.data.msg);
             if (!isMobile) {
               Vue.prototype.$notify.error({
@@ -113,7 +130,8 @@ axios.interceptors.response.use(
         // 403
         // 无权限访问或操作的请求
         case 403:
-          if (error.response.data.msg) {
+          if (!currentSession) break;
+          if (error.response.data && error.response.data.msg) {
             mMessage.error(error.response.data.msg);
             if (!isMobile) {
               Vue.prototype.$notify.error({
@@ -124,12 +142,20 @@ axios.interceptors.response.use(
               });
             }
           }
-          let isAdminApi = error.response.config.url.startsWith('/api/admin');
-          store.dispatch('refreshUserAuthInfo').then((res)=>{
-            if(isAdminApi){
-              router.push("/admin")
-            }
-          })
+          // The permissions endpoint can itself reject: never recursively refresh it.
+          if (localApiPath(error.response.config) !== '/api/get-user-auth-info' &&
+              (!authRefreshPending || authRefreshPending.sessionVersion !== store.getters.sessionVersion)) {
+            const isAdminApi = localApiPath(error.response.config).startsWith('/api/admin/');
+            const sessionVersion = store.getters.sessionVersion;
+            const refresh = { sessionVersion };
+            authRefreshPending = refresh;
+            refresh.promise = store.dispatch('refreshUserAuthInfo').then(() => {
+              if (isAdminApi && store.getters.token && store.getters.token === localStorage.getItem('token') &&
+                  sessionVersion === store.getters.sessionVersion) router.push('/admin');
+            }).catch(() => {}).finally(() => {
+              if (authRefreshPending === refresh) authRefreshPending = null;
+            });
+          }
           break;
         // 404请求不存在
         case 404:
@@ -156,7 +182,7 @@ axios.interceptors.response.use(
       }
       return Promise.reject(error);
     } else { //处理断网或请求超时，请求没响应
-      if (error.code == 'ECONNABORTED' || error.message.includes('timeout')) {
+      if (error.code == 'ECONNABORTED' || String(error.message || '').includes('timeout')) {
         mMessage.error(i18n.t('m.Request_timed_out_please_try_again_later'));
       } else {
         mMessage.error(i18n.t('m.Network_error_abnormal_link_with_server_please_try_again_later'));

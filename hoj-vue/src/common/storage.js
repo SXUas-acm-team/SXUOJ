@@ -18,7 +18,12 @@ export default {
    * @return {Object}
    */
   get (key) {
-    return JSON.parse(localStorage.getItem(key)) || null
+    try {
+      return JSON.parse(localStorage.getItem(key))
+    } catch (error) {
+      // A stale or damaged preference must not prevent the application from starting.
+      return null
+    }
   },
 
   /**

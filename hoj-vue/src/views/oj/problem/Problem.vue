@@ -886,6 +886,8 @@ export default {
       tabSize: 4,
       height: 550,
       submissionId: "",
+      submissionRequestId: 0,
+      refreshStatus: null,
       submitted: false,
       submitDisabled: false,
       submitPwdVisible: false,
@@ -1510,15 +1512,14 @@ export default {
         .catch(() => {});
     },
     checkSubmissionStatus() {
-      // 使用setTimeout避免一些问题
-      if (this.refreshStatus) {
-        // 如果之前的提交状态检查还没有停止,则停止,否则将会失去timeout的引用造成无限请求
-        clearTimeout(this.refreshStatus);
-      }
+      this.stopSubmissionPolling();
+      const requestId = this.submissionRequestId;
+      const submitId = this.submissionId;
       const checkStatus = () => {
-        let submitId = this.submissionId;
+        if (requestId !== this.submissionRequestId) return;
         api.getSubmission(submitId).then(
           (res) => {
+            if (requestId !== this.submissionRequestId) return;
             this.result.status = res.data.data.submission.status;
             if (Object.keys(res.data.data.submission).length !== 0) {
               // status不为判题和排队中才表示此次判题结束
@@ -1545,6 +1546,7 @@ export default {
             }
           },
           (res) => {
+            if (requestId !== this.submissionRequestId) return;
             this.submitting = false;
             clearTimeout(this.refreshStatus);
           }
@@ -1552,6 +1554,11 @@ export default {
       };
       // 设置每2秒检查一下该题的提交结果
       this.refreshStatus = setTimeout(checkStatus, 2000);
+    },
+    stopSubmissionPolling() {
+      this.submissionRequestId++;
+      clearTimeout(this.refreshStatus);
+      this.refreshStatus = null;
     },
 
     checkContestPassword() {
@@ -1571,6 +1578,7 @@ export default {
     },
 
     submitCode() {
+      if (this.submitting) return;
       if (this.code.trim() === "") {
         myMessage.error(this.$i18n.t("m.Code_can_not_be_empty"));
         return;
@@ -1587,6 +1595,8 @@ export default {
         return;
       }
 
+      this.stopSubmissionPolling();
+      const requestId = this.submissionRequestId;
       this.submissionId = "";
       this.result = { status: 9 };
       this.submitting = true;
@@ -1603,9 +1613,11 @@ export default {
         data.captcha = this.captchaCode;
       }
       const submitFunc = (data, detailsVisible) => {
+        if (requestId !== this.submissionRequestId) return;
         this.statusVisible = true;
         api.submitCode(data).then(
           (res) => {
+            if (requestId !== this.submissionRequestId) return;
             this.submissionId = res.data.data && res.data.data.submitId;
             // 定时检查状态
             this.submitting = false;
@@ -1627,6 +1639,7 @@ export default {
             this.checkSubmissionStatus();
           },
           (res) => {
+            if (requestId !== this.submissionRequestId) return;
             // this.getCaptchaSrc();
             // if (res.data.data.startsWith('Captcha is required')) {
             //   this.captchaRequired = true;
@@ -1660,6 +1673,7 @@ export default {
               }, 1000);
             })
             .catch(() => {
+              if (requestId !== this.submissionRequestId) return;
               this.submitting = false;
             });
         } else {
@@ -1671,15 +1685,19 @@ export default {
     },
 
     reSubmit(submitId) {
+      this.stopSubmissionPolling();
+      const requestId = this.submissionRequestId;
       this.result = { status: 9 };
       this.submitting = true;
       api.reSubmitRemoteJudge(submitId).then(
         (res) => {
+          if (requestId !== this.submissionRequestId) return;
           myMessage.success(this.$i18n.t("m.Resubmitted_Successfully"));
           this.submitted = true;
           this.checkSubmissionStatus();
         },
         (err) => {
+          if (requestId !== this.submissionRequestId) return;
           this.submitting = false;
           this.statusVisible = false;
         }
@@ -1694,7 +1712,7 @@ export default {
       });
     },
     downloadExtraFile() {
-      utils.downloadFileByText(this.fileName, this.fileContent);
+      return utils.downloadFileByText(this.fileName, this.fileContent).catch(() => {});
     },
 
     getLevelColor(difficulty) {
@@ -1735,7 +1753,7 @@ export default {
       });
     },
     beforeLeaveDo(cid){
-      clearInterval(this.refreshStatus);
+      this.stopSubmissionPolling();
       storage.set(
         buildProblemCodeAndSettingKey(this.problemID, cid),
         {
@@ -1834,6 +1852,9 @@ export default {
       }
     },
   },
+  beforeDestroy() {
+    this.stopSubmissionPolling();
+  },
   beforeRouteLeave(to, from, next) {
     this.beforeLeaveDo(from.params.contestID)
     if(this.$route.name === "ContestFullProblemDetails"){
@@ -1855,6 +1876,7 @@ export default {
       this.init();
     },
     isAuthenticated(newVal) {
+      this.stopSubmissionPolling();
       if (newVal === true) {
         this.submitted = false;
         this.submitDisabled = false;

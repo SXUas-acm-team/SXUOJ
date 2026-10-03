@@ -13,6 +13,7 @@ import top.hcode.hoj.pojo.entity.msg.AdminSysNotice;
 import top.hcode.hoj.pojo.entity.msg.UserSysNotice;
 import top.hcode.hoj.pojo.vo.SysMsgVO;
 import top.hcode.hoj.shiro.AccountProfile;
+import top.hcode.hoj.utils.RequestLimits;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -40,8 +41,8 @@ public class NoticeManager {
     public IPage<SysMsgVO> getSysNotice(Integer limit, Integer currentPage) {
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 5;
+        currentPage = RequestLimits.pageNumber(currentPage);
+        limit = RequestLimits.pageSize(limit, 5);
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
@@ -54,8 +55,8 @@ public class NoticeManager {
     public IPage<SysMsgVO> getMineNotice(Integer limit, Integer currentPage) {
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 5;
+        currentPage = RequestLimits.pageNumber(currentPage);
+        limit = RequestLimits.pageSize(limit, 5);
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 

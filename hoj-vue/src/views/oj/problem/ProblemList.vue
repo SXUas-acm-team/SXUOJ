@@ -194,7 +194,7 @@
             field="tag"
             :title="$t('m.Tags')"
             min-width="230"
-            visible="false"
+            :visible="false"
           >
             <template v-slot="{ row }">
               <span
@@ -331,7 +331,7 @@
 </template>
 
 <script>
-import { normalizeDifficulty } from "@/common/viewSafety";
+import { normalizeDifficulty, normalizePage, normalizePageSize, normalizeTagIds } from "@/common/viewSafety";
 import { mapGetters } from 'vuex';
 import api from '@/common/api';
 import {
@@ -363,6 +363,8 @@ export default {
       limit: 30,
       total: 100,
       isGetStatusOk: false,
+      problemRequestId: 0,
+      tagRequestId: 0,
       loadings: {
         table: true,
         tag: true,
@@ -412,32 +414,23 @@ export default {
       { status: 4, count: 100 },
     ];
     this.getTagList(this.query.oj);
-    this.loadings.table = true;
-    setTimeout(() => {
-      // 将指定列设置为隐藏状态
-      this.$refs.problemList.getColumnByField('tag').visible = false;
-      this.$refs.problemList.refreshColumn();
-      this.loadings.table = false;
-    }, 200);
     this.getData();
+  },
+  beforeDestroy() {
+    // Requests already in flight must not update a destroyed view.
+    this.problemRequestId++;
+    this.tagRequestId++;
   },
   methods: {
     init() {
       this.routeName = this.$route.name;
       let query = this.$route.query;
       this.query.difficulty = normalizeDifficulty(query.difficulty);
-      this.query.oj = query.oj || 'Mine';
-      this.query.keyword = query.keyword || '';
-      try {
-        this.query.tagId = JSON.parse(query.tagId);
-      } catch (error) {
-        this.query.tagId = [];
-      }
-      this.query.currentPage = parseInt(query.currentPage) || 1;
-      this.limit = parseInt(query.limit) || 30;
-      if (this.query.currentPage < 1) {
-        this.query.currentPage = 1;
-      }
+      this.query.oj = typeof query.oj === 'string' && query.oj ? query.oj : 'Mine';
+      this.query.keyword = typeof query.keyword === 'string' ? query.keyword : '';
+      this.query.tagId = normalizeTagIds(query.tagId);
+      this.query.currentPage = normalizePage(query.currentPage);
+      this.limit = normalizePageSize(query.limit, 30);
     },
 
     getData() {
@@ -445,13 +438,12 @@ export default {
     },
 
     pushRouter() {
-      this.query.tagId = JSON.stringify(
-        this.filterTagList.map((tagJson) => tagJson.id)
-      );
-      this.query.limit = this.limit;
       this.$router.push({
         path: '/problem',
-        query: this.query,
+        query: Object.assign({}, this.query, {
+          tagId: JSON.stringify(this.filterTagList.map(tag => tag.id)),
+          limit: this.limit,
+        }),
       });
     },
     onPageSizeChange(pageSize) {
@@ -504,6 +496,7 @@ export default {
       this.currentProblemTitle = problem.title;
     },
     getProblemList() {
+      const requestId = ++this.problemRequestId;
       let queryParams = Object.assign({}, this.query);
       if (queryParams.difficulty == 'All') {
         queryParams.difficulty = '';
@@ -516,8 +509,10 @@ export default {
       queryParams.tagId = queryParams.tagId + '';
       queryParams.limit = this.limit;
       this.loadings.table = true;
-      api.getProblemList(queryParams).then(
+      this.isGetStatusOk = false;
+      return api.getProblemList(queryParams).then(
         (res) => {
+          if (requestId !== this.problemRequestId) return;
           this.total = res.data.data.total;
           this.problemList = res.data.data.records;
           if (this.isAuthenticated) {
@@ -533,33 +528,37 @@ export default {
               api
                 .getUserProblemStatus(pidList, isContestProblemList)
                 .then((res) => {
+                  if (requestId !== this.problemRequestId || !this.isAuthenticated) return;
                   let result = res.data.data;
                   for (
                     let index = 0;
                     index < this.problemList.length;
                     index++
                   ) {
-                    this.problemList[index]['myStatus'] =
-                      result[this.problemList[index].pid].status;
+                    const status = result[this.problemList[index].pid];
+                    this.problemList[index]['myStatus'] = status ? status.status : -10;
                   }
                   this.isGetStatusOk = true;
-                });
+                }, () => {});
             }
           }
           this.loadings.table = false;
         },
         (res) => {
+          if (requestId !== this.problemRequestId) return;
           this.loadings.table = false;
         }
       );
     },
     getTagList(oj) {
+      const requestId = ++this.tagRequestId;
       if (oj == 'Mine') {
         oj = 'ME';
       }
       this.loadings.tag = true;
-      api.getProblemTagsAndClassification(oj).then(
+      return api.getProblemTagsAndClassification(oj).then(
         (res) => {
+          if (requestId !== this.tagRequestId) return;
           this.tagsAndClassificationList = res.data.data;
           this.searchTagClassificationList = res.data.data;
           this.filterTagList = [];
@@ -581,6 +580,7 @@ export default {
           this.loadings.tag = false;
         },
         (res) => {
+          if (requestId !== this.tagRequestId) return;
           this.loadings.tag = false;
         }
       );
@@ -650,7 +650,6 @@ export default {
         this.filterTagList = [];
       }
       this.query.currentPage = 1;
-      this.getTagList(this.query.oj);
       this.pushRouter();
     },
     filterByKeyword() {
@@ -747,14 +746,13 @@ export default {
     $route(newVal, oldVal) {
       if (newVal !== oldVal) {
         this.init();
+        this.getTagList(this.query.oj);
         this.getData();
       }
     },
     isAuthenticated(newVal) {
-      if (newVal === true) {
-        this.init();
-        this.getData();
-      }
+      this.init();
+      this.getData();
     },
   },
 };

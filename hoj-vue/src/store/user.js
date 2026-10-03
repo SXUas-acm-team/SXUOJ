@@ -1,9 +1,11 @@
 import { USER_TYPE } from '@/common/constants'
 import storage from '@/common/storage'
+import { getSavedLanguage, LANGUAGE_STORAGE_KEY } from '@/i18n/language'
 import api from '@/common/api'
 const state = {
   userInfo:  storage.get('userInfo'),
   token: localStorage.getItem('token'),
+  sessionVersion: 0,
   loginFailNum:0,
   unreadMessage:{
     comment:0,
@@ -17,6 +19,7 @@ const state = {
 const getters = {
   userInfo: state => state.userInfo || {},
   token: state => state.token ||'',
+  sessionVersion: state => state.sessionVersion,
   unreadMessage:state => state.unreadMessage || {},
   loginFailNum:state=>state.loginFailNum || 0,
   isAuthenticated: (state, getters) => {
@@ -53,6 +56,11 @@ const mutations = {
     storage.set('userInfo',userInfo)
   },
   changeUserToken(state,token){
+    if (state.token !== token) state.sessionVersion++
+    state.token = token
+    localStorage.setItem("token",token)
+  },
+  refreshUserToken(state,token){
     state.token = token
     localStorage.setItem("token",token)
   },
@@ -65,10 +73,14 @@ const mutations = {
   },
   
   clearUserInfoAndToken(state){
+    const language = getSavedLanguage()
+    state.sessionVersion++
     state.token = ''
     state.userInfo = {}
     state.loginFailNum = 0
+    state.unreadMessage = { comment: 0, reply: 0, like: 0, sys: 0, mine: 0 }
     storage.clear()
+    if (language) storage.set(LANGUAGE_STORAGE_KEY, language)
   },
   updateUnreadMessageCount(state, {unreadMessage}){
     state.unreadMessage = unreadMessage
@@ -78,6 +90,7 @@ const mutations = {
     state.unreadMessage[needSubstractMsg.name] = state.unreadMessage[needSubstractMsg.name]-needSubstractMsg.num;
   },
   changeUserAuthInfo(state, {roles}){
+    if (!state.userInfo || !Array.isArray(roles)) return
     state.userInfo.roleList = roles;
     storage.set('userInfo', state.userInfo);
   }
@@ -105,14 +118,15 @@ const actions = {
       needSubstractMsg: needSubstractMsg
     })
   },
-  refreshUserAuthInfo({commit,dispatch}){
-    return new Promise((resolve, reject) => {
-      api.getUserAuthInfo().then((res) => {
+  refreshUserAuthInfo({commit,state}){
+    const token = state.token
+    const sessionVersion = state.sessionVersion
+    return api.getUserAuthInfo().then((res) => {
+      // Ignore a response from a session that logged out or changed accounts.
+      if (token && state.token && state.sessionVersion === sessionVersion && state.token === localStorage.getItem('token')) {
         commit('changeUserAuthInfo', {roles: res.data.data.roles})
-        resolve(res)
-      })
-    }, err => {
-      reject(err)
+      }
+      return res
     })
   }
 }

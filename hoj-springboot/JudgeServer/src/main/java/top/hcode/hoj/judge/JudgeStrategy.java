@@ -163,7 +163,7 @@ public class JudgeStrategy {
             return TestJudgeRes.builder()
                     .memory(0L)
                     .time(0L)
-                    .status(Constants.Judge.STATUS_COMPILE_ERROR.getStatus())
+                    .status(Constants.Judge.STATUS_SYSTEM_ERROR.getStatus())
                     .stderr("Oops, something has gone wrong with the judgeServer. Please report this to administrator.")
                     .build();
         } catch (SubmitError submitError) {
@@ -186,7 +186,7 @@ public class JudgeStrategy {
             return TestJudgeRes.builder()
                     .memory(0L)
                     .time(0L)
-                    .status(Constants.Judge.STATUS_COMPILE_ERROR.getStatus())
+                    .status(Constants.Judge.STATUS_SYSTEM_ERROR.getStatus())
                     .stderr("Oops, something has gone wrong with the judgeServer. Please report this to administrator.")
                     .build();
         } finally {
@@ -266,7 +266,7 @@ public class JudgeStrategy {
 
                 // 版本变动也需要重新编译
                 if (!currentVersion.equals(recordInteractiveVersion)) {
-                    boolean isCompileInteractive = Compiler.compileSpj(problem.getSpjCode(), problem.getId(), problem.getSpjLanguage(),
+                    boolean isCompileInteractive = Compiler.compileInteractive(problem.getSpjCode(), problem.getId(), problem.getSpjLanguage(),
                             JudgeUtils.getProblemExtraFileMap(problem, "judge"));
 
                     FileWriter fileWriter = new FileWriter(programVersionPath);
@@ -352,7 +352,11 @@ public class JudgeStrategy {
     public HashMap<String, Object> getJudgeInfo(List<JSONObject> testCaseResultList,
                                                 Problem problem,
                                                 Judge judge,
-                                                String judgeCaseMode) {
+                                                String judgeCaseMode) throws SystemError {
+
+        if (testCaseResultList == null || testCaseResultList.isEmpty()) {
+            throw new SystemError("The evaluation results of the problem are empty", null, null);
+        }
 
         boolean isACM = Objects.equals(problem.getType(), Constants.Contest.TYPE_ACM.getCode());
 

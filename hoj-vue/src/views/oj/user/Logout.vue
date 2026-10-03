@@ -6,12 +6,11 @@
 
   export default {
     mounted () {
-        api.logout().then(res => {
-        this.$store.dispatch('clearUserInfoAndToken')
-        this.$router.replace({
-          path: '/home'
-        })
-      })
+      const completeLogout = () => this.$store.dispatch('clearUserInfoAndToken').then(() =>
+        this.$router.replace({ path: '/home' })
+      )
+      // Password changes revoke the server session before this route is entered.
+      return api.logout().then(completeLogout, completeLogout)
     }
   }
 </script>

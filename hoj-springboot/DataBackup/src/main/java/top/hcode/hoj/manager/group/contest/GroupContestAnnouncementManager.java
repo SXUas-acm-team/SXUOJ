@@ -1,5 +1,6 @@
 package top.hcode.hoj.manager.group.contest;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,7 @@ import top.hcode.hoj.pojo.vo.AnnouncementVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.validator.CommonValidator;
 import top.hcode.hoj.validator.GroupValidator;
+import java.util.Objects;
 
 /**
  * @Author: LengYun
@@ -117,7 +119,8 @@ public class GroupContestAnnouncementManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        announcementDto.getAnnouncement().setGid(gid);
+        announcementDto.getAnnouncement().setId(null).setGid(gid).setUid(userRolesVo.getUid())
+                .setGmtCreate(null).setGmtModified(null);
 
         boolean isOk = announcementEntityService.save(announcementDto.getAnnouncement());
         if (isOk) {
@@ -163,7 +166,11 @@ public class GroupContestAnnouncementManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        boolean isOk = announcementEntityService.updateById(announcementDto.getAnnouncement());
+        Announcement requested = announcementDto.getAnnouncement();
+        Announcement stored = requireContestAnnouncement(requested.getId(), cid, gid);
+        Announcement update = new Announcement().setId(stored.getId()).setTitle(requested.getTitle())
+                .setContent(requested.getContent()).setStatus(requested.getStatus());
+        boolean isOk = announcementEntityService.updateById(update);
         if (!isOk) {
             throw new StatusFailException("更新失败！");
         }
@@ -192,20 +199,29 @@ public class GroupContestAnnouncementManager {
             throw new StatusNotFoundException("删除失败，该团队不存在或已被封禁！");
         }
 
-        Announcement announcement = announcementEntityService.getById(aid);
-
-        if (announcement == null) {
-            throw new StatusNotFoundException("删除失败，该公告不存在！");
-        }
-
         if (!userRolesVo.getUid().equals(contest.getUid()) && !isRoot
                 && !groupValidator.isGroupRoot(userRolesVo.getUid(), gid)) {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
+        requireContestAnnouncement(aid, cid, gid);
         boolean isOk = announcementEntityService.removeById(aid);
         if (!isOk) {
             throw new StatusFailException("删除失败！");
         }
+    }
+
+    private Announcement requireContestAnnouncement(Long aid, Long cid, Long gid)
+            throws StatusNotFoundException, StatusForbiddenException {
+        Announcement announcement = aid == null ? null : announcementEntityService.getById(aid);
+        if (announcement == null) {
+            throw new StatusNotFoundException("该公告不存在！");
+        }
+        QueryWrapper<ContestAnnouncement> relation = new QueryWrapper<>();
+        relation.eq("aid", aid).eq("cid", cid);
+        if (!Objects.equals(announcement.getGid(), gid) || contestAnnouncementEntityService.count(relation) == 0) {
+            throw new StatusForbiddenException("对不起，该公告不属于当前比赛！");
+        }
+        return announcement;
     }
 }

@@ -102,7 +102,7 @@ public class GroupMemberManager {
             throw new StatusNotFoundException("添加成员失败，该团队已被封禁或未公开显示！");
         }
 
-        if (group.getAuth() == 3 && !code.equals(group.getCode())) {
+        if (group.getAuth() == 3 && (code == null || !code.equals(group.getCode()))) {
             throw new StatusFailException("邀请码错误，请重新尝试！");
         }
 
@@ -145,6 +145,11 @@ public class GroupMemberManager {
     }
 
     public void updateMember(GroupMember groupMemberDto) throws StatusFailException, StatusForbiddenException, StatusNotFoundException {
+        if (groupMemberDto == null || groupMemberDto.getGid() == null
+                || !StringUtils.hasText(groupMemberDto.getUid()) || groupMemberDto.getAuth() == null
+                || groupMemberDto.getAuth() < 1 || groupMemberDto.getAuth() > 5) {
+            throw new StatusFailException("更新失败，成员信息或权限无效！");
+        }
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
@@ -160,8 +165,6 @@ public class GroupMemberManager {
         if (group.getUid().equals(groupMemberDto.getUid())) {
             throw new StatusNotFoundException("对不起，不允许操作团队的Owner权限！");
         }
-
-        boolean isAgreedNewMember = false;
 
         QueryWrapper<GroupMember> groupMemberQueryWrapper = new QueryWrapper<>();
         groupMemberQueryWrapper.eq("gid", gid)
@@ -183,6 +186,10 @@ public class GroupMemberManager {
             throw new StatusNotFoundException("该用户不在团队中！");
         }
 
+        if (groupMemberDto.getId() != null && !groupMemberDto.getId().equals(changeGroupMember.getId())) {
+            throw new StatusForbiddenException("对不起，成员记录与当前团队不匹配！");
+        }
+
         if (changeGroupMember.getAuth() != null && changeGroupMember.getAuth() >= 3
             && (groupMemberDto.getAuth() == null || groupMemberDto.getAuth() < 3)){
             throw new StatusForbiddenException("对不起，您无法将已是团队成员的权限降为处理中或拒绝");
@@ -193,11 +200,13 @@ public class GroupMemberManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        boolean isOk = groupMemberEntityService.updateById(groupMemberDto);
+        // Only the authorized stored membership may change, and only its role is editable.
+        GroupMember update = new GroupMember().setId(changeGroupMember.getId()).setAuth(groupMemberDto.getAuth());
+        boolean isOk = groupMemberEntityService.updateById(update);
         if (!isOk) {
             throw new StatusFailException("更新失败，请重新尝试！");
         } else {
-            if (changeGroupMember.getAuth() <= 2) { // 之前是申请中，则之后通过审批就要发消息
+            if (changeGroupMember.getAuth() <= 2 && groupMemberDto.getAuth() >= 3) {
                 groupMemberEntityService.addWelcomeNoticeToGroupNewMember(gid, group.getName(), groupMemberDto.getUid());
             }
         }

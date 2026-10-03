@@ -715,11 +715,11 @@ export default {
       return time.secondFormat(totalTime);
     },
     downloadRankCSV() {
-      utils.downloadFile(
+      return utils.downloadFile(
         `/api/file/download-contest-rank?cid=${
           this.$route.params.contestID
         }&forceRefresh=${this.forceUpdate ? true : false}&containEnd=${this.isContainsAfterContestJudge}`
-      );
+      ).catch(() => {});
     },
   },
   watch: {

@@ -25,6 +25,7 @@ import top.hcode.hoj.validator.GroupValidator;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Objects;
 
 /**
  * @Author: LengYun
@@ -84,6 +85,17 @@ public class GroupTrainingProblemManager {
     }
 
     public void updateTrainingProblem(TrainingProblem trainingProblem) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
+        if (trainingProblem == null || trainingProblem.getId() == null || trainingProblem.getTid() == null) {
+            throw new StatusFailException("更新失败，训练题目信息不完整！");
+        }
+        TrainingProblem storedProblem = trainingProblemEntityService.getById(trainingProblem.getId());
+        if (storedProblem == null) {
+            throw new StatusNotFoundException("更新失败，该训练题目不存在！");
+        }
+        if (!Objects.equals(storedProblem.getTid(), trainingProblem.getTid())
+                || (trainingProblem.getPid() != null && !Objects.equals(storedProblem.getPid(), trainingProblem.getPid()))) {
+            throw new StatusForbiddenException("更新失败，不可更改训练题目的所属关系！");
+        }
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
@@ -111,7 +123,9 @@ public class GroupTrainingProblemManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        boolean isOk = trainingProblemEntityService.updateById(trainingProblem);
+        TrainingProblem update = new TrainingProblem().setId(storedProblem.getId())
+                .setDisplayId(trainingProblem.getDisplayId()).setRank(trainingProblem.getRank());
+        boolean isOk = trainingProblemEntityService.updateById(update);
         if (!isOk) {
             throw new StatusFailException("修改失败！");
         }

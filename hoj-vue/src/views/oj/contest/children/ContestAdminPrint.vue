@@ -156,7 +156,7 @@ export default {
     },
     downloadSubmissions(id) {
       let url = `/api/file/download-contest-print-text?id=${id}`;
-      utils.downloadFile(url);
+      return utils.downloadFile(url).catch(() => {});
     },
     handleAutoRefresh() {
       if (this.autoRefresh) {

@@ -263,7 +263,7 @@ export default {
     },
     downloadSubmissions() {
       let url = `/api/file/download-contest-ac-submission?cid=${this.currentId}&excludeAdmin=${this.excludeAdmin}&splitType=${this.splitType}`;
-      utils.downloadFile(url);
+      return utils.downloadFile(url).catch(() => {});
       this.downloadDialogVisible = false;
     },
     goEditContest(contestId) {

@@ -58,52 +58,70 @@ function breakLongWords (value, length = 16) {
   return value.replace(re, '$1\n')
 }
 
-function downloadFile (url) {
+function saveBlob(fileName, blob) {
+  const objectUrl = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = fileName
+  try {
+    document.body.appendChild(link)
+    link.click()
+  } finally {
+    link.remove()
+    // Allow the browser to consume the click before releasing large downloads.
+    setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000)
+  }
+}
+
+function readBlobText(blob) {
   return new Promise((resolve, reject) => {
-    Vue.prototype.$axios.get(url, {responseType: 'blob',timeout: 5 * 60 * 1000}).then(resp => {
-      let headers = resp.headers
-      if (headers['content-type'].indexOf('json') !== -1) {
-        let fr = new window.FileReader()
-        if (resp.data.error) {
-          myMessage.error(resp.data.error)
-        }
-        fr.onload = (event) => {
-          let data = JSON.parse(event.target.result)
-          if (data.msg) {
-            myMessage.info(data.msg)
-          } else {
-            myMessage.error('Invalid file format')
-          }
-        }
-        let b = new window.Blob([resp.data], {type: 'application/json'})
-        fr.readAsText(b)
-        return
-      }
-      let link = document.createElement('a')
-      link.href = window.URL.createObjectURL(new window.Blob([resp.data], {type: headers['content-type']}))
-      link.download = (headers['content-disposition'] || '').split('filename=')[1]
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      myMessage.success("Downloading...")
-      resolve()
-    }).catch((error) => {
-      reject(error)
-    })
+    const reader = new window.FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error || new Error('Unable to read download response'))
+    reader.onabort = () => reject(new Error('Download response was interrupted'))
+    reader.readAsText(blob)
   })
 }
 
-function downloadFileByText (fileName,fileContent) {
-  return new Promise((resolve, reject) => {
-      let link = document.createElement('a')
-      link.href = window.URL.createObjectURL(new window.Blob([fileContent], {type:'text/plain;charset=utf-8'}))
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      myMessage.success("Download Successfully!")
-      resolve()
-  })
+function downloadFilename(disposition) {
+  const encoded = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(disposition)
+  if (encoded) {
+    try { return decodeURIComponent(encoded[1].trim()) } catch (_) { /* Try the regular filename. */ }
+  }
+  const regular = /filename\s*=\s*(?:"([^"]*)"|([^;]*))/i.exec(disposition)
+  const filename = regular && (regular[1] || regular[2] || '').trim()
+  if (!filename) return 'download'
+  try { return decodeURIComponent(filename) } catch (_) { return filename }
+}
+
+async function downloadFile (url) {
+  const resp = await Vue.prototype.$axios.get(url, {responseType: 'blob', timeout: 5 * 60 * 1000})
+  const headers = resp.headers || {}
+  const contentType = String(headers['content-type'] || (resp.data && resp.data.type) || 'application/octet-stream')
+  const blob = new window.Blob([resp.data], {type: contentType})
+  if (contentType.toLowerCase().includes('json')) {
+    let message = 'Invalid file format'
+    try {
+      const data = JSON.parse(await readBlobText(blob))
+      if (data && typeof data.msg === 'string' && data.msg) message = data.msg
+      else if (data && typeof data.error === 'string' && data.error) message = data.error
+    } catch (_) { /* A malformed error response must also finish the request. */ }
+    myMessage.error(message)
+    throw new Error(message)
+  }
+  // The API interceptor passes Blob error responses through for this helper to read.
+  if (typeof resp.status === 'number' && (resp.status < 200 || resp.status >= 300)) {
+    const message = `Download failed (HTTP ${resp.status})`
+    myMessage.error(message)
+    throw new Error(message)
+  }
+  saveBlob(downloadFilename(headers['content-disposition'] || ''), blob)
+  myMessage.success('Downloading...')
+}
+
+async function downloadFileByText (fileName, fileContent) {
+  saveBlob(fileName, new window.Blob([fileContent], {type: 'text/plain;charset=utf-8'}))
+  myMessage.success('Download Successfully!')
 }
 
 function getLanguages (all=true) {

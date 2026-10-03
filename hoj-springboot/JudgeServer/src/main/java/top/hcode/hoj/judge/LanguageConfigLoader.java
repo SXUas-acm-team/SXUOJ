@@ -131,10 +131,10 @@ public class LanguageConfigLoader {
             return 3000L;
         }
         timeStr = timeStr.toLowerCase();
-        if (timeStr.endsWith("s")) {
-            return Long.parseLong(timeStr.replace("s", "")) * 1000;
-        } else if (timeStr.endsWith("ms")) {
-            return Long.parseLong(timeStr.replace("s", ""));
+        if (timeStr.endsWith("ms")) {
+            return Long.parseLong(timeStr.substring(0, timeStr.length() - 2));
+        } else if (timeStr.endsWith("s")) {
+            return Long.parseLong(timeStr.substring(0, timeStr.length() - 1)) * 1000;
         } else {
             return Long.parseLong(timeStr);
         }

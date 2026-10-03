@@ -661,6 +661,7 @@ export default {
       testJudgeKey: null,
       testJudgeLoding: false,
       refreshStatus: null,
+      testJudgeRequestId: 0,
       equalsExpectedOuput: null,
     };
   },
@@ -758,6 +759,7 @@ export default {
     },
 
     submitTestJudge() {
+      if (this.testJudgeLoding) return;
       if (!this.isAuthenticated) {
         myMessage.warning(this.$i18n.t("m.Please_login_first"));
         this.$store.dispatch("changeModalStatus", { visible: true });
@@ -783,14 +785,20 @@ export default {
         mode: this.mode[this.language],
         isRemoteJudge: this.isRemoteJudge,
       };
-      api.submitTestJudge(data).then(
+      const requestId = ++this.testJudgeRequestId;
+      clearTimeout(this.refreshStatus);
+      this.testJudgeLoding = true;
+      return api.submitTestJudge(data).then(
         (res) => {
+          if (requestId !== this.testJudgeRequestId) return;
           this.testJudgeKey = res.data.data;
           this.testJudgeActiveTab = "result";
           this.testJudgeLoding = true;
           this.checkTestJudgeStatus();
         },
         (err) => {
+          if (requestId !== this.testJudgeRequestId) return;
+          this.testJudgeLoding = false;
           this.testJudgeActiveTab = "input";
         }
       );
@@ -801,9 +809,13 @@ export default {
         // 如果之前的提交状态检查还没有停止,则停止,否则将会失去timeout的引用造成无限请求
         clearTimeout(this.refreshStatus);
       }
+      const requestId = this.testJudgeRequestId;
+      const testJudgeKey = this.testJudgeKey;
       const checkStatus = () => {
-        api.getTestJudgeResult(this.testJudgeKey).then(
+        if (requestId !== this.testJudgeRequestId) return;
+        api.getTestJudgeResult(testJudgeKey).then(
           (res) => {
+            if (requestId !== this.testJudgeRequestId) return;
             let resData = res.data.data;
             if (resData.status != JUDGE_STATUS_RESERVE["Pending"]) {
               // status不为pending
@@ -828,6 +840,7 @@ export default {
             }
           },
           (res) => {
+            if (requestId !== this.testJudgeRequestId) return;
             this.testJudgeLoding = false;
             clearTimeout(this.refreshStatus);
           }
@@ -835,6 +848,12 @@ export default {
       };
       // 设置每1秒检查一下该题的提交结果
       this.refreshStatus = setTimeout(checkStatus, 1000);
+    },
+    stopTestJudge() {
+      this.testJudgeRequestId++;
+      clearTimeout(this.refreshStatus);
+      this.refreshStatus = null;
+      this.testJudgeLoding = false;
     },
     closeDrawer() {
       this.$emit("update:openTestCaseDrawer", false);
@@ -866,6 +885,12 @@ export default {
     },
   },
   watch: {
+    pid() {
+      this.stopTestJudge();
+      this.testJudgeKey = null;
+      this.testJudgeRes = { status: -10, problemJudgeMode: 'default' };
+      this.equalsExpectedOuput = null;
+    },
     height(newVal){
       this.editor.setSize('100%', newVal);
       this.$nextTick(() => {
@@ -889,7 +914,7 @@ export default {
   },
   beforeDestroy() {
     // 防止切换组件后仍然不断请求
-    clearInterval(this.refreshStatus);
+    this.stopTestJudge();
   },
 };
 </script>

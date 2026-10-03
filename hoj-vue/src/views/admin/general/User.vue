@@ -820,7 +820,7 @@ export default {
             let url = '/api/file/generate-user-excel?key=' + res.data.data.key;
             utils.downloadFile(url).then(() => {
               this.$alert(this.$i18n.t('m.Generate_User_Success'), 'Tips');
-            });
+            }).catch(() => {});
             this.getUserList(1);
           })
           .catch(() => {
