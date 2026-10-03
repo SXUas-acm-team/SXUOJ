@@ -19,6 +19,6 @@ public interface RemoteJudgeAccountMapper extends BaseMapper<RemoteJudgeAccount>
     public List<RemoteJudgeAccount> getAvailableAccount(@Param("oj") String oj);
 
 
-    @Update("update `remote_judge_account` set `status` = 0 where `id` = #{id} and `status` = 1")
+    @Update("update `remote_judge_account` set `status` = 0, `version` = COALESCE(`version`, 0) + 1 where `id` = #{id} and `status` = 1")
     public int updateAccountStatusById(@Param("id") Integer id);
 }

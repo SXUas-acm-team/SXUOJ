@@ -132,6 +132,9 @@ public class GroupDiscussionManager {
 
     public void addDiscussion(Discussion discussion) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
 
+        if (discussion.getId() != null) throw new StatusFailException("新讨论不能指定已有讨论ID！");
+        discussion.setStatus(0).setLikeNum(0).setViewNum(0).setCommentNum(0);
+
         commonValidator.validateContent(discussion.getTitle(), "讨论标题", 255);
         commonValidator.validateContent(discussion.getDescription(), "讨论描述", 255);
         commonValidator.validateContent(discussion.getContent(), "讨论", 65535);
@@ -168,7 +171,9 @@ public class GroupDiscussionManager {
             if (problem == null) {
                 throw new StatusNotFoundException("该题目不存在");
             } else if (problem.getIsGroup()) {
-                discussion.setGid(problem.getGid());
+                if (!java.util.Objects.equals(gid, problem.getGid())) {
+                    throw new StatusForbiddenException("题目与讨论必须属于同一团队！");
+                }
             }
         }
 
@@ -201,6 +206,7 @@ public class GroupDiscussionManager {
         } else if (groupValidator.isGroupAdmin(userRolesVo.getUid(), gid)) {
             discussion.setRole("admin");
         } else {
+            discussion.setRole("user");
             discussion.setTopPriority(false);
         }
 

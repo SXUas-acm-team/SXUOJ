@@ -294,7 +294,7 @@
                     <template v-else>
                       <p
                       class="md-content"
-                      v-html="problemData.problem.source"
+                      v-dompurify-html="problemData.problem.source"
                       ></p>
                     </template>
                   </template>

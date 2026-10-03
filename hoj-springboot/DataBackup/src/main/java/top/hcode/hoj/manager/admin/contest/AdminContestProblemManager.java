@@ -28,6 +28,7 @@ import top.hcode.hoj.pojo.entity.judge.Judge;
 import top.hcode.hoj.pojo.entity.problem.Problem;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.validator.GroupValidator;
 
 import java.io.File;
 import java.util.*;
@@ -57,10 +58,23 @@ public class AdminContestProblemManager {
     @Autowired
     private ContestEntityService contestEntityService;
 
+    @Autowired
+    private GroupValidator groupValidator;
+
+    private void requireContestOwner(Long cid) throws StatusFailException {
+        Contest contest = cid == null ? null : contestEntityService.getById(cid);
+        AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        if (contest == null || user == null || (!SecurityUtils.getSubject().hasRole("root")
+                && !Objects.equals(user.getUid(), contest.getUid())
+                && !(Boolean.TRUE.equals(contest.getIsGroup()) && groupValidator.isGroupRoot(user.getUid(), contest.getGid())))) {
+            throw new StatusFailException("无权管理该比赛！");
+        }
+    }
+
     public HashMap<String, Object> getProblemList(Integer limit, Integer currentPage, String keyword,
                                                   Long cid, Integer problemType, String oj) {
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
         IPage<Problem> iPage = new Page<>(currentPage, limit);
         // 根据cid在ContestProblem表中查询到对应pid集合
         QueryWrapper<ContestProblem> contestProblemQueryWrapper = new QueryWrapper<>();
@@ -165,9 +179,11 @@ public class AdminContestProblemManager {
         }
     }
 
-    public void deleteProblem(Long pid, Long cid) {
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteProblem(Long pid, Long cid) throws StatusFailException {
         //  比赛id不为null，表示就是从比赛列表移除而已
         if (cid != null) {
+            requireContestOwner(cid);
             QueryWrapper<ContestProblem> contestProblemQueryWrapper = new QueryWrapper<>();
             contestProblemQueryWrapper.eq("cid", cid).eq("pid", pid);
             contestProblemEntityService.remove(contestProblemQueryWrapper);
@@ -255,6 +271,13 @@ public class AdminContestProblemManager {
     }
 
     public ContestProblem setContestProblem(ContestProblem contestProblem) throws StatusFailException {
+        requireContestOwner(contestProblem.getCid());
+        if (contestProblem.getId() != null) {
+            ContestProblem stored = contestProblemEntityService.getById(contestProblem.getId());
+            if (stored == null || !Objects.equals(stored.getCid(), contestProblem.getCid())) {
+                throw new StatusFailException("题目与比赛不匹配！");
+            }
+        }
         boolean isOk = contestProblemEntityService.saveOrUpdate(contestProblem);
         if (isOk) {
             contestProblemEntityService.syncContestRecord(contestProblem.getPid(), contestProblem.getCid(), contestProblem.getDisplayId());
@@ -304,7 +327,13 @@ public class AdminContestProblemManager {
                 "Admin_Contest", "Add_Public_Problem", cid, pid, userRolesVo.getUid(), userRolesVo.getUsername());
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void importContestRemoteOJProblem(String name, String problemId, Long cid, String displayId) throws StatusFailException {
+        requireContestOwner(cid);
+        if (displayId == null || displayId.trim().isEmpty() || displayId.length() > 20) throw new StatusFailException("展示ID错误！");
+        if (contestProblemEntityService.count(new QueryWrapper<ContestProblem>().eq("cid", cid).eq("display_id", displayId)) > 0) {
+            throw new StatusFailException("比赛展示ID已存在！");
+        }
         QueryWrapper<Problem> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("problem_id", name.toUpperCase() + "-" + problemId);
         Problem problem = problemEntityService.getOne(queryWrapper, false);

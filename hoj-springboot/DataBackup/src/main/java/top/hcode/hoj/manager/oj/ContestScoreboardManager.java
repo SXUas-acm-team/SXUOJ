@@ -16,6 +16,9 @@ import top.hcode.hoj.pojo.vo.ContestOutsideInfoVO;
 import top.hcode.hoj.pojo.vo.ContestVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.RedisUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import top.hcode.hoj.validator.ContestValidator;
 
 import javax.annotation.Resource;
@@ -43,11 +46,15 @@ public class ContestScoreboardManager {
     @Resource
     private ContestRankManager contestRankManager;
 
+    @Resource
+    private RedisUtils redisUtils;
+
     public ContestOutsideInfoVO getContestOutsideInfo(Long cid) throws StatusNotFoundException, StatusForbiddenException {
 
         ContestVO contestInfo = contestEntityService.getContestInfoById(cid);
+        Contest definition = contestEntityService.getById(cid);
 
-        if (contestInfo == null) {
+        if (contestInfo == null || definition == null || !Boolean.TRUE.equals(definition.getVisible())) {
             throw new StatusNotFoundException("访问错误：该比赛不存在！");
         }
 
@@ -76,12 +83,19 @@ public class ContestScoreboardManager {
     public IPage getContestOutsideScoreboard(ContestRankDTO contestRankDto) throws StatusFailException, StatusForbiddenException {
 
         Long cid = contestRankDto.getCid();
-        List<String> concernedList = contestRankDto.getConcernedList();
+        List<String> concernedList = top.hcode.hoj.utils.RequestLimits.boundedDistinct(contestRankDto.getConcernedList(), 100);
         Boolean removeStar = contestRankDto.getRemoveStar();
         Boolean forceRefresh = contestRankDto.getForceRefresh();
 
         if (cid == null) {
             throw new StatusFailException("错误：比赛id不能为空");
+        }
+        AccountProfile caller = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        String callerKey = caller != null ? "user:" + caller.getUid()
+                : "ip:" + (attributes == null ? "unknown" : attributes.getRequest().getRemoteAddr());
+        if (!redisUtils.isWithinRateLimit("scoreboard:" + callerKey + ":" + cid, 2)) {
+            throw new StatusForbiddenException("榜单请求过于频繁，请稍后重试！");
         }
         if (removeStar == null) {
             removeStar = false;
@@ -93,7 +107,7 @@ public class ContestScoreboardManager {
         // 获取本场比赛的状态
         Contest contest = contestEntityService.getById(cid);
 
-        if (contest == null) {
+        if (contest == null || !Boolean.TRUE.equals(contest.getVisible())) {
             throw new StatusFailException("访问错误：该比赛不存在！");
         }
 
@@ -125,8 +139,8 @@ public class ContestScoreboardManager {
         Integer currentPage = contestRankDto.getCurrentPage();
         Integer limit = contestRankDto.getLimit();
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 50;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 50);
 
         // 校验该比赛是否开启了封榜模式，超级管理员和比赛创建者可以直接看到实际榜单
         boolean isOpenSealRank = contestValidator.isSealRank(currentUid, contest, forceRefresh, isRoot);
@@ -142,7 +156,7 @@ public class ContestScoreboardManager {
                     contest,
                     null,
                     concernedList,
-                    contestRankDto.getExternalCidList(),
+                    contestValidator.validateExternalRanks(contestRankDto.getExternalCidList(), userRolesVo, isRoot),
                     currentPage,
                     limit,
                     contestRankDto.getKeyword(),
@@ -157,7 +171,7 @@ public class ContestScoreboardManager {
                     contest,
                     null,
                     concernedList,
-                    contestRankDto.getExternalCidList(),
+                    contestValidator.validateExternalRanks(contestRankDto.getExternalCidList(), userRolesVo, isRoot),
                     currentPage,
                     limit,
                     contestRankDto.getKeyword(),

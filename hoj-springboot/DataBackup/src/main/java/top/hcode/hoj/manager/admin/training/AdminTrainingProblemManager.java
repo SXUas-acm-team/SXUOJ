@@ -53,8 +53,8 @@ public class AdminTrainingProblemManager {
     private RemoteProblemManager remoteProblemManager;
 
     public HashMap<String, Object> getProblemList(Integer limit, Integer currentPage, String keyword, Boolean queryExisted, Long tid) {
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
 
         IPage<Problem> iPage = new Page<>(currentPage, limit);
         // 根据tid在TrainingProblem表中查询到对应pid集合
@@ -198,7 +198,11 @@ public class AdminTrainingProblemManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void importTrainingRemoteOJProblem(String name, String problemId, Long tid) throws StatusFailException {
+        if (trainingEntityService.getById(tid) == null) throw new StatusFailException("训练不存在！");
+        if (trainingProblemEntityService.count(new QueryWrapper<TrainingProblem>().eq("tid", tid)
+                .eq("display_id", name.toUpperCase() + "-" + problemId)) > 0) throw new StatusFailException("展示ID已存在！");
         QueryWrapper<Problem> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("problem_id", name.toUpperCase() + "-" + problemId);
         Problem problem = problemEntityService.getOne(queryWrapper, false);

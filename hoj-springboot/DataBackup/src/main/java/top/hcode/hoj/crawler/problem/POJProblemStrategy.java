@@ -16,7 +16,7 @@ import top.hcode.hoj.utils.JsoupUtils;
 public class POJProblemStrategy extends ProblemStrategy {
 
     public static final String JUDGE_NAME = "POJ";
-    public static final String HOST = "http://poj.org";
+    public static final String HOST = "https://poj.org";
     public static final String PROBLEM_URL = "/problem?id=%s";
 
     @Override
@@ -27,6 +27,7 @@ public class POJProblemStrategy extends ProblemStrategy {
         Problem info = new Problem();
         String url = HOST + String.format(PROBLEM_URL, problemId);
         Connection connection = JsoupUtils.getConnectionFromUrl(url, null, null);
+        connection.followRedirects(false);
         Document document = JsoupUtils.getDocument(connection, null);
         String html = document.html();
         html = html.replaceAll("<br>", "\n");
@@ -47,7 +48,7 @@ public class POJProblemStrategy extends ProblemStrategy {
         info.setExamples(sb.toString());
         info.setHint(ReUtil.get("<p class=.*?>Hint</p><div class=.*?>([\\s\\S]*?)</div><p class=\"pst\">", html, 1));
         info.setIsRemote(true);
-        info.setSource(String.format("<a style='color:#1A5CC8' href='http://poj.org/problem?id=%s'>%s</a>", problemId, JUDGE_NAME + "-" + problemId));
+        info.setSource(String.format("<a style='color:#1A5CC8' href='https://poj.org/problem?id=%s'>%s</a>", problemId, JUDGE_NAME + "-" + problemId));
         info.setType(0)
                 .setAuth(1)
                 .setAuthor(author)

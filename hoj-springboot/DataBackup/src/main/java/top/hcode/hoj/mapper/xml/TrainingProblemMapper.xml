@@ -70,6 +70,10 @@
                  where tr.tid = t.id
                    and t.auth = 'Private'
                    and tr.uid = #{uid}
+                   and tr.status = 1 AND t.status = 1
+                   and (t.is_group = 0 OR EXISTS
+                       (SELECT 1 FROM group_member gm WHERE gm.gid = t.gid AND gm.uid = #{uid} AND gm.auth IN (3,4,5))
+                       OR EXISTS (SELECT 1 FROM `group` g WHERE g.id = t.gid AND g.uid = #{uid}))
              ) tm
                  left join
              training_problem tp
@@ -92,6 +96,9 @@
             ) b
             on a.pid = b.pid
         where b.pid is not null
+          AND EXISTS (SELECT 1 FROM training t WHERE t.id = a.tid AND t.status = 1 AND
+              (t.auth = 'Public' OR t.author = (SELECT username FROM user_info WHERE uuid = #{uid})
+               OR EXISTS (SELECT 1 FROM training_register tr WHERE tr.tid = t.id AND tr.uid = #{uid} AND tr.status = 1)))
     </select>
 
     <select id="getGroupTrainingListAcceptedCountByUid" resultType="top.hcode.hoj.pojo.entity.training.TrainingProblem">
@@ -105,10 +112,14 @@
         ) a
         left join
         (
-            SELECT DISTINCT pid FROM judge where gid = #{gid} and uid = #{uid} and status = 0
+            SELECT DISTINCT pid FROM judge where gid = #{gid} and uid = #{uid} and status = 0 and cid = 0
         ) b
         on a.pid = b.pid
         where b.pid is not null
+          AND EXISTS (SELECT 1 FROM training t WHERE t.id = a.tid AND t.status = 1 AND
+              (t.auth = 'Public' OR t.author = (SELECT username FROM user_info WHERE uuid = #{uid})
+               OR EXISTS (SELECT 1 FROM training_register tr WHERE tr.tid = t.id AND tr.uid = #{uid} AND tr.status = 1)
+               OR EXISTS (SELECT 1 FROM group_member gm WHERE gm.gid = t.gid AND gm.uid = #{uid} AND gm.auth = 5)))
     </select>
 
 

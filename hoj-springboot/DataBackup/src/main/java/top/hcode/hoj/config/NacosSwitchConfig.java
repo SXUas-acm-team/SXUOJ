@@ -28,6 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j(topic = "hoj")
 public class NacosSwitchConfig {
 
+    @Value("${spring.cloud.nacos.config.enabled:true}")
+    private boolean nacosEnabled;
+
     @Value("${spring.cloud.nacos.url}")
     private String NACOS_URL;
 
@@ -57,6 +60,12 @@ public class NacosSwitchConfig {
     @PostConstruct
     public void init() {
         if (init.compareAndSet(false, true)) {
+            if (!nacosEnabled) {
+                refreshSwitchConfig(null);
+                refreshWebConfig(null);
+                log.info("[Nacos Config] disabled, using local in-memory Web/Switch configuration");
+                return;
+            }
             try {
                 Properties properties = new Properties();
                 properties.put("serverAddr", NACOS_URL);
@@ -79,7 +88,7 @@ public class NacosSwitchConfig {
                         refreshSwitchConfig(configInfo);
                     }
                 });
-                log.info("[Switch Config] [Init Succeeded] [{}]", getSwitchConfig());
+                log.info("[Switch Config] initialization succeeded");
 
                 refreshWebConfig(configService.getConfig(webConfigFileName, group, 6000));
                 configService.addListener(webConfigFileName, group, new Listener() {
@@ -93,7 +102,7 @@ public class NacosSwitchConfig {
                         refreshWebConfig(configInfo);
                     }
                 });
-                log.info("[Web Config] [Init Succeeded] [{}]", getWebConfig());
+                log.info("[Web Config] initialization succeeded");
             } catch (Exception e) {
                 log.warn("[Nacos Config] init failed, fallback to defaults: {}", e.getMessage());
                 // fallback to defaults to allow local startup without Nacos
@@ -112,7 +121,7 @@ public class NacosSwitchConfig {
                 switchConfig = yaml.loadAs(config, SwitchConfig.class);
                 switchConfig.convertUnicodeRemoteAccount2Str();
             } catch (Exception e) {
-                log.error("[Nacos Config] refresh switch config error:{}, config:{}", e, config);
+                log.error("[Nacos Config] refresh switch config failed ({})", e.getClass().getSimpleName());
             }
         }
     }
@@ -129,7 +138,7 @@ public class NacosSwitchConfig {
                 Yaml yaml = new Yaml();
                 webConfig = yaml.loadAs(config, WebConfig.class);
             } catch (Exception e) {
-                log.error("[Nacos Config] refresh web config error:{}, config:{}", e, config);
+                log.error("[Nacos Config] refresh web config failed ({})", e.getClass().getSimpleName());
             }
         }
     }
@@ -139,6 +148,12 @@ public class NacosSwitchConfig {
     }
 
     public boolean publishSwitchConfig() {
+        if (!nacosEnabled) {
+            return true;
+        }
+        if (configService == null) {
+            return false;
+        }
         DumperOptions options = new DumperOptions();
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setDefaultScalarStyle(DumperOptions.ScalarStyle.PLAIN);
@@ -149,12 +164,18 @@ public class NacosSwitchConfig {
         try {
             return configService.publishConfig(switchConfigFileName, group, content, ConfigType.YAML.getType());
         } catch (NacosException e) {
-            log.error("[Nacos Config] publish switch config error:{}, config:{}", e, content);
+            log.error("[Nacos Config] publish switch config failed ({})", e.getClass().getSimpleName());
             return false;
         }
     }
 
     public boolean publishWebConfig() {
+        if (!nacosEnabled) {
+            return true;
+        }
+        if (configService == null) {
+            return false;
+        }
         DumperOptions options = new DumperOptions();
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setDefaultScalarStyle(DumperOptions.ScalarStyle.PLAIN);
@@ -163,7 +184,7 @@ public class NacosSwitchConfig {
         try {
             return configService.publishConfig(webConfigFileName, group, content, ConfigType.YAML.getType());
         } catch (NacosException e) {
-            log.error("[Nacos Config] publish web config error:{}, config:{}", e, content);
+            log.error("[Nacos Config] publish web config failed ({})", e.getClass().getSimpleName());
             return false;
         }
     }

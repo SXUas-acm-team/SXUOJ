@@ -4,7 +4,7 @@ import store from './store'
 import Element from 'element-ui'
 import i18n from '@/i18n'
 
-// import "element-ui/lib/theme-chalk/index.css"
+import "element-ui/lib/theme-chalk/index.css"
 import 'font-awesome/css/font-awesome.min.css'
 import Message from 'vue-m-message'
 import 'vue-m-message/dist/index.css'
@@ -15,6 +15,7 @@ import Md_Katex from '@iktakahiro/markdown-it-katex'
 // 注释表示使用cdn引入
 import 'xe-utils'
 import VXETable from 'vxe-table'
+import { hardenVxeTable } from '@/common/tableSecurity'
 import 'vxe-table/lib/style.css'
 
 import Katex from '@/common/katex'
@@ -39,7 +40,7 @@ import VueCropper from 'vue-cropper'
 // import 'echarts/lib/component/markPoint'
 // Vue.component('ECharts', ECharts)
 
-// 使用CDN的方式如下引入echarts
+// Bundle ECharts locally with the application
 import VueECharts from 'vue-echarts';
 Vue.component('ECharts', VueECharts)
 
@@ -52,12 +53,14 @@ import mavonEditor from 'mavon-editor'  //引入markdown编辑器
 import 'mavon-editor/dist/css/index.css';
 Vue.use(mavonEditor)
 
-// import 'muse-ui/dist/muse-ui.css';
+import 'muse-ui/dist/muse-ui.css';
 import MuseUI from 'muse-ui'
 Vue.use(MuseUI)
 
-import VueDOMPurifyHTML from 'vue-dompurify-html'
-Vue.use(VueDOMPurifyHTML)
+import { plugin as safeHtmlPlugin, secureMarkdownRenderer } from '@/common/security'
+import hljs from 'highlight.js'
+import 'github-markdown-css/github-markdown.css'
+Vue.use(safeHtmlPlugin)
 
 import router from './router'
 
@@ -66,6 +69,7 @@ Object.keys(filters).forEach(key => {   // 注册全局过滤器
 })
 Vue.use(VueParticles) // 粒子特效背景
 Vue.use(Katex)  // 数学公式渲染
+hardenVxeTable(VXETable)
 VXETable.setup({
   // 对组件内置的提示语进行国际化翻译
   i18n: (key, value) => i18n.t(key, value)
@@ -84,7 +88,7 @@ Vue.use(SlideVerify) // 滑动验证码组件
 
 Vue.prototype.$axios = axios
 
-Vue.prototype.$markDown = mavonEditor.mavonEditor.getMarkdownIt().use(Md_Katex)  // 挂载到vue
+Vue.prototype.$markDown = secureMarkdownRenderer(mavonEditor.mavonEditor.getMarkdownIt().use(Md_Katex), hljs)  // 挂载到vue
 
 Vue.config.productionTip = false
 new Vue({

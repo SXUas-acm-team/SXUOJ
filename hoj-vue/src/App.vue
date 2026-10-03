@@ -18,7 +18,7 @@
               <h1>{{ websiteConfig.name }}</h1>
               <span
                 style="line-height:25px"
-                v-html="websiteConfig.description"
+                v-dompurify-html="websiteConfig.description"
                 v-katex
                 v-highlight
               >

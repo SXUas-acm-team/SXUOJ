@@ -152,6 +152,7 @@ export default {
       screenWidth: 768,
       options: {
         tooltip: {
+          renderMode: "richText",
           trigger: 'axis',
         },
         legend: {
@@ -227,13 +228,12 @@ export default {
     };
   },
   created() {
-    this.screenWidth = window.screen.width;
-    const that = this;
-    window.onresize = () => {
-      return (() => {
-        that.screenWidth = document.documentElement.clientWidth;
-      })();
-    };
+    this.screenWidth = document.documentElement.clientWidth;
+    this._onResize = () => { this.screenWidth = document.documentElement.clientWidth; };
+    window.addEventListener("resize", this._onResize);
+  },
+  beforeDestroy() {
+    window.removeEventListener("resize", this._onResize);
   },
   mounted() {
     this.getRankData(1);

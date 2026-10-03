@@ -4,7 +4,7 @@ nacos-host: ${NACOS_HOST:127.0.0.1}
 nacos-port: ${NACOS_PORT:8848}
 nacos-url: ${NACOS_URL:${nacos-host}:${nacos-port}}
 nacos-username: ${NACOS_USERNAME:root}
-nacos-password: ${NACOS_PASSWORD:hoj123456}
+nacos-password: ${NACOS_PASSWORD:}
 nacos-switch-config: hoj-switch.yml
 nacos-web-config: hoj-web.yml
 

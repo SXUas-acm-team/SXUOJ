@@ -151,14 +151,12 @@ public class InteractiveJudge extends AbstractJudge {
             } else if (exitCode == SPJ_PC) {
                 result.set("code", exitCode);
                 String stdout = interactiveSandBoxRes.getStdout();
-                if (NumberUtil.isNumber(stdout)) {
-                    double percentage = 0.0;
-                    percentage = Double.parseDouble(stdout) / 100;
-                    if (percentage == 1) {
-                        result.set("code", SPJ_AC);
-                    } else {
-                        result.set("percentage", percentage);
-                    }
+                Double percentage = top.hcode.hoj.util.JudgeUtils.parsePercentage(stdout);
+                if (percentage == null) return result.set("code", SPJ_ERROR);
+                if (percentage == 1) {
+                    result.set("code", SPJ_AC);
+                } else {
+                    result.set("percentage", percentage);
                 }
             } else {
                 if (!StringUtils.isEmpty(interactiveSandBoxRes.getStderr())) {

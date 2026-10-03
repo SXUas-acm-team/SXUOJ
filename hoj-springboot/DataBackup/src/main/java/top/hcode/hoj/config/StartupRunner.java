@@ -158,6 +158,9 @@ public class StartupRunner implements CommandLineRunner {
     @Value("${forced-update-remote-judge-account}")
     private Boolean forcedUpdateRemoteJudgeAccount;
 
+    @Value("${hoj.startup.update-languages:true}")
+    private boolean updateLanguages;
+
     @Resource
     private CheckLanguageConfig checkLanguageConfig;
 
@@ -174,13 +177,13 @@ public class StartupRunner implements CommandLineRunner {
             log.warn("[Init System Config] 未连接 Nacos，跳过 Web/Switch 远程配置初始化");
         }
 
-        upsertHOJLanguageV2();
-//      upsertHOJLanguage("PHP", "PyPy2", "PyPy3", "JavaScript Node", "JavaScript V8");
-//      checkAllLanguageUpdate();
-
-        checkLanguageUpdate();
-
-        upsertHOJLanguageV3();
+        if (updateLanguages) {
+            upsertHOJLanguageV2();
+            checkLanguageUpdate();
+            upsertHOJLanguageV3();
+        } else {
+            log.info("[Init System Config] startup language updates disabled");
+        }
 
     }
 
@@ -382,9 +385,9 @@ public class StartupRunner implements CommandLineRunner {
 
 
         if (CollectionUtils.isEmpty(usernameList) || CollectionUtils.isEmpty(passwordList) || usernameList.size() != passwordList.size()) {
-            log.error("[Init System Config] [{}]: There is no account or password configured for remote judge, " +
-                            "username list:{}, password list:{}", oj, Arrays.toString(usernameList.toArray()),
-                    Arrays.toString(passwordList.toArray()));
+            log.error("[Init System Config] [{}]: Invalid remote account list sizes (usernames={}, passwords={})", oj,
+                    usernameList == null ? 0 : usernameList.size(), passwordList == null ? 0 : passwordList.size());
+            return;
         }
 
         List<RemoteJudgeAccount> remoteAccountList = new LinkedList<>();

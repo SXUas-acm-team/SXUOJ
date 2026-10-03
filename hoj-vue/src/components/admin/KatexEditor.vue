@@ -10,7 +10,7 @@
     </el-form-item>
 
     <el-form-item label="Output"> </el-form-item>
-    <div v-html="text"></div>
+    <div v-dompurify-html="text"></div>
   </el-form>
 </template>
 

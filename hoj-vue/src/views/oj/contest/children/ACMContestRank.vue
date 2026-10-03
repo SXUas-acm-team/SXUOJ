@@ -434,6 +434,7 @@
   </el-card>
 </template>
 <script>
+import { chartRankRecords } from "@/common/viewSafety";
 import Avatar from "vue-avatar";
 import moment from "moment";
 import { mapActions } from "vuex";
@@ -483,6 +484,7 @@ export default {
           right: "0",
         },
         tooltip: {
+          renderMode: "richText",
           trigger: "axis",
           axisPointer: {
             type: "cross",
@@ -671,14 +673,8 @@ export default {
     },
     applyToChart(rankData) {
       let [users, seriesData] = [[], []];
-      let len = rankData.length;
-      let topIndex = this.concernedList.length || 0;
-      if (rankData.length > 0) {
-        if (rankData[0].uid == this.userInfo.uid) {
-          topIndex++;
-        }
-      }
-      for (let i = topIndex; i < len && i < topIndex + 10; i++) {
+      rankData = chartRankRecords(rankData);
+      for (let i = 0; i < rankData.length; i++) {
         let rank = rankData[i];
         let rankShowName = this.getRankShowName(
           rank[this.contest.rankShowName],

@@ -1,0 +1,24 @@
+# Local debugging must not reset remote accounts or run background database maintenance.
+open-remote-judge: false
+spring:
+  datasource:
+    initial-size: 1
+    min-idle: 1
+    maxActive: 10
+    maxWait: 5000
+    connectTimeout: 5000
+    socketTimeout: 10000
+    connectionErrorRetryAttempts: 0
+    timeBetweenConnectErrorMillis: 5000
+  redis:
+    timeout: 5000
+management:
+  health:
+    # No SMTP account is configured for local debugging.
+    mail:
+      enabled: false
+hoj:
+  startup:
+    update-languages: false
+  schedule:
+    enabled: false

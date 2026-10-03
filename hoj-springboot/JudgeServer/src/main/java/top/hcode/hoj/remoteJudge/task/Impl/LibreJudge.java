@@ -1,5 +1,7 @@
 package top.hcode.hoj.remoteJudge.task.Impl;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.json.JSONObject;
@@ -103,8 +105,7 @@ public class LibreJudge extends RemoteJudgeStrategy {
         content.put("compileAndRunOptions", JSONUtil.parseObj(language.get(remoteJudgeDTO.getLanguage()).getValue()));
         json.put("content", content);
         json.put("uploadInfo", null);
-        String body = HttpRequest
-                .post(HOST + SUBMIT_URL)
+        String body = SecureHttp.post(HOST + SUBMIT_URL)
                 .header("Authorization", "Bearer " + remoteJudgeDTO.getCsrfToken())
                 .header("User-Agent", UA)
                 .body(JSONUtil.toJsonStr(JSONUtil.parseObj(json, false)))
@@ -119,8 +120,7 @@ public class LibreJudge extends RemoteJudgeStrategy {
             try {
                 TimeUnit.SECONDS.sleep(3);
             } catch (InterruptedException ignore){}
-            body = HttpRequest
-                    .post(HOST + SUBMIT_URL)
+            body = SecureHttp.post(HOST + SUBMIT_URL)
                     .header("Authorization", "Bearer " + remoteJudgeDTO.getCsrfToken())
                     .body(JSONUtil.toJsonStr(JSONUtil.parseObj(json, false)))
                     .execute()
@@ -139,7 +139,7 @@ public class LibreJudge extends RemoteJudgeStrategy {
         JSONObject json = new JSONObject();
         json.put("submissionId", remoteJudgeDTO.getSubmitId().toString());
         json.put("locale", "zh_CN");
-        String body = HttpRequest.post(HOST + SUBMISSION_RESULT_URL)
+        String body = SecureHttp.post(HOST + SUBMISSION_RESULT_URL)
                 .body(json.toString())
                 .execute().body();
         JSONObject parseObj = JSONUtil.parseObj(body);
@@ -177,7 +177,7 @@ public class LibreJudge extends RemoteJudgeStrategy {
         JSONObject json = new JSONObject();
         json.put("username", remoteJudgeDTO.getUsername());
         json.put("password", remoteJudgeDTO.getPassword());
-        String body = HttpRequest.post(HOST + LOGIN_URL)
+        String body = SecureHttp.post(HOST + LOGIN_URL)
                 .body(json.toString())
                 .header("User-Agent", UA)
                 .timeout(5000)

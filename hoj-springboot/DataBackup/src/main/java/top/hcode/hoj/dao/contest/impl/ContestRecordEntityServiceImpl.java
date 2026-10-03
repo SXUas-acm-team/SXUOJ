@@ -48,68 +48,12 @@ public class ContestRecordEntityServiceImpl extends ServiceImpl<ContestRecordMap
                                           Date startTime,
                                           Date endTime) {
 
-        List<ContestRecord> acInfo = contestRecordMapper.getACInfo(status, cid);
-
-        HashMap<Long, String> pidMapUidAndPid = new HashMap<>(12);
-        HashMap<String, Long> UidAndPidMapTime = new HashMap<>(12);
-
-        List<String> superAdminUidList = userInfoEntityService.getSuperAdminUidList();
-
-        List<ContestRecord> userACInfo = new LinkedList<>();
-
-        for (ContestRecord contestRecord : acInfo) {
-
-            if (contestRecord.getUid().equals(contestCreatorId)
-                    || superAdminUidList.contains(contestRecord.getUid())) { // 超级管理员和比赛创建者的提交跳过
-                continue;
-            }
-
-
-            if (!DateUtil.isIn(contestRecord.getSubmitTime(), startTime, endTime)){ // 非比赛期间的不记录
-                continue;
-            }
-
-            contestRecord.setFirstBlood(false);
-            String uidAndPid = pidMapUidAndPid.get(contestRecord.getPid());
-            if (uidAndPid == null) {
-                pidMapUidAndPid.put(contestRecord.getPid(), contestRecord.getUid() + contestRecord.getPid());
-                UidAndPidMapTime.put(contestRecord.getUid() + contestRecord.getPid(), contestRecord.getTime());
-            } else {
-                Long firstTime = UidAndPidMapTime.get(uidAndPid);
-                Long tmpTime = contestRecord.getTime();
-                if (tmpTime < firstTime) {
-                    pidMapUidAndPid.put(contestRecord.getPid(), contestRecord.getUid() + contestRecord.getPid());
-                    UidAndPidMapTime.put(contestRecord.getUid() + contestRecord.getPid(), tmpTime);
-                }
-            }
-            userACInfo.add(contestRecord);
-        }
-
-
-        List<ContestRecord> pageList = new ArrayList<>();
-
-        int count = userACInfo.size();
-
-        //计算当前页第一条数据的下标
-        int currId = currentPage > 1 ? (currentPage - 1) * limit : 0;
-        for (int i = 0; i < limit && i < count - currId; i++) {
-            ContestRecord contestRecord = userACInfo.get(currId + i);
-            if (pidMapUidAndPid.get(contestRecord.getPid()).equals(contestRecord.getUid() + contestRecord.getPid())) {
-                contestRecord.setFirstBlood(true);
-            }
-            pageList.add(contestRecord);
-        }
-
-
-        Page<ContestRecord> page = new Page<>(currentPage, limit);
-        page.setSize(limit);
-        page.setCurrent(currentPage);
-        page.setTotal(count);
-        page.setRecords(pageList);
-
-        return page;
+        List<String> excluded = new ArrayList<>(userInfoEntityService.getSuperAdminUidList());
+        excluded.add(contestCreatorId);
+        Page<ContestRecord> page = new Page<>(top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage),
+                top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30));
+        return contestRecordMapper.getACInfoPage(page, status, cid, excluded, startTime, endTime);
     }
-
 
     @Override
     public List<ContestRecordVO> getOIContestRecord(Contest contest, List<Integer> externalCidList,

@@ -2,6 +2,7 @@ package top.hcode.hoj.manager.oj;
 
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.shiro.SecurityUtils;
@@ -57,8 +58,8 @@ public class ContestAdminManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 30;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
 
         // 获取当前比赛的，状态为ac，未被校验的排在前面
         return contestRecordEntityService.getACInfo(currentPage,
@@ -88,8 +89,8 @@ public class ContestAdminManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        boolean isOk = contestRecordEntityService.updateById(
-                new ContestRecord().setChecked(checkACDto.getChecked()).setId(checkACDto.getId()));
+        boolean isOk = contestRecordEntityService.update(new UpdateWrapper<ContestRecord>()
+                .eq("id", checkACDto.getId()).eq("cid", checkACDto.getCid()).set("checked", checkACDto.getChecked()));
 
         if (!isOk) {
             throw new StatusFailException("修改失败！");
@@ -112,8 +113,8 @@ public class ContestAdminManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 30;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
 
         // 获取当前比赛的，未被确定的排在签名
 
@@ -143,7 +144,8 @@ public class ContestAdminManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        boolean isOk = contestPrintEntityService.updateById(new ContestPrint().setId(id).setStatus(1));
+        boolean isOk = contestPrintEntityService.update(new UpdateWrapper<ContestPrint>()
+                .eq("id", id).eq("cid", cid).set("status", 1));
 
         if (!isOk) {
             throw new StatusFailException("修改失败！");

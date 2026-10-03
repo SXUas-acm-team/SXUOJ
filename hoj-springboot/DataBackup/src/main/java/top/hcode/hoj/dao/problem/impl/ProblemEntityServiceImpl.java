@@ -34,6 +34,7 @@ import top.hcode.hoj.pojo.vo.ImportProblemVO;
 import top.hcode.hoj.pojo.vo.ProblemCountVO;
 import top.hcode.hoj.pojo.vo.ProblemVO;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.SafeFiles;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -111,8 +112,13 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean adminUpdateProblem(ProblemDTO problemDto) {
+        validateProblemFiles(problemDto);
 
         Problem problem = problemDto.getProblem();
+        Problem previousProblem = problemMapper.selectById(problem.getId());
+        if (previousProblem == null) throw new IllegalArgumentException("Problem does not exist");
+        boolean judgeModeChanged = !Objects.equals(previousProblem.getJudgeMode(), problemDto.getJudgeMode())
+                || !Objects.equals(previousProblem.getJudgeCaseMode(), problem.getJudgeCaseMode());
         if (Constants.JudgeMode.DEFAULT.getMode().equals(problemDto.getJudgeMode())) {
             problem.setSpjLanguage(null).setSpjCode(null);
         }
@@ -181,6 +187,7 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
          */
         List<ProblemTag> problemTagList = new LinkedList<>(); // 存储新的problem_tag表数据
         for (Tag tag : problemDto.getTags()) {
+            validateTagScope(tag, problem);
             if (tag.getId() == null) { // 没有主键表示为新添加的标签
                 tag.setOj(ojName);
                 boolean addTagResult = tagEntityService.save(tag);
@@ -334,6 +341,7 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
             String testcaseDir = problemDto.getUploadTestcaseDir();
             if (needDeleteProblemCases.size() > 0 || newProblemCaseList.size() > 0
                     || needUpdateProblemCaseList.size() > 0 || !StringUtils.isEmpty(testcaseDir)
+                    || judgeModeChanged
                     || (problemDto.getChangeJudgeCaseMode() != null && problemDto.getChangeJudgeCaseMode())) {
                 problem.setCaseVersion(caseVersion);
                 // 如果是选择上传测试文件的，则需要遍历对应文件夹，读取数据，写入数据库,先前的题目数据一并清空。
@@ -393,6 +401,7 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean adminAddProblem(ProblemDTO problemDto) {
+        validateProblemFiles(problemDto);
 
         Problem problem = problemDto.getProblem();
 
@@ -479,8 +488,8 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
                 problemMapper.update(null, problemUpdateWrapper);
             }
             addCasesToProblemResult = problemCaseEntityService.saveOrUpdateBatch(problemCases);
-            // 获取代理bean对象执行异步方法===》根据测试文件初始info
-            applicationContext.getBean(ProblemEntityServiceImpl.class).initUploadTestCase(
+            // Finish testcase initialization before import staging directories are cleaned up.
+            initUploadTestCase(
                     problemDto.getJudgeMode(),
                     problem.getJudgeCaseMode(),
                     problem.getCaseVersion(),
@@ -515,9 +524,12 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
         List<ProblemTag> problemTagList = new LinkedList<>();
         if (problemDto.getTags() != null) {
             for (Tag tag : problemDto.getTags()) {
+                validateTagScope(tag, problem);
                 if (tag.getId() == null) { //id为空 表示为原tag表中不存在的 插入后可以获取到对应的tagId
-                    Tag existedTag = tagEntityService.getOne(new QueryWrapper<Tag>().eq("name", tag.getName())
-                            .eq("oj", "ME"), false);
+                    QueryWrapper<Tag> lookup = new QueryWrapper<Tag>().eq("name", tag.getName()).eq("oj", "ME");
+                    if (Boolean.TRUE.equals(problem.getIsGroup())) lookup.eq("gid", problem.getGid());
+                    else lookup.isNull("gid");
+                    Tag existedTag = tagEntityService.getOne(lookup, false);
                     if (existedTag == null) {
                         tag.setOj("ME");
                         tagEntityService.save(tag);
@@ -542,6 +554,32 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
         }
     }
 
+    private void validateProblemFiles(ProblemDTO dto) {
+        if (!Boolean.TRUE.equals(dto.getIsUploadTestCase())) return;
+        if (!StringUtils.isEmpty(dto.getUploadTestcaseDir())) {
+            dto.setUploadTestcaseDir(SafeFiles.uploadDirectory(dto.getUploadTestcaseDir()));
+        }
+        if (dto.getSamples() != null) for (ProblemCase sample : dto.getSamples()) {
+            SafeFiles.basename(sample.getInput());
+            if (!StringUtils.isEmpty(sample.getOutput())) SafeFiles.basename(sample.getOutput());
+        }
+    }
+
+    private void validateTagScope(Tag tag, Problem problem) {
+        Long groupId = Boolean.TRUE.equals(problem.getIsGroup()) ? problem.getGid() : null;
+        if (Boolean.TRUE.equals(problem.getIsGroup()) && groupId == null) {
+            throw new IllegalArgumentException("Group problem requires its group ID");
+        }
+        if (tag.getId() == null) {
+            tag.setGid(groupId);
+        } else {
+            Tag existing = tagEntityService.getById(tag.getId());
+            if (existing == null || !Objects.equals(existing.getGid(), groupId)) {
+                throw new IllegalArgumentException("Tag belongs to a different group");
+            }
+        }
+    }
+
     // 初始化上传文件的测试数据，写成json文件
     @Async
     public void initUploadTestCase(String judgeMode,
@@ -550,6 +588,12 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
                                    Long problemId,
                                    String tmpTestcaseDir,
                                    List<ProblemCase> problemCaseList) {
+        if (problemId == null || problemId <= 0) throw new IllegalArgumentException("Invalid problem ID");
+        if (!StringUtils.isEmpty(tmpTestcaseDir)) tmpTestcaseDir = SafeFiles.uploadDirectory(tmpTestcaseDir);
+        for (ProblemCase problemCase : problemCaseList) {
+            SafeFiles.basename(problemCase.getInput());
+            SafeFiles.basename(problemCase.getOutput());
+        }
 
         String baseDir = resolveTestcaseBaseDir();
         String testCasesDir = baseDir + File.separator + "problem_" + problemId;
@@ -592,23 +636,23 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
             listFileNames.remove(problemCase.getOutput());
 
             // 读取输入文件
-            FileReader inputFile = new FileReader(testCasesDir + File.separator + problemCase.getInput(), CharsetUtil.UTF_8);
+            FileReader inputFile = new FileReader(SafeFiles.child(testCasesDir, problemCase.getInput()), CharsetUtil.UTF_8);
             String input = inputFile.readString()
                     .replaceAll("\r\n", "\n") // 避免window系统的换行问题
                     .replaceAll("\r", "\n"); // 避免mac系统的换行问题
 
-            FileWriter inputFileWriter = new FileWriter(testCasesDir + File.separator + problemCase.getInput(), CharsetUtil.UTF_8);
+            FileWriter inputFileWriter = new FileWriter(SafeFiles.child(testCasesDir, problemCase.getInput()), CharsetUtil.UTF_8);
             inputFileWriter.write(input);
 
             // 读取输出文件
             String output = "";
-            String outputFilePath = testCasesDir + File.separator + problemCase.getOutput();
+            String outputFilePath = SafeFiles.child(testCasesDir, problemCase.getOutput()).getPath();
             if (FileUtil.exist(outputFilePath)) {
                 FileReader outputFile = new FileReader(outputFilePath, CharsetUtil.UTF_8);
                 output = outputFile.readString()
                         .replaceAll("\r\n", "\n") // 避免window系统的换行问题
                         .replaceAll("\r", "\n"); // 避免mac系统的换行问题
-                FileWriter outFileWriter = new FileWriter(testCasesDir + File.separator + problemCase.getOutput(), CharsetUtil.UTF_8);
+                FileWriter outFileWriter = new FileWriter(SafeFiles.child(testCasesDir, problemCase.getOutput()), CharsetUtil.UTF_8);
                 outFileWriter.write(output);
             } else {
                 FileWriter fileWriter = new FileWriter(outputFilePath);
@@ -636,7 +680,7 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
         // 写入记录文件
         infoFile.write(JSONUtil.toJsonStr(result));
         // 删除临时上传文件夹
-        FileUtil.del(tmpTestcaseDir);
+        if (!StringUtils.isEmpty(tmpTestcaseDir)) FileUtil.del(SafeFiles.uploadDirectory(tmpTestcaseDir));
         // 删除非测试数据的文件
         listFileNames.remove("info");
         if (!CollectionUtils.isEmpty(listFileNames)) {

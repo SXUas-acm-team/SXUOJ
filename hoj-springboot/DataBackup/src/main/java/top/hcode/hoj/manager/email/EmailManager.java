@@ -55,12 +55,21 @@ public class EmailManager {
         sender.setUsername(webConfig.getEmailUsername());
         sender.setPassword(webConfig.getEmailPassword());
 
-        Properties p = new Properties();
-        p.setProperty("mail.smtp.ssl.enable", webConfig.getEmailSsl().toString());
-        p.setProperty("mail.smtp.auth", "true");
-        p.setProperty("mail.smtp.starttls.enable", webConfig.getEmailSsl().toString());
-        sender.setJavaMailProperties(p);
+        sender.setJavaMailProperties(secureMailProperties(Boolean.TRUE.equals(webConfig.getEmailSsl())));
         return sender;
+    }
+
+    public static Properties secureMailProperties(boolean implicitTls) {
+        Properties p = new Properties();
+        p.setProperty("mail.smtp.auth", "true");
+        p.setProperty("mail.smtp.ssl.enable", Boolean.toString(implicitTls));
+        p.setProperty("mail.smtp.starttls.enable", Boolean.toString(!implicitTls));
+        p.setProperty("mail.smtp.starttls.required", Boolean.toString(!implicitTls));
+        p.setProperty("mail.smtp.ssl.checkserveridentity", "true");
+        p.setProperty("mail.smtp.connectiontimeout", "5000");
+        p.setProperty("mail.smtp.timeout", "10000");
+        p.setProperty("mail.smtp.writetimeout", "10000");
+        return p;
     }
 
     /**

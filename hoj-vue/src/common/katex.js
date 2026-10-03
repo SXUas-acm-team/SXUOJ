@@ -1,5 +1,5 @@
 import 'katex'
-import renderMathInElement from 'katex/contrib/auto-render/auto-render'
+import renderMathInElement from 'katex/dist/contrib/auto-render.js'
 import 'katex/dist/katex.min.css'
 
 function _ () {
@@ -8,6 +8,8 @@ function _ () {
 const defaultOptions = {
   errorCallback: _,
   throwOnError: false,
+  trust: false,
+  maxExpand: 1000,
   delimiters: [
     {left: '$', right: '$', display: false},
     {left: '$$', right: '$$', display: true},

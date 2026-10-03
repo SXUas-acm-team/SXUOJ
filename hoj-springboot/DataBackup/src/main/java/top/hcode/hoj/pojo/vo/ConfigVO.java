@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
  */
 @RefreshScope
 @Data
+@lombok.ToString(onlyExplicitlyIncluded = true)
 @Component
 public class ConfigVO {
     // 数据库配置

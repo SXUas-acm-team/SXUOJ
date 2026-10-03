@@ -28,6 +28,7 @@ import top.hcode.hoj.pojo.entity.problem.*;
 import top.hcode.hoj.pojo.vo.ImportProblemVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.SafeFiles;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
@@ -71,7 +72,7 @@ public class ProblemFileManager {
 
         String fileDirId = IdUtil.simpleUUID();
         String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
-        String filePath = fileDir + File.separator + file.getOriginalFilename();
+        String filePath = SafeFiles.child(fileDir, file.getOriginalFilename()).getPath();
         // 文件夹不存在就新建
         FileUtil.mkdir(fileDir);
         try {
@@ -82,7 +83,7 @@ public class ProblemFileManager {
         }
 
         // 将压缩包压缩到指定文件夹
-        ZipUtil.unzip(filePath, fileDir);
+        SafeFiles.unzip(filePath, fileDir);
 
         // 删除zip文件
         FileUtil.del(filePath);

@@ -1,14 +1,14 @@
 # redis配置（支持 .env / 环境变量覆盖）
-redis-host: ${REDIS_HOST:100.97.103.105}
-redis-port: ${REDIS_PORT:6379}
+redis-host: ${REDIS_HOST:100.77.29.68}
+redis-port: ${REDIS_PORT:17291}
 redis-password: ${REDIS_PASSWORD:hoj123456}
 
 # 本服务连接mysql的地址和端口号（支持 .env / 环境变量覆盖）
-mysql-host: ${MYSQL_HOST:${HOJ_DB_PUBLIC_HOST:100.97.103.105}}
-mysql-port: ${MYSQL_PORT:${HOJ_DB_PUBLIC_PORT:3306}}
+mysql-host: ${MYSQL_HOST:${HOJ_DB_PUBLIC_HOST:100.77.29.68}}
+mysql-port: ${MYSQL_PORT:${HOJ_DB_PUBLIC_PORT:16603}}
 # mysql的公网地址和端口号
-mysql-public-host: ${MYSQL_PUBLIC_HOST:${HOJ_DB_PUBLIC_HOST:100.97.103.105}}
-mysql-public-port: ${MYSQL_PUBLIC_PORT:${HOJ_DB_PUBLIC_PORT:3306}}
+mysql-public-host: ${MYSQL_PUBLIC_HOST:${HOJ_DB_PUBLIC_HOST:100.77.29.68}}
+mysql-public-port: ${MYSQL_PUBLIC_PORT:${HOJ_DB_PUBLIC_PORT:16603}}
 mysql-username: ${MYSQL_USERNAME:${HOJ_DB_USERNAME:root}}
 mysql-password: ${MYSQL_PASSWORD:${HOJ_DB_PASSWORD:hoj123456}}
 mysql-name: ${MYSQL_DB:hoj}
@@ -85,8 +85,9 @@ spring:
   # 配置文件上传限制
   servlet:
     multipart:
-      max-file-size: 512MB
-      max-request-size: 512MB
+      resolve-lazily: true
+      max-file-size: 64MB
+      max-request-size: 64MB
 
   redis:
     host: ${redis-host}

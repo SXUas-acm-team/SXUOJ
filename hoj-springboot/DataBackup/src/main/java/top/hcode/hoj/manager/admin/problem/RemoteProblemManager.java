@@ -129,7 +129,7 @@ public class RemoteProblemManager {
 
         if (addTagList != null && addTagList.size() > 0) {
             QueryWrapper<Tag> tagQueryWrapper = new QueryWrapper<>();
-            tagQueryWrapper.eq("oj", OJName);
+            tagQueryWrapper.eq("oj", OJName).isNull("gid");
             List<Tag> tagList = tagEntityService.list(tagQueryWrapper);
             // 已存在的tag不进行添加
             for (Tag hasTag : tagList) {
@@ -153,7 +153,7 @@ public class RemoteProblemManager {
             addProblemTagResult = problemTagEntityService.saveOrUpdateBatch(problemTagList);
         } else {
             QueryWrapper<Tag> tagQueryWrapper = new QueryWrapper<>();
-            tagQueryWrapper.eq("name", OJName);
+            tagQueryWrapper.eq("name", OJName).isNull("gid");
             Tag OJNameTag = tagEntityService.getOne(tagQueryWrapper, false);
             if (OJNameTag == null) {
                 OJNameTag = new Tag();

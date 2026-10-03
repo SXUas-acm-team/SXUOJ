@@ -76,6 +76,9 @@ public class JudgeContext {
     }
 
     public TestJudgeRes testJudge(TestJudgeReq testJudgeReq) {
+        if (testJudgeReq.getExpectedOutput() != null && testJudgeReq.getExpectedOutput().length() > 1024 * 1024) {
+            throw new IllegalArgumentException("Expected output exceeds 1 MiB");
+        }
         // c和c++为一倍时间和空间，其它语言为2倍时间和空间
         LanguageConfig languageConfig = languageConfigLoader.getLanguageConfigByName(testJudgeReq.getLanguage());
         if (languageConfig.getSrcName() == null

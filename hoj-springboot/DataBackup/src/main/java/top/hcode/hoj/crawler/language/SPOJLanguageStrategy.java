@@ -1,5 +1,7 @@
 package top.hcode.hoj.crawler.language;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpUtil;
 import top.hcode.hoj.pojo.entity.problem.Language;
@@ -131,7 +133,7 @@ public class SPOJLanguageStrategy extends LanguageStrategy {
 
     public static void main(String[] args) {
         String url = "https://www.spoj.com/submit/HOTLINE/";
-        String body = HttpUtil.get(url);
+        String body = SecureHttp.getBody(url);
         Pattern pattern1 = Pattern.compile("<option value=\"([\\s\\S]*?)\" >[\\s\\S]*?</option>");
         Pattern pattern2 = Pattern.compile("<option value=\"[\\s\\S]*?\" >([\\s\\S]*?)</option>");
         List<String> allGroups1 = ReUtil.findAll(pattern1, body, 1);

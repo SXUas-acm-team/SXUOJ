@@ -194,14 +194,12 @@ public class SpecialJudge extends AbstractJudge {
                 result.set("code", exitCode);
             } else if (exitCode == SPJ_PC) {
                 result.set("code", exitCode);
-                if (NumberUtil.isNumber(spjStdOut)) {
-                    double percentage = 0.0;
-                    percentage = Double.parseDouble(spjStdOut) / 100;
-                    if (percentage == 1) {
-                        result.set("code", SPJ_AC);
-                    } else {
-                        result.set("percentage", percentage);
-                    }
+                Double percentage = top.hcode.hoj.util.JudgeUtils.parsePercentage(spjStdOut);
+                if (percentage == null) return result.set("code", SPJ_ERROR);
+                if (percentage == 1) {
+                    result.set("code", SPJ_AC);
+                } else {
+                    result.set("percentage", percentage);
                 }
             } else {
                 if (!StringUtils.isEmpty(spjErrOut)) {

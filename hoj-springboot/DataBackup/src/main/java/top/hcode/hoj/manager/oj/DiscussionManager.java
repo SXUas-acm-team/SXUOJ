@@ -88,6 +88,8 @@ public class DiscussionManager {
                                                boolean onlyMine,
                                                String keyword,
                                                boolean admin) {
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
 
@@ -191,6 +193,9 @@ public class DiscussionManager {
 
     public void addDiscussion(Discussion discussion) throws StatusFailException, StatusForbiddenException, StatusNotFoundException {
 
+        if (discussion.getId() != null) throw new StatusFailException("新讨论不能指定已有讨论ID！");
+        discussion.setStatus(0).setLikeNum(0).setViewNum(0).setCommentNum(0);
+
         commonValidator.validateContent(discussion.getTitle(), "讨论标题", 255);
         commonValidator.validateContent(discussion.getDescription(), "讨论描述", 255);
         commonValidator.validateContent(discussion.getContent(), "讨论", 65535);
@@ -207,15 +212,20 @@ public class DiscussionManager {
         if (problemId != null) {
             QueryWrapper<Problem> problemQueryWrapper = new QueryWrapper<>();
             problemQueryWrapper.eq("problem_id", problemId);
-            int problemCount = problemEntityService.count(problemQueryWrapper);
-            if (problemCount == 0) {
+            Problem problem = problemEntityService.getOne(problemQueryWrapper, false);
+            if (problem == null) {
                 throw new StatusNotFoundException("对不起，该题目不存在，无法发布题解!");
+            }
+            if (Boolean.TRUE.equals(problem.getIsGroup())) {
+                if (!isRoot && !groupValidator.isGroupMember(userRolesVo.getUid(), problem.getGid())) {
+                    throw new StatusForbiddenException("无权访问该团队题目！");
+                }
+                discussion.setGid(problem.getGid());
             }
         }
 
         if (discussion.getGid() != null) {
             if (!isRoot
-                    && !discussion.getUid().equals(userRolesVo.getUid())
                     && !groupValidator.isGroupMember(userRolesVo.getUid(), discussion.getGid())) {
                 throw new StatusForbiddenException("对不起，您无权限操作！");
             }
@@ -253,10 +263,11 @@ public class DiscussionManager {
             discussion.setRole("admin");
         } else {
             // 如果不是管理员角色，一律重置为不置顶
+            discussion.setRole("user");
             discussion.setTopPriority(false);
         }
 
-        boolean isOk = discussionEntityService.saveOrUpdate(discussion);
+        boolean isOk = discussionEntityService.save(discussion);
         if (!isOk) {
             throw new StatusFailException("发布失败，请重新尝试！");
         }
@@ -364,6 +375,9 @@ public class DiscussionManager {
         }
 
         String key = "lock:discussion:like:" + userRolesVo.getUid() + "_" + did;
+        if (!redisUtils.isWithinRateLimit(key + ":cooldown", 5)) {
+            throw new StatusForbiddenException("请不要频繁操作点赞！");
+        }
 
         String requestId = UUID.randomUUID().toString();
 
@@ -376,6 +390,7 @@ public class DiscussionManager {
                 DiscussionLike discussionLike = discussionLikeEntityService.getOne(discussionLikeQueryWrapper, false);
 
                 if (toLike) { // 添加点赞
+                    if (discussionLike != null) return;
                     if (discussionLike == null) { // 如果不存在就添加
                         boolean isSave = discussionLikeEntityService.saveOrUpdate(new DiscussionLike().setUid(userRolesVo.getUid()).setDid(did));
                         if (!isSave) {
@@ -395,6 +410,7 @@ public class DiscussionManager {
                                 discussion.getGid());
                     }
                 } else { // 取消点赞
+                    if (discussionLike == null) return;
                     if (discussionLike != null) { // 如果存在就删除
                         boolean isDelete = discussionLikeEntityService.removeById(discussionLike.getId());
                         if (!isDelete) {
@@ -403,7 +419,7 @@ public class DiscussionManager {
                     }
                     // 点赞-1
                     UpdateWrapper<Discussion> discussionUpdateWrapper = new UpdateWrapper<>();
-                    discussionUpdateWrapper.setSql("like_num=like_num-1").eq("id", did);
+                    discussionUpdateWrapper.setSql("like_num=GREATEST(like_num-1,0)").eq("id", did);
                     discussionEntityService.update(discussionUpdateWrapper);
                 }
             }finally {
@@ -431,6 +447,8 @@ public class DiscussionManager {
     }
 
     public void addDiscussionReport(DiscussionReport discussionReport) throws StatusFailException {
+        if (discussionReport.getId() != null) throw new StatusFailException("举报不能指定已有ID！");
+        commonValidator.validateContent(discussionReport.getContent(), "举报", 10000);
         boolean isOk = discussionReportEntityService.saveOrUpdate(discussionReport);
         if (!isOk) {
             throw new StatusFailException("举报失败，请重新尝试");

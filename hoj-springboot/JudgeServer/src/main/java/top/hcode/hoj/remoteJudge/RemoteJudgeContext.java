@@ -36,7 +36,6 @@ public class RemoteJudgeContext {
 
     public static final boolean openCodeforcesFixServer = false;
 
-    @Async
     public void judge(ToJudgeDTO toJudgeDTO) {
         String[] source = toJudgeDTO.getRemoteJudgeProblem().split("-");
         String remoteOj = source[0];
@@ -49,6 +48,7 @@ public class RemoteJudgeContext {
                 .gid(toJudgeDTO.getJudge().getGid())
                 .username(toJudgeDTO.getUsername())
                 .password(toJudgeDTO.getPassword())
+                .accountVersion(toJudgeDTO.getRemoteAccountVersion())
                 .oj(remoteOj)
                 .completeProblemId(remoteProblemId)
                 .userCode(toJudgeDTO.getJudge().getCode())

@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
 import top.hcode.hoj.dao.contest.ContestRegisterEntityService;
+import top.hcode.hoj.dao.contest.ContestEntityService;
 import top.hcode.hoj.pojo.entity.contest.Contest;
 import top.hcode.hoj.pojo.entity.contest.ContestRegister;
 import top.hcode.hoj.pojo.vo.AdminContestVO;
@@ -17,6 +18,8 @@ import top.hcode.hoj.utils.Constants;
 import javax.annotation.Resource;
 import java.util.Date;
 import java.util.Objects;
+import java.util.List;
+import top.hcode.hoj.utils.RequestLimits;
 
 /**
  * @Author: Himit_ZH
@@ -28,6 +31,9 @@ public class ContestValidator {
 
     @Resource
     private ContestRegisterEntityService contestRegisterEntityService;
+
+    @Resource
+    private ContestEntityService contestEntityService;
 
     @Autowired
     private GroupValidator groupValidator;
@@ -94,10 +100,11 @@ public class ContestValidator {
             throw new StatusFailException("对不起，该比赛不存在！");
         }
 
-        boolean isContestAdmin = isRoot || contest.getUid().equals(userRolesVo.getUid());
+        String uid = userRolesVo == null ? null : userRolesVo.getUid();
+        boolean isContestAdmin = isRoot || Objects.equals(contest.getUid(), uid);
         Long gid = contest.getGid();
         // 若是比赛管理者
-        if (isContestAdmin || (contest.getIsGroup() && groupValidator.isGroupRoot(userRolesVo.getUid(), gid))) {
+        if (isContestAdmin || (userRolesVo != null && contest.getIsGroup() && groupValidator.isGroupRoot(uid, gid))) {
             return;
         }
 
@@ -107,12 +114,15 @@ public class ContestValidator {
             throw new StatusForbiddenException("比赛还未开始，您无权访问该比赛！");
         } else {
 
-            if (contest.getIsGroup() && !groupValidator.isGroupMember(userRolesVo.getUid(), gid)) {
+            if (contest.getIsGroup() && (uid == null || !groupValidator.isGroupMember(uid, gid))) {
                 throw new StatusForbiddenException("对不起，您并非团队内的成员无法参加该团队内的比赛！");
             }
 
             // 如果是处于比赛正在进行阶段，需要判断该场比赛是否为私有赛，私有赛需要判断该用户是否已注册
             if (contest.getAuth().intValue() == Constants.Contest.AUTH_PRIVATE.getCode()) {
+                if (userRolesVo == null) {
+                    throw new StatusForbiddenException("请先登录并注册该比赛！");
+                }
                 QueryWrapper<ContestRegister> registerQueryWrapper = new QueryWrapper<>();
                 registerQueryWrapper.eq("cid", contest.getId()).eq("uid", userRolesVo.getUid());
                 ContestRegister register = contestRegisterEntityService.getOne(registerQueryWrapper);
@@ -132,6 +142,12 @@ public class ContestValidator {
 
     public void validateJudgeAuth(Contest contest, String uid) throws StatusForbiddenException {
 
+        if (!Boolean.TRUE.equals(contest.getVisible())
+                || (Boolean.TRUE.equals(contest.getIsGroup())
+                && !groupValidator.isGroupMember(uid, contest.getGid()))) {
+            throw new StatusForbiddenException("您无权向该比赛提交！");
+        }
+
         if (contest.getAuth().intValue() == Constants.Contest.AUTH_PRIVATE.getCode() ||
                 contest.getAuth().intValue() == Constants.Contest.AUTH_PROTECT.getCode()) {
             QueryWrapper<ContestRegister> queryWrapper = new QueryWrapper<>();
@@ -142,6 +158,29 @@ public class ContestValidator {
                 throw new StatusForbiddenException("对不起，请你先注册该比赛，提交代码失败！");
             }
         }
+    }
+
+    public List<Integer> validateExternalRanks(List<Integer> requested, AccountProfile user, boolean root)
+            throws StatusForbiddenException {
+        if (requested != null && requested.size() > 10) {
+            throw new StatusForbiddenException("关联比赛数量不能超过10场！");
+        }
+        List<Integer> result = RequestLimits.boundedDistinct(requested, 10);
+        if (result.isEmpty()) return null;
+        for (Integer id : result) {
+            Contest other = contestEntityService.getById(id.longValue());
+            if (other == null || !Boolean.TRUE.equals(other.getVisible()) || !Boolean.TRUE.equals(other.getOpenRank())
+                    || !Objects.equals(other.getStatus(), Constants.Contest.STATUS_ENDED.getCode())
+                    || isSealRank(user == null ? null : user.getUid(), other, false, false)) {
+                throw new StatusForbiddenException("关联比赛尚未公开最终榜单！");
+            }
+            try {
+                validateContestAuth(other, user, root);
+            } catch (StatusFailException e) {
+                throw new StatusForbiddenException("关联比赛不可访问！");
+            }
+        }
+        return result;
     }
 
 

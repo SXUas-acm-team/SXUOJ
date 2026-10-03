@@ -1,5 +1,7 @@
 package top.hcode.hoj.crawler.problem;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpUtil;
 import org.apache.commons.lang.Validate;
@@ -46,7 +48,7 @@ public class AtCoderProblemStrategy extends ProblemStrategy {
 
         String contestId = problemId.split("_")[0];
 
-        String body = HttpUtil.get(getProblemUrl(problemId, contestId));
+        String body = SecureHttp.getBody(getProblemUrl(problemId, contestId));
         Pattern pattern = Pattern.compile("Time Limit: (\\d+) sec / Memory Limit: (\\d+) MB");
         Matcher matcher = pattern.matcher(body);
         Validate.isTrue(matcher.find());

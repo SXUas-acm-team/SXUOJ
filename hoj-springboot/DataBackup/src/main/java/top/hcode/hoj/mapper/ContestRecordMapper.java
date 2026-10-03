@@ -8,6 +8,9 @@ import top.hcode.hoj.pojo.entity.contest.ContestRecord;
 import top.hcode.hoj.pojo.vo.ContestRecordVO;
 
 import java.util.List;
+import java.util.Date;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 /**
  * <p>
@@ -21,6 +24,9 @@ import java.util.List;
 @Repository
 public interface ContestRecordMapper extends BaseMapper<ContestRecord> {
     List<ContestRecord> getACInfo(@Param("status") Integer status, @Param("cid") Long cid);
+    IPage<ContestRecord> getACInfoPage(Page<ContestRecord> page, @Param("status") Integer status,
+            @Param("cid") Long cid, @Param("excludedUids") List<String> excludedUids,
+            @Param("startTime") Date startTime, @Param("endTime") Date endTime);
 
     List<ContestRecordVO> getOIContestRecordByRecentSubmission(@Param("cid") Long cid,
                                                                @Param("externalCidList") List<Integer> externalCidList,

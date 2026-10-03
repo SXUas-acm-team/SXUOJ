@@ -49,6 +49,23 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new org.springframework.web.servlet.HandlerInterceptor() {
+            @Override
+            public boolean preHandle(javax.servlet.http.HttpServletRequest request,
+                                     javax.servlet.http.HttpServletResponse response, Object handler) {
+                response.setHeader("X-Content-Type-Options", "nosniff");
+                response.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
+                if (request.getRequestURI().startsWith(Constants.File.FILE_API.getPath())) {
+                    response.setHeader("Content-Disposition", "attachment");
+                } else {
+                    String uri = request.getRequestURI().toLowerCase(java.util.Locale.ROOT);
+                    if (!uri.matches(".*\\.(png|jpe?g|gif|webp)$")) {
+                        response.setHeader("Content-Disposition", "attachment");
+                    }
+                }
+                return true;
+            }
+        }).addPathPatterns("/api/public/img/**", "/api/public/file/**");
         registry.addInterceptor(accessInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(EXCLUDE_PATH_PATTERNS);

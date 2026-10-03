@@ -1,0 +1,1 @@
+org.springframework.boot.env.EnvironmentPostProcessor=top.hcode.hoj.env.DotenvEnvironmentPostProcessor,top.hcode.hoj.env.SecurityEnvironmentPostProcessor

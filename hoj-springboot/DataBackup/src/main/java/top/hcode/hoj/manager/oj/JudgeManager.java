@@ -116,7 +116,7 @@ public class JudgeManager {
         boolean isTrainingSubmission = judgeDto.getTid() != null && judgeDto.getTid() != 0;
 
         SwitchConfig switchConfig = nacosSwitchConfig.getSwitchConfig();
-        if (!isContestSubmission && switchConfig.getDefaultSubmitInterval() > 0) { // 非比赛提交有限制限制
+        if (switchConfig.getDefaultSubmitInterval() > 0) {
             String lockKey = Constants.Account.SUBMIT_NON_CONTEST_LOCK.getCode() + userRolesVo.getUid();
             if (!redisUtils.isWithinRateLimit(lockKey, switchConfig.getDefaultSubmitInterval())) {
                 throw new StatusForbiddenException("对不起，您的提交频率过快，请稍后再尝试！");
@@ -129,7 +129,7 @@ public class JudgeManager {
         judge.setShare(false) // 默认设置代码为单独自己可见
                 .setCode(judgeDto.getCode())
                 .setCid(judgeDto.getCid())
-                .setGid(judgeDto.getGid())
+                .setGid(null)
                 .setLanguage(judgeDto.getLanguage())
                 .setLength(judgeDto.getCode().length())
                 .setUid(userRolesVo.getUid())
@@ -251,6 +251,20 @@ public class JudgeManager {
         if (!Objects.equals(judge.getUid(), userRolesVo.getUid())){
             throw new StatusForbiddenException("非提交该评测的用户不可操作！");
         }
+        if (!Objects.equals(judge.getStatus(), Constants.Judge.STATUS_SUBMITTED_FAILED.getStatus())
+                && !Objects.equals(judge.getStatus(), Constants.Judge.STATUS_SYSTEM_ERROR.getStatus())) {
+            throw new StatusForbiddenException("只能重试已失败的评测任务！");
+        }
+        if (judge.getCid() != null && judge.getCid() != 0) {
+            Contest contest = contestEntityService.getById(judge.getCid());
+            if (contest == null || !Objects.equals(contest.getStatus(), Constants.Contest.STATUS_RUNNING.getCode())) {
+                throw new StatusForbiddenException("比赛结束后不可自行重试！");
+            }
+            contestValidator.validateJudgeAuth(contest, userRolesVo.getUid());
+        }
+        if (!redisUtils.isWithinRateLimit("resubmit:" + userRolesVo.getUid(), 60)) {
+            throw new StatusForbiddenException("重试过于频繁，请稍后再试！");
+        }
 
         QueryWrapper<Problem> problemQueryWrapper = new QueryWrapper<>();
         problemQueryWrapper.select("id", "is_remote", "problem_id")
@@ -333,6 +347,10 @@ public class JudgeManager {
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
 
+        validateSubmissionVisibility(judge, userRolesVo, isRoot);
+        // Network addresses and internal judge host names are not public submission metadata.
+        judge.setIp(null).setJudger(null);
+
         // 清空vj信息
         judge.setVjudgeUsername(null);
         judge.setVjudgeSubmitId(null);
@@ -387,7 +405,7 @@ public class JudgeManager {
             if (!judge.getShare()
                     && !isRoot
                     && !isProblemAdmin
-                    && !(judge.getGid() != null
+                    && !(userRolesVo != null && judge.getGid() != null
                     && groupValidator.isGroupRoot(userRolesVo.getUid(), judge.getGid()))) {
                 if (userRolesVo != null) { // 当前是登陆状态
                     // 需要判断是否为当前登陆用户自己的提交代码
@@ -475,8 +493,16 @@ public class JudgeManager {
                                        Boolean completeProblemID,
                                        Long gid) throws StatusAccessDeniedException {
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 30;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
+        if (gid != null) {
+            AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+            if (!SecurityUtils.getSubject().hasRole("root")
+                    && (user == null || !groupValidator.isGroupMember(user.getUid(), gid))) {
+                throw new StatusAccessDeniedException("请先加入该团队！");
+            }
+        }
 
         String uid = null;
         // 只查看当前用户的提交
@@ -514,7 +540,7 @@ public class JudgeManager {
      */
     public HashMap<Long, Object> checkCommonJudgeResult(SubmitIdListDTO submitIdListDto) {
 
-        List<Long> submitIds = submitIdListDto.getSubmitIds();
+        List<Long> submitIds = top.hcode.hoj.utils.RequestLimits.boundedDistinct(submitIdListDto.getSubmitIds(), 100);
 
         if (CollectionUtils.isEmpty(submitIds)) {
             return new HashMap<>();
@@ -522,10 +548,17 @@ public class JudgeManager {
 
         QueryWrapper<Judge> queryWrapper = new QueryWrapper<>();
         // lambada表达式过滤掉code
-        queryWrapper.select(Judge.class, info -> !info.getColumn().equals("code")).in("submit_id", submitIds);
+        queryWrapper.select(Judge.class, info -> !info.getColumn().equals("code")).in("submit_id", submitIds).eq("cid", 0);
         List<Judge> judgeList = judgeEntityService.list(queryWrapper);
         HashMap<Long, Object> result = new HashMap<>();
         for (Judge judge : judgeList) {
+            try {
+                validateSubmissionVisibility(judge, (AccountProfile) SecurityUtils.getSubject().getPrincipal(),
+                        SecurityUtils.getSubject().hasRole("root"));
+            } catch (StatusAccessDeniedException e) {
+                continue;
+            }
+            judge.setIp(null).setJudger(null);
             judge.setCode(null);
             judge.setErrorMessage(null);
             judge.setVjudgeUsername(null);
@@ -555,29 +588,35 @@ public class JudgeManager {
         boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
 
         Contest contest = contestEntityService.getById(submitIdListDto.getCid());
+        try {
+            contestValidator.validateContestAuth(contest, userRolesVo, isRoot);
+        } catch (StatusFailException | StatusForbiddenException e) {
+            return new HashMap<>();
+        }
 
         boolean isContestAdmin = isRoot
-                || userRolesVo.getUid().equals(contest.getUid())
-                || (contest.getIsGroup() && groupValidator.isGroupRoot(userRolesVo.getUid(), contest.getGid()));
+                || (userRolesVo != null && (userRolesVo.getUid().equals(contest.getUid())
+                || (contest.getIsGroup() && groupValidator.isGroupRoot(userRolesVo.getUid(), contest.getGid()))));
         // 如果是封榜时间且不是比赛管理员和超级管理员
-        boolean isSealRank = contestValidator.isSealRank(userRolesVo.getUid(), contest, true, isRoot);
+        boolean isSealRank = contestValidator.isSealRank(userRolesVo == null ? null : userRolesVo.getUid(), contest, true, isRoot);
 
         QueryWrapper<Judge> queryWrapper = new QueryWrapper<>();
         // lambada表达式过滤掉code
         queryWrapper.select(Judge.class, info -> !info.getColumn().equals("code"))
-                .in("submit_id", submitIdListDto.getSubmitIds())
+                .in("submit_id", top.hcode.hoj.utils.RequestLimits.boundedDistinct(submitIdListDto.getSubmitIds(), 100))
                 .eq("cid", submitIdListDto.getCid())
                 .between(isSealRank, "submit_time", contest.getStartTime(), contest.getSealRankTime());
         List<Judge> judgeList = judgeEntityService.list(queryWrapper);
         HashMap<Long, Object> result = new HashMap<>();
         for (Judge judge : judgeList) {
+            judge.setIp(null).setJudger(null);
             judge.setCode(null);
             judge.setDisplayPid(null);
             judge.setErrorMessage(null);
             judge.setVjudgeUsername(null);
             judge.setVjudgeSubmitId(null);
             judge.setVjudgePassword(null);
-            if (!judge.getUid().equals(userRolesVo.getUid()) && !isContestAdmin) {
+            if ((userRolesVo == null || !judge.getUid().equals(userRolesVo.getUid())) && !isContestAdmin) {
                 judge.setTime(null);
                 judge.setMemory(null);
                 judge.setLength(null);
@@ -600,6 +639,32 @@ public class JudgeManager {
 
         if (judge == null) {
             throw new StatusNotFoundException("此提交数据不存在！");
+        }
+        AccountProfile viewer = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        boolean privileged = SecurityUtils.getSubject().hasRole("root");
+        if (judge.getCid() != null && judge.getCid() != 0) {
+            Contest current = contestEntityService.getById(judge.getCid());
+            privileged = privileged || (viewer != null && current != null
+                    && (Objects.equals(current.getUid(), viewer.getUid())
+                    || (Boolean.TRUE.equals(current.getIsGroup()) && groupValidator.isGroupRoot(viewer.getUid(), current.getGid()))));
+        } else {
+            privileged = privileged || SecurityUtils.getSubject().hasRole("problem_admin");
+        }
+        if (!privileged && (viewer == null || !Objects.equals(viewer.getUid(), judge.getUid()))) {
+            throw new StatusForbiddenException("只能查看自己的测试点结果！");
+        }
+        if (!SecurityUtils.getSubject().hasRole("root") && judge.getGid() != null
+                && (viewer == null || !groupValidator.isGroupMember(viewer.getUid(), judge.getGid()))) {
+            throw new StatusForbiddenException("无权访问该团队测试点结果！");
+        }
+        if (!privileged && judge.getCid() != null && judge.getCid() != 0) {
+            Contest current = contestEntityService.getById(judge.getCid());
+            try {
+                contestValidator.validateContestAuth(current, viewer, false);
+            } catch (StatusFailException e) {
+                throw new StatusForbiddenException("比赛不可访问！");
+            }
+            if (contestValidator.isSealRank(viewer.getUid(), current, false, false)) return null;
         }
 
         Problem problem = problemEntityService.getById(judge.getPid());
@@ -677,6 +742,25 @@ public class JudgeManager {
             judgeCaseVo.setJudgeCaseMode(Constants.JudgeCaseMode.DEFAULT.getMode());
         }
         return judgeCaseVo;
+    }
+
+    private void validateSubmissionVisibility(Judge judge, AccountProfile viewer, boolean root)
+            throws StatusAccessDeniedException {
+        if (root) return;
+        if (judge.getGid() != null && (viewer == null || !groupValidator.isGroupMember(viewer.getUid(), judge.getGid()))) {
+            throw new StatusAccessDeniedException("您无权查看该团队的提交！");
+        }
+        if (judge.getCid() != null && judge.getCid() != 0) {
+            try {
+                contestValidator.validateContestAuth(contestEntityService.getById(judge.getCid()), viewer, false);
+            } catch (StatusFailException | StatusForbiddenException e) {
+                throw new StatusAccessDeniedException("您无权查看该比赛的提交！");
+            }
+        } else if (!Boolean.TRUE.equals(judge.getShare())
+                && !SecurityUtils.getSubject().hasRole("problem_admin")
+                && (viewer == null || !Objects.equals(judge.getUid(), viewer.getUid()))) {
+            throw new StatusAccessDeniedException("该提交未分享，只允许本人查看！");
+        }
     }
 
     private List<SubTaskJudgeCaseVO> buildSubTaskDetail(List<JudgeCase> judgeCaseList, Constants.JudgeCaseMode judgeCaseMode) {

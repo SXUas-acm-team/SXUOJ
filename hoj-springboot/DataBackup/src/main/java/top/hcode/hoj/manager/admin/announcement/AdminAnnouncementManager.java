@@ -26,8 +26,8 @@ public class AdminAnnouncementManager {
 
     public IPage<AnnouncementVO> getAnnouncementList(Integer limit, Integer currentPage) {
 
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
         return announcementEntityService.getAnnouncementList(limit, currentPage, false);
 
     }

@@ -24,7 +24,7 @@ public class DruidConfig {
     @Value("${hoj.db.username:root}")
     private String username;
 
-    @Value("${hoj.db.password:hoj123456}")
+    @Value("${hoj.db.password}")
     private String password;
 
     @Value("${hoj.db.host:172.20.0.3}")
@@ -107,8 +107,8 @@ public class DruidConfig {
         String mysqlUsername = username;
         String mysqlUserPassword = password;
 
-        log.warn("[MySQL] [Config Init] name:[{}], host:[{}], port:[{}], username:[{}], password:[{}]",
-                mysqlName, mysqlHost, mysqlPort, mysqlUsername, mysqlUserPassword);
+        log.warn("[MySQL] [Config Init] name:[{}], host:[{}], port:[{}], username:[{}]",
+                mysqlName, mysqlHost, mysqlPort, mysqlUsername);
 
         DruidDataSource datasource = new DruidDataSource();
         String url = "jdbc:mysql://" + mysqlHost + ":" + mysqlPort + "/" + mysqlName + "?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowMultiQueries=true&rewriteBatchedStatements=true";

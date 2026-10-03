@@ -401,7 +401,7 @@ public class JudgeStrategy {
                 } else if (Objects.equals(status, Constants.Judge.STATUS_PARTIAL_ACCEPTED.getStatus())) {
                     errorTestCaseList.add(jsonObject);
                     Double percentage = jsonObject.getDouble("percentage");
-                    if (percentage != null) {
+                    if (percentage != null && Double.isFinite(percentage) && percentage >= 0 && percentage <= 1) {
                         int score = (int) Math.floor(percentage * oiScore);
                         judgeCase.setScore(score);
                     } else {

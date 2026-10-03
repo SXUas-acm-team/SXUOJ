@@ -16,40 +16,29 @@ import java.net.UnknownHostException;
 public class IpUtils {
 
     public static String getUserIpAddr(HttpServletRequest request) {
-        String ipAddress = null;
-        try {
-            ipAddress = request.getHeader("x-forwarded-for");
-            if (ipAddress == null || ipAddress.length() == 0 || "unknown".equalsIgnoreCase(ipAddress)) {
-                ipAddress = request.getHeader("Proxy-Client-IP");
-            }
-            if (ipAddress == null || ipAddress.length() == 0 || "unknown".equalsIgnoreCase(ipAddress)) {
-                ipAddress = request.getHeader("WL-Proxy-Client-IP");
-            }
-            if (ipAddress == null || ipAddress.length() == 0 || "unknown".equalsIgnoreCase(ipAddress)) {
-                ipAddress = request.getRemoteAddr();
-                if (ipAddress.equals("127.0.0.1")) {
-                    // 根据网卡取本机配置的IP
-                    try {
-                        ipAddress = InetAddress.getLocalHost().getHostAddress();
-                    } catch (UnknownHostException e) {
-                        log.error("用户ip获取异常------->{}", e.getMessage());
-                    }
-                }
-            }
-            // 通过多个代理的情况，第一个IP为客户端真实IP,多个IP按照','分割
-            if (ipAddress != null) {
-                if (ipAddress.contains(",")) {
-                    return ipAddress.split(",")[0];
-                } else {
-                    return ipAddress;
-                }
-            } else {
-                return "";
-            }
-        } catch (Exception e) {
-            log.error("用户ip获取异常------->{}", e.getMessage());
-            return "";
+        String peer = request.getRemoteAddr();
+        if (!isTrustedProxy(peer)) return peer == null ? "" : peer;
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded == null || forwarded.length() > 1024) return peer;
+        String[] hops = forwarded.split(",");
+        for (int i = hops.length - 1; i >= 0; i--) {
+            String candidate = hops[i].trim();
+            if (!candidate.matches("[0-9a-fA-F:.]+")) return peer;
+            if (!isTrustedProxy(candidate)) return candidate;
         }
+        return peer;
+    }
+
+    private static boolean isTrustedProxy(String ip) {
+        if (ip == null) return false;
+        if ("127.0.0.1".equals(ip) || "::1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip)) return true;
+        String configured = System.getProperty("hoj.trusted-proxies", System.getenv("HOJ_TRUSTED_PROXIES"));
+        if (configured != null) {
+            for (String proxy : configured.split(",")) {
+                if (ip.equals(proxy.trim())) return true;
+            }
+        }
+        return false;
     }
 
     public static String getServiceIp() {

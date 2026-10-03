@@ -22,7 +22,7 @@ public class ThreadPoolUtils {
                 TimeUnit.SECONDS,// 结束线程时间单位
                 new LinkedBlockingDeque<>(200 * cpuNum), //阻塞队列，限制等候线程数
                 Executors.defaultThreadFactory(),
-                new ThreadPoolExecutor.DiscardOldestPolicy());//队列满了，尝试去和最早的竞争，也不会抛出异常！
+                new ThreadPoolExecutor.AbortPolicy()); // Fail explicitly; never silently discard queued Futures.
     }
 
     private static class PluginConfigHolder {

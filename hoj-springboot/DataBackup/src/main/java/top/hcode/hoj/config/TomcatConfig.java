@@ -20,9 +20,8 @@ public class TomcatConfig {
         factory.addConnectorCustomizers(new TomcatConnectorCustomizer() {
             @Override
             public void customize(Connector connector) {
-                connector.setProperty("relaxedPathChars", "\"<>[\\]^`{|}");
-                connector.setProperty("relaxedQueryChars", "\"<>[\\]^`{|}");
-                connector.setProperty("rejectIllegalHeader", "false");
+                connector.setProperty("relaxedQueryChars", "[]");
+                connector.setProperty("rejectIllegalHeader", "true");
             }
         });
         return factory;

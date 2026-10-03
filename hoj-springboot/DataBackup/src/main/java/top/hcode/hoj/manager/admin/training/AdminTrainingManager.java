@@ -57,8 +57,8 @@ public class AdminTrainingManager {
 
     public IPage<Training> getTrainingList(Integer limit, Integer currentPage, String keyword) {
 
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
         IPage<Training> iPage = new Page<>(currentPage, limit);
         QueryWrapper<Training> queryWrapper = new QueryWrapper<>();
         // 过滤密码
@@ -157,10 +157,12 @@ public class AdminTrainingManager {
         // 是否为超级管理员
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
         // 只有超级管理员和训练拥有者才能操作
-        if (!isRoot && !userRolesVo.getUsername().equals(trainingDto.getTraining().getAuthor())) {
+        Training oldTraining = trainingEntityService.getById(training.getId());
+        if (oldTraining == null) throw new StatusFailException("该训练不存在！");
+        if (!isRoot && !userRolesVo.getUsername().equals(oldTraining.getAuthor())) {
             throw new StatusForbiddenException("对不起，你无权限操作！");
         }
-        Training oldTraining = trainingEntityService.getById(training.getId());
+        training.setAuthor(oldTraining.getAuthor()).setIsGroup(oldTraining.getIsGroup()).setGid(oldTraining.getGid());
         trainingEntityService.updateById(training);
 
         // 私有训练 修改密码 需要清空之前注册训练的记录
@@ -213,11 +215,13 @@ public class AdminTrainingManager {
         // 是否为超级管理员
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
         // 只有超级管理员和训练拥有者才能操作
-        if (!isRoot && !userRolesVo.getUsername().equals(author)) {
+        Training existing = trainingEntityService.getById(tid);
+        if (existing == null) throw new StatusFailException("该训练不存在！");
+        if (!isRoot && !userRolesVo.getUsername().equals(existing.getAuthor())) {
             throw new StatusForbiddenException("对不起，你无权限操作！");
         }
 
-        boolean isOk = trainingEntityService.saveOrUpdate(new Training().setId(tid).setStatus(status));
+        boolean isOk = trainingEntityService.updateById(new Training().setId(tid).setStatus(status));
         if (!isOk) {
             throw new StatusFailException("修改失败");
         }

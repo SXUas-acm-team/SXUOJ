@@ -49,6 +49,9 @@ public class ToJudgeDTO implements Serializable {
      */
     private String password;
 
+    // Reservation generation; result-only rechecks do not own a reservation.
+    private Long remoteAccountVersion;
+
     /**
      *  调用判题机的ip
      */

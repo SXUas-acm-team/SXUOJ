@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { isLocalApiUrl } from '@/common/security'
 import Vue from 'vue'
 import mMessage from '@/common/message'
 import router from '@/router'
@@ -27,7 +28,7 @@ axios.interceptors.request.use(
     // 如果存在，则统一在http请求的header都加上token，这样后台根据token判断你的登录情况
     // 即使本地存在token，也有可能token是过期的，所以在响应拦截器中要对返回状态进行判断
     const token = localStorage.getItem('token')
-    if(config.url != '/api/login' && config.url != '/api/admin/login'){
+    if (isLocalApiUrl(config.url, config.baseURL) && config.url !== '/api/login' && config.url !== '/api/admin/login') {
       token && (config.headers.Authorization = token);
     }
     let type = config.url.split("/")[2];
@@ -41,16 +42,16 @@ axios.interceptors.request.use(
   },
   error => {
     // NProgress.done();
-    mMessage.error(error.response.data.msg);
+    mMessage.error(error.response && error.response.data ? error.response.data.msg : error.message);
     if (!isMobile) {
       Vue.prototype.$notify.error({
         title: i18n.t('m.Error'),
-        message: error.response.data.msg,
+        message: error.response && error.response.data ? error.response.data.msg : error.message,
         duration: 5000,
         offset: 50
       });
     }
-    return Promise.error(error);
+    return Promise.reject(error);
   })
 
 // 响应拦截器
@@ -96,7 +97,7 @@ axios.interceptors.response.use(
             if (!isMobile) {
               Vue.prototype.$notify.error({
                 title: i18n.t('m.Error'),
-                message: error.response.data.msg,
+                message: error.response && error.response.data ? error.response.data.msg : error.message,
                 duration: 5000,
                 offset: 50
               });
@@ -117,7 +118,7 @@ axios.interceptors.response.use(
             if (!isMobile) {
               Vue.prototype.$notify.error({
                 title: i18n.t('m.Error'),
-                message: error.response.data.msg,
+                message: error.response && error.response.data ? error.response.data.msg : error.message,
                 duration: 5000,
                 offset: 50
               });
@@ -142,7 +143,7 @@ axios.interceptors.response.use(
               if (!isMobile) {
                 Vue.prototype.$notify.error({
                   title: i18n.t('m.Error'),
-                  message: error.response.data.msg,
+                  message: error.response && error.response.data ? error.response.data.msg : error.message,
                   duration: 5000,
                   offset: 50
                 });

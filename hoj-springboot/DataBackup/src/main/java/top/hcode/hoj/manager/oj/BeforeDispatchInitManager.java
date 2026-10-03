@@ -32,6 +32,9 @@ import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.validator.ContestValidator;
 import top.hcode.hoj.validator.GroupValidator;
 import top.hcode.hoj.validator.TrainingValidator;
+import top.hcode.hoj.validator.AccessValidator;
+import top.hcode.hoj.annotation.HOJAccessEnum;
+import top.hcode.hoj.exception.AccessException;
 
 import javax.annotation.Resource;
 import java.util.Objects;
@@ -80,7 +83,11 @@ public class BeforeDispatchInitManager {
     @Autowired
     private GroupValidator groupValidator;
 
-    public void initCommonSubmission(String problemId, Long gid, Judge judge) throws StatusForbiddenException {
+    @Resource
+    private AccessValidator accessValidator;
+
+    public void initCommonSubmission(String problemId, Long gid, Judge judge) throws StatusForbiddenException, AccessException {
+        judge.setGid(null);
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         QueryWrapper<Problem> problemQueryWrapper = new QueryWrapper<>();
@@ -97,10 +104,15 @@ public class BeforeDispatchInitManager {
         }
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        accessValidator.validateAccess(Boolean.TRUE.equals(problem.getIsGroup())
+                ? HOJAccessEnum.GROUP_JUDGE : HOJAccessEnum.PUBLIC_JUDGE);
 
         if (problem.getIsGroup()) {
             if (gid == null){
                 throw new StatusForbiddenException("提交失败，该题目为团队所属，请你前往指定团队内提交！");
+            }
+            if (!Objects.equals(gid, problem.getGid())) {
+                throw new StatusForbiddenException("题目与团队不匹配！");
             }
             if (!isRoot && !groupValidator.isGroupMember(userRolesVo.getUid(), problem.getGid())) {
                 throw new StatusForbiddenException("对不起，您并非该题目所属的团队内成员，无权进行提交！");
@@ -120,7 +132,7 @@ public class BeforeDispatchInitManager {
 
 
     @Transactional(rollbackFor = Exception.class)
-    public void initContestSubmission(Long cid, String displayId, AccountProfile userRolesVo, Judge judge) throws StatusNotFoundException, StatusForbiddenException {
+    public void initContestSubmission(Long cid, String displayId, AccountProfile userRolesVo, Judge judge) throws StatusNotFoundException, StatusForbiddenException, AccessException {
         Contest contest = contestEntityService.getById(cid);
         if (contest == null) {
             throw new StatusNotFoundException("对不起，该比赛不存在！");
@@ -153,6 +165,11 @@ public class BeforeDispatchInitManager {
         QueryWrapper<ContestProblem> contestProblemQueryWrapper = new QueryWrapper<>();
         contestProblemQueryWrapper.eq("cid", cid).eq("display_id", displayId);
         ContestProblem contestProblem = contestProblemEntityService.getOne(contestProblemQueryWrapper, false);
+        if (contestProblem == null) {
+            throw new StatusNotFoundException("该比赛题目不存在！");
+        }
+        accessValidator.validateAccess(Boolean.TRUE.equals(contest.getIsGroup())
+                ? HOJAccessEnum.GROUP_JUDGE : HOJAccessEnum.CONTEST_JUDGE);
         judge.setCpid(contestProblem.getId())
                 .setPid(contestProblem.getPid())
                 .setGid(contest.getGid());
@@ -198,7 +215,7 @@ public class BeforeDispatchInitManager {
 
 
     @Transactional(rollbackFor = Exception.class)
-    public void initTrainingSubmission(Long tid, String displayId, AccountProfile userRolesVo, Judge judge) throws StatusForbiddenException, StatusFailException, StatusAccessDeniedException {
+    public void initTrainingSubmission(Long tid, String displayId, AccountProfile userRolesVo, Judge judge) throws StatusForbiddenException, StatusFailException, StatusAccessDeniedException, AccessException {
 
         Training training = trainingEntityService.getById(tid);
         if (training == null || !training.getStatus()) {
@@ -206,12 +223,17 @@ public class BeforeDispatchInitManager {
         }
 
         trainingValidator.validateTrainingAuth(training, userRolesVo);
+        accessValidator.validateAccess(Boolean.TRUE.equals(training.getIsGroup())
+                ? HOJAccessEnum.GROUP_JUDGE : HOJAccessEnum.PUBLIC_JUDGE);
 
         // 查询获取对应的pid和cpid
         QueryWrapper<TrainingProblem> trainingProblemQueryWrapper = new QueryWrapper<>();
         trainingProblemQueryWrapper.eq("tid", tid)
                 .eq("display_id", displayId);
         TrainingProblem trainingProblem = trainingProblemEntityService.getOne(trainingProblemQueryWrapper);
+        if (trainingProblem == null) {
+            throw new StatusFailException("该训练题目不存在！");
+        }
         judge.setPid(trainingProblem.getPid());
 
         Problem problem = problemEntityService.getById(trainingProblem.getPid());

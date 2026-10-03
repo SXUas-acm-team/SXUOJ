@@ -48,8 +48,12 @@ public class AdminContestProblemServiceImpl implements AdminContestProblemServic
 
     @Override
     public CommonResult<Void> deleteProblem(Long pid, Long cid) {
-        adminContestProblemManager.deleteProblem(pid, cid);
-        return CommonResult.successResponse();
+        try {
+            adminContestProblemManager.deleteProblem(pid, cid);
+            return CommonResult.successResponse();
+        } catch (StatusFailException e) {
+            return CommonResult.errorResponse(e.getMessage(), ResultStatus.FORBIDDEN);
+        }
     }
 
     @Override

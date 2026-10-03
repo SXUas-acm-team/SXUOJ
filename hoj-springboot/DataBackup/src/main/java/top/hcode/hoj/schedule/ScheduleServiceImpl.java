@@ -11,6 +11,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.time.DateFormatUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationContext;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -70,6 +71,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @Slf4j(topic = "hoj")
+@ConditionalOnProperty(name = "hoj.schedule.enabled", havingValue = "true", matchIfMissing = true)
 public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired

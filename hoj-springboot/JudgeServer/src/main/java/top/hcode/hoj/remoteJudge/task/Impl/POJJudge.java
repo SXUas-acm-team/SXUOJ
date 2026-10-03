@@ -1,5 +1,7 @@
 package top.hcode.hoj.remoteJudge.task.Impl;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ReUtil;
@@ -27,7 +29,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j(topic = "hoj")
 public class POJJudge extends RemoteJudgeStrategy {
-    public static final String HOST = "http://poj.org";
+    public static final String HOST = "https://poj.org";
     public static final String LOGIN_URL = "/login";
     public static final String SUBMIT_URL = "/submit";
     public static final String STATUS_URL = "/status?user_id=%s&problem_id=%s";
@@ -51,7 +53,7 @@ public class POJJudge extends RemoteJudgeStrategy {
 
         List<HttpCookie> cookies = remoteJudgeDTO.getCookies();
 
-        HttpRequest request = HttpUtil.createPost(HOST + SUBMIT_URL)
+        HttpRequest request = SecureHttp.post(HOST + SUBMIT_URL)
                 .addHeaders(headers)
                 .cookie(cookies);
 
@@ -97,7 +99,7 @@ public class POJJudge extends RemoteJudgeStrategy {
             cookies = remoteJudgeDTO.getCookies();
         }
         String url = HOST + String.format(QUERY_URL, submitId);
-        HttpRequest request = HttpUtil.createGet(url)
+        HttpRequest request = SecureHttp.get(url)
                 .cookie(cookies)
                 .addHeaders(headers);
 
@@ -146,7 +148,7 @@ public class POJJudge extends RemoteJudgeStrategy {
 
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
 
-        HttpRequest request = HttpUtil.createPost(HOST + LOGIN_URL);
+        HttpRequest request = SecureHttp.post(HOST + LOGIN_URL);
         HttpResponse response = request.form(MapUtil.builder(new HashMap<String, Object>())
                 .put("user_id1", remoteJudgeDTO.getUsername())
                 .put("B1", "login")
@@ -157,7 +159,7 @@ public class POJJudge extends RemoteJudgeStrategy {
             throw new RuntimeException("[POJ] Failed to login! The possible cause is connection failure, and the returned status code is " + response.getStatus());
         }
 
-        HttpRequest homeRequest = HttpUtil.createGet(HOST);
+        HttpRequest homeRequest = SecureHttp.get(HOST);
         homeRequest.cookie(response.getCookies());
         HttpResponse homeResponse = homeRequest.execute();
         String body = homeResponse.body();

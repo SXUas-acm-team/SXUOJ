@@ -236,10 +236,13 @@ public class ContestRankManager {
     }
 
     private <T> Page<T> getPagingRankList(List<T> rankList, int currentPage, int limit) {
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 50);
         Page<T> page = new Page<>(currentPage, limit);
         int count = rankList.size();
         List<T> pageList = new ArrayList<>();
-        int currId = currentPage > 1 ? (currentPage - 1) * limit : 0;
+        long offset = (long) (currentPage - 1) * limit;
+        int currId = (int) Math.min(offset, count);
         for (int i = 0; i < limit && i < count - currId; i++) {
             pageList.add(rankList.get(currId + i));
         }

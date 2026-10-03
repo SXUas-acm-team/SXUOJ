@@ -1,5 +1,7 @@
 package top.hcode.hoj.remoteJudge.task.Impl;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ReUtil;
@@ -26,7 +28,7 @@ import java.util.regex.Pattern;
 
 @Slf4j(topic = "hoj")
 public class HDUJudge extends RemoteJudgeStrategy {
-    public static final String HOST = "http://acm.hdu.edu.cn";
+    public static final String HOST = "https://acm.hdu.edu.cn";
     public static final String LOGIN_URL = "/userloginex.php?action=login";
     public static final String SUBMIT_URL = "/submit.php?action=submit";
     public static final String STATUS_URL = "/status.php?user=%s&pid=%s";
@@ -53,7 +55,7 @@ public class HDUJudge extends RemoteJudgeStrategy {
 
         List<HttpCookie> cookies = remoteJudgeDTO.getCookies();
 
-        HttpRequest request = HttpUtil.createPost(HOST + SUBMIT_URL)
+        HttpRequest request = SecureHttp.post(HOST + SUBMIT_URL)
                 .addHeaders(headers)
                 .form(MapUtil
                         .builder(new HashMap<String, Object>())
@@ -101,7 +103,7 @@ public class HDUJudge extends RemoteJudgeStrategy {
     public RemoteJudgeRes result() {
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
         String url = HOST + String.format(QUERY_URL, remoteJudgeDTO.getSubmitId());
-        HttpRequest request = HttpUtil.createGet(url)
+        HttpRequest request = SecureHttp.get(url)
                 .cookie(remoteJudgeDTO.getCookies())
                 .addHeaders(headers);
         HttpResponse response = request.execute();
@@ -149,7 +151,7 @@ public class HDUJudge extends RemoteJudgeStrategy {
         // 清除当前线程的cookies缓存
         HttpRequest.getCookieManager().getCookieStore().removeAll();
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
-        HttpRequest request = HttpUtil.createPost(HOST + LOGIN_URL).addHeaders(headers);
+        HttpRequest request = SecureHttp.post(HOST + LOGIN_URL).addHeaders(headers);
         HttpResponse response = request.form(MapUtil
                         .builder(new HashMap<String, Object>())
                         .put("username", remoteJudgeDTO.getUsername())
@@ -190,7 +192,7 @@ public class HDUJudge extends RemoteJudgeStrategy {
 
     public Long getMaxRunId(String userName, String problemId) {
         String url = HOST + String.format(STATUS_URL, userName, problemId);
-        HttpResponse response = HttpUtil.createGet(url).addHeaders(headers).execute();
+        HttpResponse response = SecureHttp.get(url).addHeaders(headers).execute();
         String maxRunId = ReUtil.get("<td height=22px>(\\d+)", response.body(), 1);
         return maxRunId != null ? Long.parseLong(maxRunId) : -1L;
     }

@@ -48,8 +48,8 @@ public class RankManager {
     public IPage getRankList(Integer limit, Integer currentPage, String searchUser, Integer type) throws StatusFailException {
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 30;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
 
         List<String> uidList = null;
         if (!StringUtils.isEmpty(searchUser)) {
@@ -60,9 +60,7 @@ public class RankManager {
             userInfoQueryWrapper.and(wrapper -> wrapper
                     .like("username", searchUser)
                     .or()
-                    .like("nickname", searchUser)
-                    .or()
-                    .like("realname", searchUser));
+                    .like("nickname", searchUser));
 
             userInfoQueryWrapper.eq("status", 0);
 

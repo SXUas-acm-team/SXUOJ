@@ -36,6 +36,9 @@ import top.hcode.hoj.validator.AccessValidator;
 import top.hcode.hoj.validator.CommonValidator;
 import top.hcode.hoj.validator.ContestValidator;
 import top.hcode.hoj.validator.GroupValidator;
+import top.hcode.hoj.utils.RedisUtils;
+import top.hcode.hoj.utils.RequestLimits;
+import java.util.Objects;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -84,9 +87,15 @@ public class CommentManager {
     @Autowired
     private NacosSwitchConfig nacosSwitchConfig;
 
-    private final static Pattern pattern = Pattern.compile("<.*?([a,A][u,U][t,T][o,O][p,P][l,L][a,A][y,Y]).*?>");
+    @Autowired
+    private RedisUtils redisUtils;
+
+    private final static Pattern pattern = Pattern.compile("(?i)\\bautoplay\\b");
 
     public CommentListVO getComments(Long cid, Integer did, Integer limit, Integer currentPage) throws StatusForbiddenException, AccessException {
+        if ((cid == null) == (did == null)) throw new StatusForbiddenException("评论来源参数错误！");
+        limit = RequestLimits.pageSize(limit, 10);
+        currentPage = RequestLimits.pageNumber(currentPage);
 
         // 如果有登录，则获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -99,7 +108,7 @@ public class CommentManager {
             Discussion discussion = discussionEntityService.getOne(discussionQueryWrapper);
             if (discussion != null && discussion.getGid() != null) {
                 accessValidator.validateAccess(HOJAccessEnum.GROUP_DISCUSSION);
-                if (!isRoot && !groupValidator.isGroupMember(userRolesVo.getUid(), discussion.getGid())) {
+                if (!isRoot && (userRolesVo == null || !groupValidator.isGroupMember(userRolesVo.getUid(), discussion.getGid()))) {
                     throw new StatusForbiddenException("对不起，您无权限操作！");
                 }
             } else {
@@ -107,6 +116,11 @@ public class CommentManager {
             }
         } else {
             accessValidator.validateAccess(HOJAccessEnum.CONTEST_COMMENT);
+            try {
+                contestValidator.validateContestAuth(contestEntityService.getById(cid), userRolesVo, isRoot);
+            } catch (StatusFailException e) {
+                throw new StatusForbiddenException("无权查看该比赛评论！");
+            }
         }
 
         IPage<CommentVO> commentList = commentEntityService.getCommentList(limit, currentPage, cid, did, isRoot,
@@ -145,6 +159,11 @@ public class CommentManager {
 
     @Transactional
     public CommentVO addComment(Comment comment) throws StatusFailException, StatusForbiddenException, AccessException {
+
+        if (comment.getId() != null || (comment.getCid() == null) == (comment.getDid() == null)) {
+            throw new StatusFailException("新评论必须指定唯一来源，且不能指定已有ID！");
+        }
+        comment.setStatus(0).setLikeNum(0);
 
         commonValidator.validateContent(comment.getContent(), "评论", 10000);
 
@@ -213,7 +232,7 @@ public class CommentManager {
         // 带有表情的字符串转换为编码
         comment.setContent(EmojiUtil.toHtml(formatContentRemoveAutoPlay(comment.getContent())));
 
-        boolean isOk = commentEntityService.saveOrUpdate(comment);
+        boolean isOk = commentEntityService.save(comment);
 
         if (isOk) {
             CommentVO commentVo = new CommentVO();
@@ -321,6 +340,27 @@ public class CommentManager {
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        Comment target = commentEntityService.getById(cid);
+        if (target == null) throw new StatusFailException("评论不存在！");
+        boolean root = SecurityUtils.getSubject().hasRole("root");
+        if (target.getCid() != null) {
+            try {
+                contestValidator.validateContestAuth(contestEntityService.getById(target.getCid()), userRolesVo, root);
+            } catch (StatusForbiddenException e) {
+                throw new StatusFailException("无权操作该比赛评论！");
+            }
+        } else {
+            Discussion discussion = discussionEntityService.getById(target.getDid());
+            if (discussion == null || (!root && discussion.getGid() != null
+                    && !groupValidator.isGroupMember(userRolesVo.getUid(), discussion.getGid()))) {
+                throw new StatusFailException("无权操作该讨论评论！");
+            }
+        }
+        sourceId = target.getDid() != null ? target.getDid() : target.getCid().intValue();
+        sourceType = target.getDid() != null ? "Discussion" : "Contest";
+        if (!redisUtils.isWithinRateLimit("comment:like:" + userRolesVo.getUid() + ":" + cid, 5)) {
+            throw new StatusFailException("请不要频繁操作点赞！");
+        }
 
         QueryWrapper<CommentLike> commentLikeQueryWrapper = new QueryWrapper<>();
         commentLikeQueryWrapper.eq("cid", cid).eq("uid", userRolesVo.getUid());
@@ -328,6 +368,7 @@ public class CommentManager {
         CommentLike commentLike = commentLikeEntityService.getOne(commentLikeQueryWrapper, false);
 
         if (toLike) { // 添加点赞
+            if (commentLike != null) return;
             if (commentLike == null) { // 如果不存在就添加
                 boolean isSave = commentLikeEntityService.saveOrUpdate(new CommentLike()
                         .setUid(userRolesVo.getUid())
@@ -347,6 +388,7 @@ public class CommentManager {
                 }
             }
         } else { // 取消点赞
+            if (commentLike == null) return;
             if (commentLike != null) { // 如果存在就删除
                 boolean isDelete = commentLikeEntityService.removeById(commentLike.getId());
                 if (!isDelete) {
@@ -355,7 +397,7 @@ public class CommentManager {
             }
             // 点赞-1
             UpdateWrapper<Comment> commentUpdateWrapper = new UpdateWrapper<>();
-            commentUpdateWrapper.setSql("like_num=like_num-1").eq("id", cid);
+            commentUpdateWrapper.setSql("like_num=GREATEST(like_num-1,0)").eq("id", cid);
             commentEntityService.update(commentUpdateWrapper);
         }
 
@@ -367,15 +409,23 @@ public class CommentManager {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
 
+        Comment storedComment = commentEntityService.getById(commentId);
+        if (storedComment == null) throw new StatusFailException("评论不存在！");
+        if (cid != null && !Objects.equals(cid, storedComment.getCid())) {
+            throw new StatusForbiddenException("评论与比赛不匹配！");
+        }
+        cid = storedComment.getCid();
+
         if (cid == null) {
             Comment comment = commentEntityService.getById(commentId);
             QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
             discussionQueryWrapper.select("id", "gid").eq("id", comment.getDid());
             Discussion discussion = discussionEntityService.getOne(discussionQueryWrapper);
+            if (discussion == null) throw new StatusFailException("讨论不存在！");
             Long gid = discussion.getGid();
             if (gid != null) {
                 accessValidator.validateAccess(HOJAccessEnum.GROUP_DISCUSSION);
-                if (!isRoot && !groupValidator.isGroupMember(userRolesVo.getUid(), gid)) {
+                if (!isRoot && (userRolesVo == null || !groupValidator.isGroupMember(userRolesVo.getUid(), gid))) {
                     throw new StatusForbiddenException("对不起，您无权限操作！");
                 }
             } else {
@@ -395,7 +445,7 @@ public class CommentManager {
 
 
     public ReplyVO addReply(ReplyDTO replyDto) throws StatusFailException, StatusForbiddenException, AccessException {
-
+        if (replyDto == null || replyDto.getReply() == null) throw new StatusFailException("回复参数错误！");
         commonValidator.validateContent(replyDto.getReply().getContent(), "回复", 10000);
 
         // 获取当前登录的用户
@@ -407,7 +457,7 @@ public class CommentManager {
 
         Reply reply = replyDto.getReply();
 
-        if (reply == null || reply.getCommentId() == null){
+        if (reply.getId() != null || reply.getCommentId() == null){
             throw new StatusFailException("回复失败，当前请求的参数错误！");
         }
 
@@ -416,6 +466,18 @@ public class CommentManager {
         if (comment == null) {
             throw new StatusFailException("回复失败，当前评论已不存在！");
         }
+        replyDto.setDid(comment.getDid());
+        if ("Reply".equals(replyDto.getQuoteType())) {
+            Reply quoted = replyEntityService.getById(replyDto.getQuoteId());
+            if (quoted == null || !Objects.equals(quoted.getCommentId(), comment.getId())) {
+                throw new StatusFailException("引用回复与当前评论不匹配！");
+            }
+            reply.setToUid(quoted.getFromUid()).setToName(quoted.getFromName()).setToAvatar(quoted.getFromAvatar());
+        } else {
+            replyDto.setQuoteType("Comment").setQuoteId(comment.getId());
+            reply.setToUid(comment.getFromUid()).setToName(comment.getFromName()).setToAvatar(comment.getFromAvatar());
+        }
+        reply.setStatus(0);
 
         Long cid = comment.getCid();
         if (cid == null) {
@@ -470,13 +532,13 @@ public class CommentManager {
         // 带有表情的字符串转换为编码
         reply.setContent(EmojiUtil.toHtml(formatContentRemoveAutoPlay(reply.getContent())));
 
-        boolean isOk = replyEntityService.saveOrUpdate(reply);
+        boolean isOk = replyEntityService.save(reply);
 
         if (isOk) {
             // 如果是讨论区的回复，发布成功需要增加统计该讨论的回复数
-            if (replyDto.getDid() != null) {
+            if (comment.getDid() != null) {
                 UpdateWrapper<Discussion> discussionUpdateWrapper = new UpdateWrapper<>();
-                discussionUpdateWrapper.eq("id", replyDto.getDid())
+                discussionUpdateWrapper.eq("id", comment.getDid())
                         .setSql("comment_num=comment_num+1");
                 discussionEntityService.update(discussionUpdateWrapper);
                 // 更新消息
@@ -558,9 +620,9 @@ public class CommentManager {
         boolean isOk = replyEntityService.removeById(reply.getId());
         if (isOk) {
             // 如果是讨论区的回复，删除成功需要减少统计该讨论的回复数
-            if (replyDto.getDid() != null) {
+            if (comment.getDid() != null) {
                 UpdateWrapper<Discussion> discussionUpdateWrapper = new UpdateWrapper<>();
-                discussionUpdateWrapper.eq("id", replyDto.getDid())
+                discussionUpdateWrapper.eq("id", comment.getDid())
                         .setSql("comment_num=comment_num-1");
                 discussionEntityService.update(discussionUpdateWrapper);
             }
@@ -570,12 +632,7 @@ public class CommentManager {
     }
 
     private String formatContentRemoveAutoPlay(String content) {
-        StringBuilder sb = new StringBuilder(content);
-        Matcher matcher = pattern.matcher(content);
-        while (matcher.find()) {
-            sb.replace(matcher.start(1), matcher.end(1), "controls");
-        }
-        return sb.toString();
+        return pattern.matcher(content).replaceAll("controls");
     }
 
 }

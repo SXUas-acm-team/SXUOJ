@@ -143,7 +143,7 @@ public class Dispatcher {
         Runnable getResultTask = () -> {
             if (count.get() > maxTryNum) { // 300次失败则判为提交失败
                 // 远程判题需要将账号归为可用
-                changeRemoteJudgeStatus(finalOj, data.getUsername(), null);
+                changeRemoteJudgeStatus(finalOj, data.getUsername(), null, data.getRemoteAccountVersion());
                 checkResult(null, submitId);
                 releaseTaskThread(taskKey);
                 return;
@@ -163,7 +163,8 @@ public class Dispatcher {
                     result = restTemplate.postForObject("http://" + judgeServer.getUrl() + path, data, CommonResult.class);
                 } catch (Exception e) {
                     log.error("[Remote Judge] Request the judge server [" + judgeServer.getUrl() + "] error-------------->", e);
-                    changeRemoteJudgeStatus(finalOj, data.getUsername(), judgeServer);
+                    // A transport failure cannot prove that the judge server did not accept the task.
+                    // Keep the lease until the remote worker releases it; never admit overlapping submissions.
                 } finally {
                     checkResult(result, submitId);
                     if (!isCFFixServerJudge) {
@@ -334,8 +335,8 @@ public class Dispatcher {
      * @param username
      * @param judgeServer
      */
-    public void changeRemoteJudgeStatus(String oj, String username, JudgeServer judgeServer) {
-        changeAccountStatus(oj, username);
+    public void changeRemoteJudgeStatus(String oj, String username, JudgeServer judgeServer, Long version) {
+        changeAccountStatus(oj, username, version);
         if (ChooseUtils.openCodeforcesFixServer) {
             if (oj.equals(Constants.RemoteOJ.CODEFORCES.getName())
                     || oj.equals(Constants.RemoteOJ.GYM.getName())) {
@@ -351,10 +352,12 @@ public class Dispatcher {
      * @param remoteJudge
      * @param username
      */
-    public void changeAccountStatus(String remoteJudge, String username) {
+    public void changeAccountStatus(String remoteJudge, String username, Long version) {
+        if (version == null) return;
 
         UpdateWrapper<RemoteJudgeAccount> remoteJudgeAccountUpdateWrapper = new UpdateWrapper<>();
         remoteJudgeAccountUpdateWrapper.set("status", true)
+                .eq("version", version)
                 .eq("status", false)
                 .eq("username", username);
         if (remoteJudge.equals("GYM")) {
@@ -364,9 +367,7 @@ public class Dispatcher {
 
         boolean isOk = remoteJudgeAccountService.update(remoteJudgeAccountUpdateWrapper);
 
-        if (!isOk) { // 重试8次
-            tryAgainUpdateAccount(remoteJudgeAccountUpdateWrapper, remoteJudge, username);
-        }
+        // A failed compare-and-set means this reservation is already released or stale.
     }
 
 

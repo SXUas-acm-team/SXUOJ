@@ -33,16 +33,21 @@ public class RemoteJudgeDTO implements Serializable {
     /**
      * 远程评测的账号
      */
+    @ToString.Exclude
     private String username;
 
     /**
      * 远程评测的密码
      */
+    @ToString.Exclude
     private String password;
+
+    private Long accountVersion;
 
     /**
      * 远程评测的cookies
      */
+    @ToString.Exclude
     private List<HttpCookie> cookies;
 
     public RemoteJudgeDTO setCookies(List<HttpCookie> cookies) {
@@ -60,6 +65,7 @@ public class RemoteJudgeDTO implements Serializable {
     /**
      * 远程测评的csrfToken
      */
+    @ToString.Exclude
     private String csrfToken;
 
     /**
@@ -85,6 +91,7 @@ public class RemoteJudgeDTO implements Serializable {
     /**
      * 远程评测的用户代码
      */
+    @ToString.Exclude
     private String userCode;
 
     /**
@@ -116,6 +123,8 @@ public class RemoteJudgeDTO implements Serializable {
      * 远程测评的提交id（远程oj的提交id）
      */
     private Long submitId;
+
+    private Long previousSubmissionId;
 
     /**
      * 远程测评的测试数据的序号(codeforces)

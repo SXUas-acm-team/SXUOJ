@@ -118,7 +118,6 @@ public class AdminTrainingController {
     @GetMapping("/import-remote-oj-problem")
     @RequiresAuthentication
     @RequiresRoles(value = {"root", "admin", "problem_admin"}, logical = Logical.OR)
-    @Transactional(rollbackFor = Exception.class)
     public CommonResult<Void> importTrainingRemoteOJProblem(@RequestParam("name") String name,
                                                             @RequestParam("problemId") String problemId,
                                                             @RequestParam("tid") Long tid) {

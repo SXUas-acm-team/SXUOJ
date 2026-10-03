@@ -10,6 +10,7 @@ import top.hcode.hoj.pojo.vo.OIRankVO;
 import top.hcode.hoj.pojo.vo.UserHomeVO;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * <p>
@@ -26,6 +27,7 @@ public interface UserRecordEntityService extends IService<UserRecord> {
     UserHomeVO getUserHomeInfo(String uid, String username);
 
     List<Judge> getLastYearUserJudgeList(String uid, String username);
+    List<Map<String, Object>> getLastYearUserJudgeCounts(String uid, String username);
 
     IPage<OIRankVO> getOIRankList(Page<OIRankVO> page, List<String> uidList);
 

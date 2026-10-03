@@ -74,6 +74,12 @@ public class ConfigManager {
     @Value("${spring.application.name}")
     private String currentServiceName;
 
+    @Value("${spring.cloud.nacos.config.enabled:true}")
+    private boolean nacosConfigEnabled;
+
+    @Value("${spring.cloud.nacos.discovery.enabled:true}")
+    private boolean nacosDiscoveryEnabled;
+
     @Value("${spring.cloud.nacos.url}")
     private String NACOS_URL;
 
@@ -110,12 +116,17 @@ public class ConfigManager {
 
         JSONObject result = new JSONObject();
 
-        List<ServiceInstance> serviceInstances = discoveryClient.getInstances(currentServiceName);
+        List<ServiceInstance> serviceInstances = nacosDiscoveryEnabled
+                ? discoveryClient.getInstances(currentServiceName) : Collections.emptyList();
 
         // 获取nacos中心配置所在的机器环境
-        String response = restTemplate.getForObject(NACOS_URL + "/nacos/v1/ns/operator/metrics", String.class);
-
-        JSONObject jsonObject = JSONUtil.parseObj(response);
+        JSONObject jsonObject = new JSONObject();
+        if (nacosConfigEnabled || nacosDiscoveryEnabled) {
+            String response = restTemplate.getForObject(NACOS_URL + "/nacos/v1/ns/operator/metrics", String.class);
+            jsonObject = JSONUtil.parseObj(response);
+        } else {
+            jsonObject.put("enabled", false);
+        }
         // 获取当前数据后台所在机器环境
         int cores = OshiUtil.getCpuInfo().getCpuNum(); // 当前机器的cpu核数
         double cpuLoad = 100 - OshiUtil.getCpuInfo().getFree();
@@ -136,6 +147,9 @@ public class ConfigManager {
 
     public List<JSONObject> getJudgeServiceInfo() {
         List<JSONObject> serviceInfoList = new LinkedList<>();
+        if (!nacosDiscoveryEnabled) {
+            return serviceInfoList;
+        }
         List<ServiceInstance> serviceInstances = discoveryClient.getInstances(judgeServiceName);
         for (ServiceInstance serviceInstance : serviceInstances) {
             try {
@@ -474,9 +488,9 @@ public class ConfigManager {
                                           String oj) {
 
         if (CollectionUtils.isEmpty(usernameList) || CollectionUtils.isEmpty(passwordList) || usernameList.size() != passwordList.size()) {
-            log.error("[Change by Switch] [{}]: There is no account or password configured for remote judge, " +
-                            "username list:{}, password list:{}", oj, Arrays.toString(usernameList.toArray()),
-                    Arrays.toString(passwordList.toArray()));
+            log.error("[Change by Switch] [{}]: Invalid remote account list sizes (usernames={}, passwords={})", oj,
+                    usernameList == null ? 0 : usernameList.size(), passwordList == null ? 0 : passwordList.size());
+            return;
         }
 
         QueryWrapper<RemoteJudgeAccount> remoteJudgeAccountQueryWrapper = new QueryWrapper<>();
@@ -504,6 +518,9 @@ public class ConfigManager {
 
 
     public boolean sendNewConfigToNacos() {
+        if (!nacosConfigEnabled) {
+            return true;
+        }
 
         Properties properties = new Properties();
         properties.put("serverAddr", NACOS_URL);

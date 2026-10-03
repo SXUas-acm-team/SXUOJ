@@ -350,6 +350,7 @@
 </template>
 
 <script>
+import { normalizePageSize, normalizePage } from "@/common/viewSafety";
 import api from '@/common/api';
 import utils from '@/common/utils';
 import AddPublicProblem from '@/components/admin/AddPublicProblem.vue';
@@ -413,8 +414,8 @@ export default {
     init() {
       this.routeName = this.$route.name;
       let query = this.$route.query;
-      this.query.currentPage = query.currentPage || 1;
-      this.query.pageSize = parseInt(query.pageSize) || 10;
+      this.query.currentPage = normalizePage(query.currentPage);
+      this.query.pageSize = normalizePageSize(query.pageSize);
       this.query.keyword = query.keyword;
       this.query.problemListAuth = query.problemListAuth
         ? parseInt(query.problemListAuth)
@@ -481,7 +482,7 @@ export default {
       this.pushRouter();
     },
     onPageSizeChange(pageSize) {
-      this.query.pageSize = pageSize;
+      this.query.pageSize = normalizePageSize(pageSize);
       this.pushRouter();
     },
     getProblemList() {

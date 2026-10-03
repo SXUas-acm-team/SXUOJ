@@ -24,6 +24,7 @@ import top.hcode.hoj.pojo.entity.problem.Problem;
 import top.hcode.hoj.pojo.entity.problem.ProblemCase;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.SafeFiles;
 import top.hcode.hoj.validator.GroupValidator;
 
 import javax.servlet.http.HttpServletResponse;
@@ -69,7 +70,7 @@ public class TestCaseManager {
         }
         String fileDirId = IdUtil.simpleUUID();
         String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
-        String filePath = fileDir + File.separator + file.getOriginalFilename();
+        String filePath = SafeFiles.child(fileDir, file.getOriginalFilename()).getPath();
         // 文件夹不存在就新建
         FileUtil.mkdir(fileDir);
         try {
@@ -80,7 +81,7 @@ public class TestCaseManager {
         }
 
         // 将压缩包压缩到指定文件夹
-        ZipUtil.unzip(filePath, fileDir);
+        SafeFiles.unzip(filePath, fileDir);
         // 删除zip文件
         FileUtil.del(filePath);
         // 检查文件是否存在
@@ -109,9 +110,9 @@ public class TestCaseManager {
             } else if (tmp.getName().endsWith(".txt")) {
                 tmpPreName = tmp.getName().substring(0, tmp.getName().lastIndexOf(".txt"));
                 if (tmpPreName.contains("input")) {
-                    inputData.put(tmpPreName.replaceAll("input", "$*$"), tmp.getName());
+                    inputData.put(tmpPreName.replace("input", "$*$"), tmp.getName());
                 } else if (tmpPreName.contains("output")) {
-                    outputData.put(tmpPreName.replaceAll("output", "$*$"), tmp.getName());
+                    outputData.put(tmpPreName.replace("output", "$*$"), tmp.getName());
                 }
             }
         }

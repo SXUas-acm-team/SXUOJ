@@ -28,6 +28,7 @@ import top.hcode.hoj.pojo.entity.problem.ProblemCase;
 import top.hcode.hoj.pojo.entity.problem.Tag;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.SafeFiles;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,7 +69,7 @@ public class ImportQDUOJProblemManager {
 
         String fileDirId = IdUtil.simpleUUID();
         String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
-        String filePath = fileDir + File.separator + file.getOriginalFilename();
+        String filePath = SafeFiles.child(fileDir, file.getOriginalFilename()).getPath();
         // 文件夹不存在就新建
         FileUtil.mkdir(fileDir);
         try {
@@ -79,7 +80,8 @@ public class ImportQDUOJProblemManager {
         }
 
         // 将压缩包压缩到指定文件夹
-        ZipUtil.unzip(filePath, fileDir);
+        try {
+        SafeFiles.unzip(filePath, fileDir);
 
         // 删除zip文件
         FileUtil.del(filePath);
@@ -141,7 +143,7 @@ public class ImportQDUOJProblemManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        List<Tag> tagList = tagEntityService.list(new QueryWrapper<Tag>().eq("oj", "ME"));
+        List<Tag> tagList = tagEntityService.list(new QueryWrapper<Tag>().eq("oj", "ME").isNull("gid"));
         HashMap<String, Tag> tagMap = new HashMap<>();
         for (Tag tag : tagList) {
             tagMap.put(tag.getName().toUpperCase(), tag);
@@ -220,6 +222,9 @@ public class ImportQDUOJProblemManager {
                 }
                 throw new StatusFailException(errMsg);
             }
+        }
+        } finally {
+            SafeFiles.deleteTree(new File(fileDir).toPath());
         }
     }
 

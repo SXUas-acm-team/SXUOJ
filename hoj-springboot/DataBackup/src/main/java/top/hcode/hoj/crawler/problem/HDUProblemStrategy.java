@@ -16,7 +16,7 @@ import top.hcode.hoj.utils.JsoupUtils;
  */
 public class HDUProblemStrategy extends ProblemStrategy {
     public static final String JUDGE_NAME = "HDU";
-    public static final String HOST = "http://acm.hdu.edu.cn";
+    public static final String HOST = "https://acm.hdu.edu.cn";
     public static final String PROBLEM_URL = "/showproblem.php?pid=%s";
 
     /**
@@ -32,6 +32,7 @@ public class HDUProblemStrategy extends ProblemStrategy {
         Problem info = new Problem();
         String url = HOST + String.format(PROBLEM_URL, problemId);
         Connection connection = JsoupUtils.getConnectionFromUrl(url, null, null);
+        connection.followRedirects(false);
         Document document = JsoupUtils.getDocument(connection, null);
         String html = document.html();
         info.setProblemId(JUDGE_NAME + "-" + problemId);

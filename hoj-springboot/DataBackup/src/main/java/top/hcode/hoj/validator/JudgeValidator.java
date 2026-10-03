@@ -47,12 +47,10 @@ public class JudgeValidator {
 
     public void validateSubmissionInfo(SubmitJudgeDTO submitJudgeDto) throws StatusFailException, AccessException {
 
-        if (submitJudgeDto.getGid() != null) { // 团队内的提交
-            accessValidator.validateAccess(HOJAccessEnum.GROUP_JUDGE);
-        } else if (submitJudgeDto.getCid() != null && submitJudgeDto.getCid() != 0) {
-            accessValidator.validateAccess(HOJAccessEnum.CONTEST_JUDGE);
-        } else {
-            accessValidator.validateAccess(HOJAccessEnum.PUBLIC_JUDGE);
+        // Access switches are checked after resolving the authoritative problem/contest.
+        if (submitJudgeDto == null || submitJudgeDto.getCode() == null || submitJudgeDto.getLanguage() == null
+                || submitJudgeDto.getIsRemote() == null) {
+            throw new StatusFailException("提交信息不能为空！");
         }
 
         if (!submitJudgeDto.getIsRemote() && !HOJ_LANGUAGE_LIST.contains(submitJudgeDto.getLanguage())) {
@@ -130,6 +128,9 @@ public class JudgeValidator {
 
         if (testJudgeDto.getUserInput().length() > 1000) {
             throw new StatusFailException("在线调试的输入数据字符长度不能超过1000！");
+        }
+        if (testJudgeDto.getExpectedOutput() != null && testJudgeDto.getExpectedOutput().length() > 1000) {
+            throw new StatusFailException("在线调试的预期输出字符长度不能超过1000！");
         }
 
         if (testJudgeDto.getPid() == null) {

@@ -44,6 +44,7 @@ public class ShiroConfig {
     @Bean
     public DefaultWebSecurityManager securityManager(AccountRealm accountRealm) {
         DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager(accountRealm);
+        securityManager.setRememberMeManager(null);
 
         ShiroCacheManager shiroCacheManager = new ShiroCacheManager();
         shiroCacheManager.setCacheLive(expire);

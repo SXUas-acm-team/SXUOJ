@@ -16,5 +16,21 @@ venv/
 # Output artifacts
 output/
 
+# Project-local Java tools and runtime output
+.tools/
+
 # Logs
 *.log
+*.log.*
+hoj_backend/
+hoj_judgeserver/
+.env
+.env.*
+!.env.example
+extand/*.xls
+extand/*.xlsx
+SECURITY_REMEDIATION.md
+hoj-springboot/local.ps1
+hoj-springboot/security-deployment.md
+hoj-springboot/security-migrations.sql
+hoj-springboot/.run/HOJ Backend Local.run.xml

@@ -13,6 +13,31 @@ import java.util.*;
  */
 public class JudgeUtils {
 
+    public static String trimLineEnds(String value) {
+        if (value == null) return null;
+        int end = value.length();
+        while (end > 0 && Character.isWhitespace(value.charAt(end - 1))) end--;
+        StringBuilder result = new StringBuilder(end);
+        for (int start = 0; start < end;) {
+            int lineEnd = value.indexOf('\n', start);
+            if (lineEnd < 0 || lineEnd > end) lineEnd = end;
+            int trimmedEnd = lineEnd;
+            while (trimmedEnd > start && Character.isWhitespace(value.charAt(trimmedEnd - 1))) trimmedEnd--;
+            result.append(value, start, trimmedEnd);
+            if (lineEnd < end) result.append('\n');
+            start = lineEnd + 1;
+        }
+        return result.toString();
+    }
+
+    public static Double parsePercentage(String output) {
+        if (output == null || output.length() > 64) return null;
+        try {
+            double score = Double.parseDouble(output.trim());
+            return Double.isFinite(score) && score >= 0 && score <= 100 ? score / 100 : null;
+        } catch (NumberFormatException e) { return null; }
+    }
+
     @SuppressWarnings("All")
     public static HashMap<String, String> getProblemExtraFileMap(Problem problem, String type) {
         if ("user".equals(type)) {

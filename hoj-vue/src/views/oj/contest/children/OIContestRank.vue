@@ -389,6 +389,7 @@
   </el-card>
 </template>
 <script>
+import { chartRankRecords } from "@/common/viewSafety";
 import Avatar from "vue-avatar";
 import { mapActions } from "vuex";
 import ContestRankMixin from "./contestRankMixin";
@@ -418,6 +419,7 @@ export default {
           left: "center",
         },
         tooltip: {
+          renderMode: "richText",
           trigger: "axis",
         },
         toolbox: {
@@ -572,14 +574,8 @@ export default {
     },
     applyToChart(rankData) {
       let [user, scores] = [[], []];
-      let len = rankData.length;
-      let topIndex = this.concernedList.length || 0;
-      if (rankData.length > 0) {
-        if (rankData[0].uid == this.userInfo.uid) {
-          topIndex++;
-        }
-      }
-      for (let i = topIndex; i < len && i < topIndex + 10; i++) {
+      rankData = chartRankRecords(rankData);
+      for (let i = 0; i < rankData.length; i++) {
         let ele = rankData[i];
         user.push(
           this.getRankShowName(ele[this.contest.rankShowName], ele.username)

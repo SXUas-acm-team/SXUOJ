@@ -30,7 +30,7 @@ public class RemoteJudgeToSubmit {
     public boolean process(RemoteJudgeStrategy remoteJudgeStrategy) {
 
         RemoteJudgeDTO remoteJudgeDTO = remoteJudgeStrategy.getRemoteJudgeDTO();
-        log.info("Ready Send Task to RemoteJudgeDTO => {}", remoteJudgeDTO);
+        log.info("Ready remote judge task, OJ={}, judgeId={}", remoteJudgeDTO.getOj(), remoteJudgeDTO.getJudgeId());
 
         String errLog = null;
         try {
@@ -46,7 +46,7 @@ public class RemoteJudgeToSubmit {
             // 将使用的账号放回对应列表
             log.error("[{}] Submit Failed! Begin to return the account to other task!", remoteJudgeDTO.getOj());
             remoteJudgeService.changeAccountStatus(remoteJudgeDTO.getOj(),
-                    remoteJudgeDTO.getUsername());
+                    remoteJudgeDTO.getUsername(), remoteJudgeDTO.getAccountVersion());
 
             if (RemoteJudgeContext.openCodeforcesFixServer) {
                 if (remoteJudgeDTO.getOj().equals(Constants.RemoteJudge.GYM_JUDGE.getName())

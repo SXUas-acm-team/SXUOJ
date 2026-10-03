@@ -57,8 +57,8 @@ public class GroupManager {
     public IPage<GroupVO> getGroupList(Integer limit, Integer currentPage, String keyword, Integer auth, boolean onlyMine) {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
         if (auth == null || auth < 1) auth = 0;
 
         if (!StringUtils.isEmpty(keyword)) {
@@ -228,6 +228,9 @@ public class GroupManager {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        Group storedGroup = groupEntityService.getById(group.getId());
+        if (storedGroup == null) throw new StatusFailException("团队不存在！");
+        group.setUid(storedGroup.getUid()).setOwner(storedGroup.getOwner());
 
         if (!groupValidator.isGroupRoot(userRolesVo.getUid(), group.getId()) && !isRoot) {
             throw new StatusForbiddenException("对不起，您无权限操作！");

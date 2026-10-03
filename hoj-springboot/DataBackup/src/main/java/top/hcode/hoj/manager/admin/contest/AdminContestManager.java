@@ -50,8 +50,8 @@ public class AdminContestManager {
 
     public IPage<Contest> getContestList(Integer limit, Integer currentPage, String keyword) {
 
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
         IPage<Contest> iPage = new Page<>(currentPage, limit);
         QueryWrapper<Contest> queryWrapper = new QueryWrapper<>();
         // 过滤密码
@@ -156,6 +156,11 @@ public class AdminContestManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
+        if (!SecurityUtils.getSubject().hasRole("root") && !Objects.equals(contest.getUid(), userRolesVo.getUid())) {
+            throw new StatusSystemErrorException("无权克隆其他用户的比赛！");
+        }
+        // Cloned contests start hidden and without copying the source password.
+        contest.setPwd(null).setAuth(Constants.Contest.AUTH_PUBLIC.getCode()).setVisible(false);
         contest.setUid(userRolesVo.getUid())
                 .setAuthor(userRolesVo.getUsername())
                 .setSource(cid.intValue())
@@ -174,9 +179,12 @@ public class AdminContestManager {
         // 是否为超级管理员
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
         // 只有超级管理员和比赛拥有者才能操作
-        if (!isRoot && !userRolesVo.getUid().equals(adminContestVo.getUid())) {
+        Contest storedContest = contestEntityService.getById(adminContestVo.getId());
+        if (storedContest == null) throw new StatusFailException("比赛不存在！");
+        if (!isRoot && !userRolesVo.getUid().equals(storedContest.getUid())) {
             throw new StatusForbiddenException("对不起，你无权限操作！");
         }
+        adminContestVo.setUid(storedContest.getUid());
         Contest contest = BeanUtil.copyProperties(adminContestVo, Contest.class, "starAccount");
 
         JSONObject accountJson = new JSONObject();
@@ -213,11 +221,13 @@ public class AdminContestManager {
         // 是否为超级管理员
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
         // 只有超级管理员和比赛拥有者才能操作
-        if (!isRoot && !userRolesVo.getUid().equals(uid)) {
+        Contest storedContest = contestEntityService.getById(cid);
+        if (storedContest == null) throw new StatusFailException("比赛不存在！");
+        if (!isRoot && !userRolesVo.getUid().equals(storedContest.getUid())) {
             throw new StatusForbiddenException("对不起，你无权限操作！");
         }
 
-        boolean isOK = contestEntityService.saveOrUpdate(new Contest().setId(cid).setVisible(visible));
+        boolean isOK = contestEntityService.updateById(new Contest().setId(cid).setVisible(visible));
 
         if (!isOK) {
             throw new StatusFailException("修改失败");

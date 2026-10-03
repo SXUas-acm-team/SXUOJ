@@ -58,12 +58,6 @@
         </resources>
     </build>
     <dependencies>
-        <!-- Load .env into Spring Environment -->
-        <dependency>
-            <groupId>me.paulschwarz</groupId>
-            <artifactId>spring-dotenv</artifactId>
-            <version>3.0.0</version>
-        </dependency>
         <dependency>
             <groupId>top.hcode</groupId>
             <artifactId>hoj-api</artifactId>

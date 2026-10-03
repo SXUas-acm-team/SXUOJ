@@ -17,6 +17,7 @@ import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.utils.RedisUtils;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * <p>
@@ -54,6 +55,11 @@ public class UserRecordEntityServiceImpl extends ServiceImpl<UserRecordMapper, U
     @Override
     public List<Judge> getLastYearUserJudgeList(String uid, String username) {
         return judgeMapper.getLastYearUserJudgeList(uid, username);
+    }
+
+    @Override
+    public List<Map<String, Object>> getLastYearUserJudgeCounts(String uid, String username) {
+        return judgeMapper.getLastYearUserJudgeCounts(uid, username);
     }
 
     @Override

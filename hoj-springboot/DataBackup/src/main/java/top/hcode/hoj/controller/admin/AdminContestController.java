@@ -135,7 +135,6 @@ public class AdminContestController {
     @DeleteMapping("/problem")
     @RequiresAuthentication
     @RequiresRoles(value = {"root", "problem_admin"}, logical = Logical.OR)
-    @Transactional(rollbackFor = Exception.class)
     public CommonResult<Void> deleteProblem(@RequestParam("pid") Long pid,
                                             @RequestParam(value = "cid", required = false) Long cid) {
         return adminContestProblemService.deleteProblem(pid, cid);
@@ -187,7 +186,6 @@ public class AdminContestController {
     @GetMapping("/import-remote-oj-problem")
     @RequiresAuthentication
     @RequiresRoles(value = {"root", "admin", "problem_admin"}, logical = Logical.OR)
-    @Transactional(rollbackFor = Exception.class)
     public CommonResult<Void> importContestRemoteOJProblem(@RequestParam("name") String name,
                                                            @RequestParam("problemId") String problemId,
                                                            @RequestParam("cid") Long cid,

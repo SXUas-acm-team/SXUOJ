@@ -13,6 +13,7 @@ import java.util.List;
  * @Date 2022/10/26
  */
 @Data
+@lombok.ToString(onlyExplicitlyIncluded = true)
 public class SwitchConfig {
 
     private List<String> hduUsernameList = new ArrayList<>();

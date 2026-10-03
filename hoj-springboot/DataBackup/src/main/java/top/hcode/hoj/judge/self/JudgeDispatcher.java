@@ -34,13 +34,9 @@ public class JudgeDispatcher {
     @Autowired
     private JudgeReceiver judgeReceiver;
 
-    @Value("${hoj.judge.token:no_judge_token}")
-    private String judgeToken;
-
     public void sendTask(Long judgeId, Long pid, Boolean isContest) {
         JSONObject task = new JSONObject();
         task.set("judgeId", judgeId);
-        task.set("token", judgeToken);
         task.set("isContest", isContest);
         try {
             boolean isOk;
@@ -65,7 +61,7 @@ public class JudgeDispatcher {
     }
 
     public void sendTestJudgeTask(TestJudgeReq testJudgeReq) throws StatusSystemErrorException {
-        testJudgeReq.setToken(judgeToken);
+        testJudgeReq.setToken(null);
         try {
             boolean isOk = redisUtils.llPush(Constants.Queue.TEST_JUDGE_WAITING.getName(), JSONUtil.toJsonStr(testJudgeReq));
             if (!isOk) {

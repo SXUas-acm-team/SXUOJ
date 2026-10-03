@@ -1,5 +1,7 @@
 package top.hcode.hoj.remoteJudge.task.Impl;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpRequest;
@@ -54,7 +56,7 @@ public class SPOJJudge extends RemoteJudgeStrategy {
 
         List<HttpCookie> cookies = remoteJudgeDTO.getCookies();
 
-        HttpRequest request = HttpUtil.createPost(HOST + SUBMIT_URL)
+        HttpRequest request = SecureHttp.post(HOST + SUBMIT_URL)
                 .cookie(cookies);
 
         HttpResponse response = request.form(MapUtil
@@ -88,7 +90,7 @@ public class SPOJJudge extends RemoteJudgeStrategy {
         Long submitId = remoteJudgeDTO.getSubmitId();
 
         String url = HOST + SUBMISSION_RESULT_URL;
-        HttpResponse response = HttpUtil.createPost(url)
+        HttpResponse response = SecureHttp.post(url)
                 .cookie(cookies)
                 .form(MapUtil.builder(new HashMap<String, Object>())
                         .put("ids", submitId).map())
@@ -134,7 +136,7 @@ public class SPOJJudge extends RemoteJudgeStrategy {
         }
         if (judgeResult.equals(Constants.Judge.STATUS_COMPILE_ERROR)) {
             String errorInfoUrl = HOST + String.format(CE_INFO_URL, submitId);
-            HttpRequest request = HttpUtil.createGet(errorInfoUrl);
+            HttpRequest request = SecureHttp.get(errorInfoUrl);
             html = request.cookie(cookies).execute().body();
             String errorInfo = ReUtil.get("<div align=\"left\"><pre><small>([\\s\\S]*?)</small></pre>", html, 1);
             remoteJudgeRes.setErrorInfo(errorInfo);
@@ -148,7 +150,7 @@ public class SPOJJudge extends RemoteJudgeStrategy {
         HttpRequest.getCookieManager().getCookieStore().removeAll();
 
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
-        HttpRequest request = HttpUtil.createPost(HOST + LOGIN_URL);
+        HttpRequest request = SecureHttp.post(HOST + LOGIN_URL);
         HttpResponse response = request.form(MapUtil.builder(new HashMap<String, Object>())
                 .put("login_user", remoteJudgeDTO.getUsername())
                 .put("autologin", "1")

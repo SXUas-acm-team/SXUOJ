@@ -1,5 +1,7 @@
 package top.hcode.hoj.crawler.problem;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpUtil;
 import top.hcode.hoj.pojo.entity.problem.Problem;
@@ -41,7 +43,7 @@ public class SPOJProblemStrategy extends ProblemStrategy {
     @Override
     public RemoteProblemInfo getProblemInfo(String problemId, String author) throws Exception {
         problemId = problemId.toUpperCase();
-        String body = HttpUtil.get(getProblemUrl(problemId));
+        String body = SecureHttp.getBody(getProblemUrl(problemId));
         String title = ReUtil.get("<h2 id=\"problem-name\" class=\"text-center\">[\\s\\S]*? - ([\\s\\S]*?)</h2>", body, 1);
         String timeLimit = ReUtil.get("Time limit:</td><td>([\\s\\S]*?)s", body, 1);
         String memoryLimit = ReUtil.get("Memory limit:</td><td>([\\s\\S]*?)MB", body, 1);
@@ -75,7 +77,7 @@ public class SPOJProblemStrategy extends ProblemStrategy {
             tagList.add(new Tag().setName(tmp.trim()));
         }
 
-        String submitPageBody = HttpUtil.get(getSubmitUrl(problemId));
+        String submitPageBody = SecureHttp.getBody(getSubmitUrl(problemId));
         Pattern pattern = Pattern.compile("<option value=\"([\\s\\S]*?)\" >[\\s\\S]*?</option>");
         List<String> langIdList = ReUtil.findAll(pattern, submitPageBody, 1);
 

@@ -56,6 +56,7 @@ public class AdminTrainingRecordManager {
         }
         if (!CollectionUtils.isEmpty(pidList)) {
             QueryWrapper<Judge> judgeQueryWrapper = new QueryWrapper<>();
+        judgeQueryWrapper.select("pid", "uid", "MIN(submit_id) AS submit_id").groupBy("pid", "uid");
             judgeQueryWrapper.in("pid", pidList)
                     .eq("cid", 0)
                     .eq("status", Constants.Judge.STATUS_ACCEPTED.getStatus()) // 只同步ac的提交
@@ -93,6 +94,7 @@ public class AdminTrainingRecordManager {
     private void syncNewProblemUserSubmissionToRecord(Long pid, Long tpId, Long tid, List<String> uidList) {
         if (!CollectionUtils.isEmpty(uidList)) {
             QueryWrapper<Judge> judgeQueryWrapper = new QueryWrapper<>();
+        judgeQueryWrapper.select("pid", "uid", "MIN(submit_id) AS submit_id").groupBy("pid", "uid");
             judgeQueryWrapper.eq("pid", pid)
                     .eq("cid", 0)
                     .eq("status", Constants.Judge.STATUS_ACCEPTED.getStatus()) // 只同步ac的提交
@@ -122,6 +124,7 @@ public class AdminTrainingRecordManager {
             return;
         }
         QueryWrapper<Judge> judgeQueryWrapper = new QueryWrapper<>();
+        judgeQueryWrapper.select("pid", "uid", "MIN(submit_id) AS submit_id").groupBy("pid", "uid");
         judgeQueryWrapper.in("pid", pidList)
                 .eq("cid", 0)
                 .eq("status", Constants.Judge.STATUS_ACCEPTED.getStatus()) // 只同步ac的提交

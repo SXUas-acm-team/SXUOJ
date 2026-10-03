@@ -1,6 +1,7 @@
 package top.hcode.hoj.manager.file;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.ZipUtil;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusSystemErrorException;
 import top.hcode.hoj.dao.problem.LanguageEntityService;
@@ -26,6 +29,7 @@ import top.hcode.hoj.pojo.entity.problem.ProblemCase;
 import top.hcode.hoj.pojo.entity.problem.Tag;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.SafeFiles;
 
 import javax.annotation.Resource;
 import java.io.File;
@@ -41,6 +45,16 @@ import java.util.*;
 @Component
 @Slf4j(topic = "hoj")
 public class ImportHydroProblemManager {
+
+    public static Yaml safeYaml() {
+        LoaderOptions options = new LoaderOptions();
+        options.setMaxAliasesForCollections(20);
+        options.setAllowDuplicateKeys(false);
+        options.setNestingDepthLimit(50);
+        options.setCodePointLimit(2 * 1024 * 1024);
+        org.yaml.snakeyaml.DumperOptions dumper = new org.yaml.snakeyaml.DumperOptions();
+        return new Yaml(new SafeConstructor(options), new org.yaml.snakeyaml.representer.Representer(dumper), dumper, options);
+    }
 
 
     @Resource
@@ -68,7 +82,7 @@ public class ImportHydroProblemManager {
 
         String fileDirId = IdUtil.simpleUUID();
         String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
-        String filePath = fileDir + File.separator + file.getOriginalFilename();
+        String filePath = SafeFiles.child(fileDir, file.getOriginalFilename()).getPath();
         // 文件夹不存在就新建
         FileUtil.mkdir(fileDir);
         try {
@@ -79,7 +93,8 @@ public class ImportHydroProblemManager {
         }
 
         // 将压缩包压缩到指定文件夹
-        ZipUtil.unzip(filePath, fileDir);
+        try {
+        SafeFiles.unzip(filePath, fileDir);
 
         // 删除zip文件
         FileUtil.del(filePath);
@@ -92,7 +107,7 @@ public class ImportHydroProblemManager {
             throw new StatusFailException("压缩包里文件不能为空！");
         }
 
-        List<Tag> tagList = tagEntityService.list(new QueryWrapper<Tag>().eq("oj", "ME"));
+        List<Tag> tagList = tagEntityService.list(new QueryWrapper<Tag>().eq("oj", "ME").isNull("gid"));
         HashMap<String, Tag> tagMap = new HashMap<>();
         for (Tag tag : tagList) {
             tagMap.put(tag.getName().toUpperCase(), tag);
@@ -151,6 +166,9 @@ public class ImportHydroProblemManager {
             }
         }
 
+        } finally {
+            SafeFiles.deleteTree(new File(fileDir).toPath());
+        }
     }
 
     private ProblemDTO buildProblemDto(String author,
@@ -243,15 +261,16 @@ public class ImportHydroProblemManager {
                                  String testDataDirPath,
                                  HashMap<String, Long> languageMap,
                                  List<Language> languageList) {
-        Yaml yaml = new Yaml();
-        HydroConfigYamlBO hydroConfigYamlBO = yaml.loadAs(configYaml, HydroConfigYamlBO.class);
+        Object parsed = safeYaml().load(configYaml);
+        if (!(parsed instanceof Map)) throw new IllegalArgumentException("Hydro config must be a mapping");
+        HydroConfigYamlBO hydroConfigYamlBO = BeanUtil.toBean(parsed, HydroConfigYamlBO.class);
         if (hydroConfigYamlBO != null) {
             if (Objects.equals(hydroConfigYamlBO.getType(), "default") || hydroConfigYamlBO.getType() == null) {
                 problem.setJudgeMode(Constants.JudgeMode.DEFAULT.getMode());
 
                 if (hydroConfigYamlBO.getChecker() != null) {
                     problem.setJudgeMode(Constants.JudgeMode.SPJ.getMode());
-                    String code = FileUtil.readString(testDataDirPath + File.separator + hydroConfigYamlBO.getChecker(), StandardCharsets.UTF_8);
+                    String code = FileUtil.readString(SafeFiles.child(testDataDirPath, hydroConfigYamlBO.getChecker()), StandardCharsets.UTF_8);
                     problem.setSpjCode(code);
                     if (hydroConfigYamlBO.getChecker().endsWith("cc")) {
                         problem.setSpjLanguage("C++");
@@ -262,7 +281,7 @@ public class ImportHydroProblemManager {
 
             } else if (Objects.equals(hydroConfigYamlBO.getType(), "interactive")) {
                 problem.setJudgeMode(Constants.JudgeMode.INTERACTIVE.getMode());
-                String code = FileUtil.readString(testDataDirPath + File.separator + hydroConfigYamlBO.getInteractor(), StandardCharsets.UTF_8);
+                String code = FileUtil.readString(SafeFiles.child(testDataDirPath, hydroConfigYamlBO.getInteractor()), StandardCharsets.UTF_8);
                 problem.setSpjCode(code);
                 if (hydroConfigYamlBO.getInteractor().endsWith("cc")) {
                     problem.setSpjLanguage("C++");
@@ -274,7 +293,7 @@ public class ImportHydroProblemManager {
             if (!CollectionUtils.isEmpty(hydroConfigYamlBO.getJudge_extra_files())) {
                 JSONObject jsonObject = new JSONObject();
                 for (String fileName : hydroConfigYamlBO.getJudge_extra_files()) {
-                    String code = FileUtil.readString(testDataDirPath + File.separator + fileName, StandardCharsets.UTF_8);
+                    String code = FileUtil.readString(SafeFiles.child(testDataDirPath, fileName), StandardCharsets.UTF_8);
                     jsonObject.set(fileName, code);
                 }
                 problem.setJudgeExtraFile(jsonObject.toString());
@@ -283,7 +302,7 @@ public class ImportHydroProblemManager {
             if (!CollectionUtils.isEmpty(hydroConfigYamlBO.getUser_extra_files())) {
                 JSONObject jsonObject = new JSONObject();
                 for (String fileName : hydroConfigYamlBO.getUser_extra_files()) {
-                    String code = FileUtil.readString(testDataDirPath + File.separator + fileName, StandardCharsets.UTF_8);
+                    String code = FileUtil.readString(SafeFiles.child(testDataDirPath, fileName), StandardCharsets.UTF_8);
                     jsonObject.set(fileName, code);
                 }
                 problem.setUserExtraFile(jsonObject.toString());
@@ -352,7 +371,7 @@ public class ImportHydroProblemManager {
                                   ProblemDTO dto,
                                   Problem problem,
                                   HashMap<String, Tag> tagMap) {
-        Yaml yaml = new Yaml();
+        Yaml yaml = safeYaml();
         Map<String, Object> map = yaml.load(problemYaml);
 
         String pid = (String) map.get("pid");
@@ -402,18 +421,20 @@ public class ImportHydroProblemManager {
         String additionalFilePath = rootDirPath + File.separator + "additional_file";
         if (!CollectionUtils.isEmpty(fileNameList) && FileUtil.exist(additionalFilePath)) {
             for (String filename : fileNameList) {
-                String filePath = additionalFilePath + File.separator + filename;
+                String filePath = SafeFiles.child(additionalFilePath, filename).getPath();
                 if (FileUtil.exist(filePath)) {
-                    FileUtil.copyFile(filePath, Constants.File.MARKDOWN_FILE_FOLDER.getPath() + File.separator + filename, StandardCopyOption.REPLACE_EXISTING);
+                    // Generate a server-owned name so attachments cannot overwrite existing uploads.
+                    String safeName = IdUtil.simpleUUID() + "-" + SafeFiles.basename(filename);
+                    FileUtil.copyFile(filePath, SafeFiles.child(Constants.File.MARKDOWN_FILE_FOLDER.getPath(), safeName).getPath(), StandardCopyOption.REPLACE_EXISTING);
                     String lowerName = filename.toLowerCase();
                     if (lowerName.endsWith(".png")
                             || lowerName.equals(".jpg")
                             || lowerName.equals(".gif")
                             || lowerName.equals(".jpeg")
                             || lowerName.equals(".webp")) {
-                        md = md.replace("file://" + filename, Constants.File.IMG_API.getPath() + filename);
+                        md = md.replace("file://" + filename, Constants.File.IMG_API.getPath() + safeName);
                     } else {
-                        md = md.replace("file://" + filename, Constants.File.FILE_API.getPath() + filename);
+                        md = md.replace("file://" + filename, Constants.File.FILE_API.getPath() + safeName);
                     }
                 }
             }

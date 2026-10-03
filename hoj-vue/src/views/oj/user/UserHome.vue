@@ -63,16 +63,16 @@
         >
         <span id="icons">
           <a
-            :href="profile.github"
-            v-if="profile.github"
+            :href="safeExternalUrl(profile.github)" rel="noopener noreferrer"
+            v-if="safeExternalUrl(profile.github)"
             class="icon"
             target="_blank"
           >
             <i class="fa fa-github"> {{ $t('m.Github') }}</i>
           </a>
           <a
-            :href="profile.blog"
-            v-if="profile.blog"
+            :href="safeExternalUrl(profile.blog)" rel="noopener noreferrer"
+            v-if="safeExternalUrl(profile.blog)"
             class="icon"
             target="_blank"
           >
@@ -226,6 +226,7 @@
   </div>
 </template>
 <script>
+import { safeExternalUrl } from "@/common/security";
 import { mapActions } from 'vuex';
 import api from '@/common/api';
 import myMessage from '@/common/message';
@@ -307,6 +308,7 @@ export default {
     this.init();
   },
   methods: {
+    safeExternalUrl,
     ...mapActions(['changeDomTitle']),
     init() {
       const uid = this.$route.query.uid;

@@ -2,6 +2,45 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="top.hcode.hoj.mapper.ContestRecordMapper">
 
+    <sql id="eligibleACRecord">
+        ${alias}.cid = #{cid} AND ${alias}.status = #{status}
+        AND ${alias}.submit_time BETWEEN #{startTime} AND #{endTime}
+        <if test="excludedUids != null and excludedUids.size() > 0">
+            AND ${alias}.uid NOT IN
+            <foreach collection="excludedUids" item="uid" open="(" separator="," close=")">#{uid}</foreach>
+        </if>
+    </sql>
+
+    <select id="getACInfoPage" resultType="top.hcode.hoj.pojo.entity.contest.ContestRecord">
+        SELECT c.id,c.uid,u.username,c.display_id,c.cid,u.realname,c.pid,c.time,c.status,c.checked,c.submit_id,c.submit_time,
+        NOT EXISTS (SELECT 1 FROM contest_record first_ac WHERE first_ac.pid = c.pid
+            AND first_ac.submit_id &lt; c.submit_id
+            AND <include refid="eligibleACRecord"><property name="alias" value="first_ac"/></include>) AS first_blood
+        FROM contest_record c JOIN user_info u ON u.uuid = c.uid
+        WHERE <include refid="eligibleACRecord"><property name="alias" value="c"/></include>
+          AND NOT EXISTS (SELECT 1 FROM contest_record earlier WHERE earlier.uid = c.uid AND earlier.pid = c.pid
+              AND earlier.cpid = c.cpid AND earlier.submit_id &lt; c.submit_id
+              AND <include refid="eligibleACRecord"><property name="alias" value="earlier"/></include>)
+        ORDER BY c.checked ASC, c.submit_time ASC, c.submit_id ASC
+    </select>
+
+    <sql id="eligibleOIRecord">
+        <choose>
+            <when test="externalCidList != null and externalCidList.size() > 0">
+                (${alias}.cid = #{cid} OR ${alias}.cid IN
+                <foreach collection="externalCidList" item="id" open="(" separator="," close=")">#{id}</foreach>)
+            </when>
+            <otherwise>${alias}.cid = #{cid}</otherwise>
+        </choose>
+        AND ${alias}.status IS NOT NULL
+        <if test="contestCreatorUid != null">AND ${alias}.uid != #{contestCreatorUid}</if>
+        <choose>
+            <when test="isOpenSealRank">AND ${alias}.time BETWEEN 0 AND #{sealTime}</when>
+            <when test="isContainsAfterContestJudge">AND ${alias}.time >= 0</when>
+            <otherwise>AND ${alias}.time BETWEEN 0 AND #{endTime}</otherwise>
+        </choose>
+    </sql>
+
     <select id="getACInfo" resultType="top.hcode.hoj.pojo.entity.contest.ContestRecord">
         SELECT c.id,c.uid,u.username,c.display_id,c.cid,u.realname,c.pid,c.time,c.status,c.checked,c.submit_id,
         c.submit_time FROM contest_record c,user_info u,
@@ -37,8 +76,8 @@
             </if>
             <if test="externalCidList != null and externalCidList.size() > 0">
                 (
-                    cr.cid = #{cid}
-                    OR cr.cid in
+                    cid = #{cid}
+                    OR cid in
                     <foreach collection="externalCidList" item="id" open="(" separator="," close=")">
                         #{id}
                     </foreach>
@@ -68,41 +107,14 @@
     <select id="getOIContestRecordByHighestSubmission" resultType="top.hcode.hoj.pojo.vo.ContestRecordVO">
         SELECT cr.id,cr.cid,cr.uid,cr.pid,cr.cpid,cr.display_id,cr.submit_id,u.username,cr.status,cr.submit_time,
         cr.time,cr.score,cr.use_time,cr.checked,cr.gmt_create,cr.gmt_modified,
-        u.gender,u.realname as realname,u.avatar,u.school,u.nickname
-        FROM
-        (SELECT uid,pid,cpid,MAX(score) AS score FROM contest_record
-        <where>
-            <if test="externalCidList == null or externalCidList.size() == 0">
-                cid=#{cid}
-            </if>
-            <if test="externalCidList != null and externalCidList.size() > 0">
-                (
-                    cr.cid = #{cid}
-                    OR cr.cid in
-                    <foreach collection="externalCidList" item="id" open="(" separator="," close=")">
-                        #{id}
-                    </foreach>
-                )
-            </if>
-            AND status IS NOT NULL
-            <if test="contestCreatorUid!=null">
-                AND uid!=#{contestCreatorUid}
-            </if>
-            <choose>
-                <when test="isOpenSealRank">
-                    AND `time` BETWEEN 0 AND #{sealTime}
-                </when>
-                <when test="isContainsAfterContestJudge">
-                    AND `time` >= 0
-                </when>
-                <otherwise>
-                    AND `time` BETWEEN 0 AND #{endTime}
-                </otherwise>
-            </choose>
-        </where>
-        GROUP BY uid,pid,cpid) t,
-        contest_record cr,user_info u WHERE t.uid = cr.uid AND t.pid =cr.pid
-        AND t.cpid = cr.cpid AND u.uuid = cr.uid AND t.score = cr.score
+        u.gender,u.realname,u.avatar,u.school,u.nickname
+        FROM contest_record cr JOIN user_info u ON u.uuid = cr.uid
+        WHERE <include refid="eligibleOIRecord"><property name="alias" value="cr"/></include>
+          AND cr.score IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM contest_record better
+              WHERE better.uid = cr.uid AND better.pid = cr.pid AND better.cpid = cr.cpid
+                AND (better.score > cr.score OR (better.score = cr.score AND better.submit_id &lt; cr.submit_id))
+                AND <include refid="eligibleOIRecord"><property name="alias" value="better"/></include>)
     </select>
 
 
@@ -118,8 +130,8 @@
             </if>
             <if test="externalCidList != null">
                 AND (
-                    cr.cid = #{cid}
-                    OR cr.cid in
+                    cid = #{cid}
+                    OR cid in
                     <foreach collection="externalCidList" item="id" open="(" separator="," close=")">
                         #{id}
                     </foreach>

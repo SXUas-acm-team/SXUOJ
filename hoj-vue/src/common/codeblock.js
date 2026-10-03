@@ -4,6 +4,7 @@ import myMessage from '@/common/message';
 export const addCodeBtn = _ => {
 	//markdown代码存放在pre code 标签对中
   $('pre code').each(function () {
+    if ($(this).siblings('i.code-copy').length) return
     let lines = $(this).text().split('\n').length - 1
     //添加有序列表
     let $numbering = $('<ol/>').addClass('pre-numbering')
@@ -18,9 +19,9 @@ export const addCodeBtn = _ => {
     }
   })
   //监听复制按钮点击事件
-  $('pre i.code-copy').click(e => {
+  $('pre i.code-copy').off('click.codeCopy').on('click.codeCopy', e => {
     let text = $(e.target).siblings('code').text()
-    let element = $('<textarea>' + text + '</textarea>')
+    let element = $('<textarea/>').val(text)
     $('body').append(element)
     element[0].select()
     document.execCommand('Copy')

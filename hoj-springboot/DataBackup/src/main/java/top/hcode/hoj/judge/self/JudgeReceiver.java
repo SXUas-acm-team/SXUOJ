@@ -15,6 +15,7 @@ import top.hcode.hoj.pojo.dto.TestJudgeReq;
 import top.hcode.hoj.pojo.dto.ToJudgeDTO;
 import top.hcode.hoj.pojo.entity.contest.ContestRecord;
 import top.hcode.hoj.pojo.entity.judge.Judge;
+import top.hcode.hoj.pojo.vo.ConfigVO;
 import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.utils.RedisUtils;
 
@@ -41,6 +42,9 @@ public class JudgeReceiver extends AbstractReceiver {
     @Autowired
     private ContestRecordEntityService contestRecordEntityService;
 
+    @Autowired
+    private ConfigVO configVO;
+
     @Async("judgeTaskAsyncPool")
     public void processWaitingTask() {
         // 优先处理比赛的提交任务
@@ -48,7 +52,8 @@ public class JudgeReceiver extends AbstractReceiver {
         // 最后处理在线调试的任务
         handleWaitingTask(Constants.Queue.CONTEST_JUDGE_WAITING.getName(),
                 Constants.Queue.GENERAL_JUDGE_WAITING.getName(),
-                Constants.Queue.TEST_JUDGE_WAITING.getName());
+                Constants.Queue.TEST_JUDGE_WAITING.getName(),
+                Constants.Queue.LEGACY_JUDGE_WAITING.getName());
     }
 
 
@@ -66,12 +71,19 @@ public class JudgeReceiver extends AbstractReceiver {
     public void handleJudgeMsg(String taskStr, String queueName) {
         if (Constants.Queue.TEST_JUDGE_WAITING.getName().equals(queueName)) {
             TestJudgeReq testJudgeReq = JSONUtil.toBean(taskStr, TestJudgeReq.class);
+            testJudgeReq.setToken(configVO.getJudgeToken());
             dispatcher.dispatch(Constants.TaskType.TEST_JUDGE, testJudgeReq);
         } else {
             JSONObject task = JSONUtil.parseObj(taskStr);
-            Long judgeId = task.getLong("judgeId");
-            Judge judge = judgeEntityService.getById(judgeId);
+            Long judgeId = getJudgeId(task);
+            Judge judge = judgeId == null ? null : judgeEntityService.getById(judgeId);
             if (judge != null) {
+                if (Constants.Queue.LEGACY_JUDGE_WAITING.getName().equals(queueName)
+                        && !Objects.equals(judge.getStatus(), Constants.Judge.STATUS_PENDING.getStatus())
+                        && !Objects.equals(judge.getStatus(), Constants.Judge.STATUS_CANCELLED.getStatus())) {
+                    processWaitingTask();
+                    return;
+                }
                 // 调度评测时发现该评测任务被取消，则结束评测
                 if (Objects.equals(judge.getStatus(), Constants.Judge.STATUS_CANCELLED.getStatus())) {
                     if (judge.getCid() != 0) {
@@ -82,11 +94,10 @@ public class JudgeReceiver extends AbstractReceiver {
                         contestRecordEntityService.update(updateWrapper);
                     }
                 } else {
-                    String token = task.getStr("token");
                     // 调用判题服务
                     dispatcher.dispatch(Constants.TaskType.JUDGE, new ToJudgeDTO()
                             .setJudge(judge)
-                            .setToken(token)
+                            .setToken(configVO.getJudgeToken())
                             .setRemoteJudgeProblem(null));
                 }
             }

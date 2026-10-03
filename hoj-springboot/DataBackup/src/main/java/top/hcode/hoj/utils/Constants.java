@@ -66,7 +66,9 @@ public class Constants {
         GENERAL_JUDGE_WAITING("General_Waiting_Handle_Queue"),
         TEST_JUDGE_WAITING("Test_Judge_Waiting_Handle_Queue"),
         CONTEST_REMOTE_JUDGE_WAITING_HANDLE("Contest_Remote_Waiting_Handle_Queue"),
-        GENERAL_REMOTE_JUDGE_WAITING_HANDLE("General_Remote_Waiting_Handle_Queue");
+        GENERAL_REMOTE_JUDGE_WAITING_HANDLE("General_Remote_Waiting_Handle_Queue"),
+        LEGACY_JUDGE_WAITING("Waiting Queue"),
+        LEGACY_REMOTE_JUDGE_WAITING("Remote Waiting Handle Queue");
 
         private Queue(String name) {
             this.name = name;

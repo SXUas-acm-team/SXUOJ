@@ -554,10 +554,11 @@ export default {
   },
   created(){
     this.page_width();
-    window.onresize = () => {
+    this._onResize = () => {
       this.page_width();
       this.setHiddenHeaderHeight();
     };
+    window.addEventListener("resize", this._onResize);
   },
   mounted() {
     this.switchMode();
@@ -571,6 +572,7 @@ export default {
   },
   beforeDestroy() {
     clearInterval(this.msgTimer);
+    window.removeEventListener("resize", this._onResize);
   },
   data() {
     return {
@@ -589,7 +591,7 @@ export default {
   methods: {
     ...mapActions(['changeModalStatus']),
     page_width() {
-      let screenWidth = window.screen.width;
+      let screenWidth = document.documentElement.clientWidth;
       if (screenWidth < 992) {
         this.mobileNar = true;
       } else {

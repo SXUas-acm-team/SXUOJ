@@ -30,6 +30,7 @@ import top.hcode.hoj.pojo.vo.*;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.utils.RedisUtils;
+import top.hcode.hoj.utils.RequestLimits;
 import top.hcode.hoj.validator.CommonValidator;
 
 import java.text.SimpleDateFormat;
@@ -146,11 +147,10 @@ public class AccountManager {
         }
         QueryWrapper<UserAcproblem> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("uid", userHomeInfo.getUid())
-                .select("distinct pid", "submit_id")
-                .orderByAsc("submit_id");
+                .select("distinct pid");
 
         List<UserAcproblem> acProblemList = userAcproblemEntityService.list(queryWrapper);
-        List<Long> pidList = acProblemList.stream().map(UserAcproblem::getPid).collect(Collectors.toList());
+        List<Long> pidList = acProblemList.stream().map(UserAcproblem::getPid).distinct().collect(Collectors.toList());
 
         List<String> disPlayIdList = new LinkedList<>();
 
@@ -171,7 +171,8 @@ public class AccountManager {
                 .orderByDesc("gmt_create")
                 .last("limit 1");
 
-        Session recentSession = sessionEntityService.getOne(sessionQueryWrapper, false);
+        Session recentSession = userRolesVo != null && Objects.equals(userRolesVo.getUid(), userHomeInfo.getUid())
+                ? sessionEntityService.getOne(sessionQueryWrapper, false) : null;
         if (recentSession != null) {
             userHomeInfo.setRecentLoginTime(recentSession.getGmtCreate());
         }
@@ -203,23 +204,14 @@ public class AccountManager {
         }
         UserCalendarHeatmapVO userCalendarHeatmapVo = new UserCalendarHeatmapVO();
         userCalendarHeatmapVo.setEndDate(DateUtil.format(new Date(), "yyyy-MM-dd"));
-        List<Judge> lastYearUserJudgeList = userRecordEntityService.getLastYearUserJudgeList(uid, username);
+        List<Map<String, Object>> lastYearUserJudgeList = userRecordEntityService.getLastYearUserJudgeCounts(uid, username);
         if (CollectionUtils.isEmpty(lastYearUserJudgeList)) {
             userCalendarHeatmapVo.setDataList(new ArrayList<>());
             return userCalendarHeatmapVo;
         }
-        HashMap<String, Integer> tmpRecordMap = new HashMap<>();
-        for (Judge judge : lastYearUserJudgeList) {
-            Date submitTime = judge.getSubmitTime();
-            String dateStr = DateUtil.format(submitTime, "yyyy-MM-dd");
-            tmpRecordMap.merge(dateStr, 1, Integer::sum);
-        }
         List<HashMap<String, Object>> dataList = new ArrayList<>();
-        for (Map.Entry<String, Integer> record : tmpRecordMap.entrySet()) {
-            HashMap<String, Object> tmp = new HashMap<>(2);
-            tmp.put("date", record.getKey());
-            tmp.put("count", record.getValue());
-            dataList.add(tmp);
+        for (Map<String, Object> record : lastYearUserJudgeList) {
+            dataList.add(new HashMap<>(record));
         }
         userCalendarHeatmapVo.setDataList(dataList);
         return userCalendarHeatmapVo;
@@ -304,14 +296,22 @@ public class AccountManager {
 
 
     public void getChangeEmailCode(String email) throws StatusFailException {
-
-        String lockKey = Constants.Email.CHANGE_EMAIL_LOCK + email;
-        if (redisUtils.hasKey(lockKey)) {
-            throw new StatusFailException("对不起，您的操作频率过快，请在" + redisUtils.getExpire(lockKey) + "秒后再次发送修改邮件！");
+        email = email == null ? null : email.trim();
+        if (email == null || email.length() > 254 || !Validator.isEmail(email)) {
+            throw new StatusFailException("邮箱格式错误！");
         }
-
-        // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        if (userRolesVo == null) throw new StatusFailException("请先登录！");
+        // SET NX cooldowns remain until expiry, including while email delivery is in flight.
+        String requestId = UUID.randomUUID().toString();
+        if (!redisUtils.getLock("email:change:user:" + userRolesVo.getUid(), 60, requestId)
+                || !redisUtils.getLock(Constants.Email.CHANGE_EMAIL_LOCK + email.toLowerCase(Locale.ROOT), 60, requestId)) {
+            throw new StatusFailException("发送过于频繁，请一分钟后重试！");
+        }
+        String budgetKey = "email:change:budget:" + userRolesVo.getUid() + ":" + DateUtil.format(new Date(), "yyyy-MM-dd");
+        long sent = redisUtils.incr(budgetKey, 1);
+        if (sent == 1) redisUtils.expire(budgetKey, 86400);
+        if (sent > 10) throw new StatusFailException("今日修改邮箱邮件次数已达到上限！");
 
         QueryWrapper<UserInfo> emailUserInfoQueryWrapper = new QueryWrapper<>();
         emailUserInfoQueryWrapper.select("uuid", "email")
@@ -329,7 +329,6 @@ public class AccountManager {
         String numbers = RandomUtil.randomNumbers(6); // 随机生成6位数字的组合
         redisUtils.set(Constants.Email.CHANGE_EMAIL_KEY_PREFIX.getValue() + email, numbers, 10 * 60); //默认验证码有效10分钟
         emailManager.sendChangeEmailCode(email, userRolesVo.getUsername(), numbers);
-        redisUtils.set(lockKey, 0, 30);
     }
 
 
@@ -475,6 +474,9 @@ public class AccountManager {
         commonValidator.validateContentLength(userInfoVo.getSchool(), "学校", 100);
         commonValidator.validateContentLength(userInfoVo.getNumber(), "学号", 200);
         commonValidator.validateContentLength(userInfoVo.getCfUsername(), "Codeforces用户名", 255);
+        if (!RequestLimits.isSafeProfileUrl(userInfoVo.getBlog()) || !RequestLimits.isSafeProfileUrl(userInfoVo.getGithub())) {
+            throw new StatusFailException("个人主页链接必须使用有效的 HTTP 或 HTTPS 地址！");
+        }
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();

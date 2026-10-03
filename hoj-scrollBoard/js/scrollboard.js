@@ -1,3 +1,15 @@
+// Encode both text and quoted attributes before constructing board markup.
+function escapeBoardHtml(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+  });
+}
+function safeBoardColor(value) {
+  return typeof value === 'string' && /^(#[0-9a-f]{3,8}|[a-z]{1,20})$/i.test(value) ? value : '#999';
+}
+function boardTeamElement(id) {
+  return $(document.getElementById('team_' + String(id)));
+}
 /*
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-512, as defined
  * in FIPS 180-2
@@ -7,14 +19,14 @@
  * See http://pajhome.org.uk/crypt/md5 for details.
  * http://www.sharejs.com/codes
  */
- 
+
 /*
  * Configurable variables. You may need to tweak these to be compatible with
  * the server-side, but the defaults work in most cases.
  */
 var hexcase = 0;  /* hex output format. 0 - lowercase; 1 - uppercase        */
 var b64pad  = ""; /* base-64 pad character. "=" for strict RFC compliance   */
- 
+
 /*
  * These are the functions you'll usually want to call
  * They take string arguments and return either hex or base-64 encoded strings
@@ -28,7 +40,7 @@ function b64_hmac_sha512(k, d)
   { return rstr2b64(rstr_hmac_sha512(str2rstr_utf8(k), str2rstr_utf8(d))); }
 function any_hmac_sha512(k, d, e)
   { return rstr2any(rstr_hmac_sha512(str2rstr_utf8(k), str2rstr_utf8(d)), e);}
- 
+
 /*
  * Perform a simple self-test to see if the VM is working
  */
@@ -38,7 +50,7 @@ function sha512_vm_test()
     "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a" +
     "2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f";
 }
- 
+
 /*
  * Calculate the SHA-512 of a raw string
  */
@@ -46,7 +58,7 @@ function rstr_sha512(s)
 {
   return binb2rstr(binb_sha512(rstr2binb(s), s.length * 8));
 }
- 
+
 /*
  * Calculate the HMAC-SHA-512 of a key and some data (raw strings)
  */
@@ -54,18 +66,18 @@ function rstr_hmac_sha512(key, data)
 {
   var bkey = rstr2binb(key);
   if(bkey.length > 32) bkey = binb_sha512(bkey, key.length * 8);
- 
+
   var ipad = Array(32), opad = Array(32);
   for(var i = 0; i < 32; i++)
   {
     ipad[i] = bkey[i] ^ 0x36363636;
     opad[i] = bkey[i] ^ 0x5C5C5C5C;
   }
- 
+
   var hash = binb_sha512(ipad.concat(rstr2binb(data)), 1024 + data.length * 8);
   return binb2rstr(binb_sha512(opad.concat(hash), 1024 + 512));
 }
- 
+
 /*
  * Convert a raw string to a hex string
  */
@@ -83,7 +95,7 @@ function rstr2hex(input)
   }
   return output;
 }
- 
+
 /*
  * Convert a raw string to a base-64 string
  */
@@ -106,7 +118,7 @@ function rstr2b64(input)
   }
   return output;
 }
- 
+
 /*
  * Convert a raw string to an arbitrary string encoding
  */
@@ -114,14 +126,14 @@ function rstr2any(input, encoding)
 {
   var divisor = encoding.length;
   var i, j, q, x, quotient;
- 
+
   /* Convert to an array of 16-bit big-endian values, forming the dividend */
   var dividend = Array(Math.ceil(input.length / 2));
   for(i = 0; i < dividend.length; i++)
   {
     dividend[i] = (input.charCodeAt(i * 2) << 8) | input.charCodeAt(i * 2 + 1);
   }
- 
+
   /*
    * Repeatedly perform a long division. The binary array forms the dividend,
    * the length of the encoding is the divisor. Once computed, the quotient
@@ -146,15 +158,15 @@ function rstr2any(input, encoding)
     remainders[j] = x;
     dividend = quotient;
   }
- 
+
   /* Convert the remainders to the output string */
   var output = "";
   for(i = remainders.length - 1; i >= 0; i--)
     output += encoding.charAt(remainders[i]);
- 
+
   return output;
 }
- 
+
 /*
  * Encode a string as utf-8.
  * For efficiency, this assumes the input is valid utf-16.
@@ -164,7 +176,7 @@ function str2rstr_utf8(input)
   var output = "";
   var i = -1;
   var x, y;
- 
+
   while(++i < input.length)
   {
     /* Decode utf-16 surrogate pairs */
@@ -175,7 +187,7 @@ function str2rstr_utf8(input)
       x = 0x10000 + ((x & 0x03FF) << 10) + (y & 0x03FF);
       i++;
     }
- 
+
     /* Encode output as utf-8 */
     if(x <= 0x7F)
       output += String.fromCharCode(x);
@@ -194,7 +206,7 @@ function str2rstr_utf8(input)
   }
   return output;
 }
- 
+
 /*
  * Encode a string as utf-16
  */
@@ -206,7 +218,7 @@ function str2rstr_utf16le(input)
                                   (input.charCodeAt(i) >>> 8) & 0xFF);
   return output;
 }
- 
+
 function str2rstr_utf16be(input)
 {
   var output = "";
@@ -215,7 +227,7 @@ function str2rstr_utf16be(input)
                                    input.charCodeAt(i)        & 0xFF);
   return output;
 }
- 
+
 /*
  * Convert a raw string to an array of big-endian words
  * Characters >255 have their high-byte silently ignored.
@@ -229,7 +241,7 @@ function rstr2binb(input)
     output[i>>5] |= (input.charCodeAt(i / 8) & 0xFF) << (24 - i % 32);
   return output;
 }
- 
+
 /*
  * Convert an array of big-endian words to a string
  */
@@ -240,7 +252,7 @@ function binb2rstr(input)
     output += String.fromCharCode((input[i>>5] >>> (24 - i % 32)) & 0xFF);
   return output;
 }
- 
+
 /*
  * Calculate the SHA-512 of an array of big-endian dwords, and a bit length
  */
@@ -292,7 +304,7 @@ new int64(0x3c9ebe0a, 0x15c9bebc), new int64(0x431d67c4, -1676669620),
 new int64(0x4cc5d4be, -885112138), new int64(0x597f299c, -60457430),
 new int64(0x5fcb6fab, 0x3ad6faec), new int64(0x6c44198c, 0x4a475817));
   }
- 
+
   //Initial hash values
   var H = new Array(
 new int64(0x6a09e667, -205731576),
@@ -303,7 +315,7 @@ new int64(0x510e527f, -1377402159),
 new int64(-1694144372, 0x2b3e6c1f),
 new int64(0x1f83d9ab, -79577749),
 new int64(0x5be0cd19, 0x137e2179));
- 
+
   var T1 = new int64(0, 0),
     T2 = new int64(0, 0),
     a = new int64(0,0),
@@ -326,11 +338,11 @@ new int64(0x5be0cd19, 0x137e2179));
   var W = new Array(80);
   for(i=0; i<80; i++)
     W[i] = new int64(0, 0);
- 
+
   // append padding to the source string. The format is described in the FIPS.
   x[len >> 5] |= 0x80 << (24 - (len & 0x1f));
   x[((len + 128 >> 10)<< 5) + 31] = len;
- 
+
   for(i = 0; i<x.length; i+=32) //32 dwords is the block size
   {
     int64copy(a, H[0]);
@@ -341,13 +353,13 @@ new int64(0x5be0cd19, 0x137e2179));
     int64copy(f, H[5]);
     int64copy(g, H[6]);
     int64copy(h, H[7]);
- 
+
     for(j=0; j<16; j++)
     {
         W[j].h = x[i + 2*j];
         W[j].l = x[i + 2*j + 1];
     }
- 
+
     for(j=16; j<80; j++)
     {
       //sigma1
@@ -362,37 +374,37 @@ new int64(0x5be0cd19, 0x137e2179));
       int64shr(r3, W[j-15], 7);
       s0.l = r1.l ^ r2.l ^ r3.l;
       s0.h = r1.h ^ r2.h ^ r3.h;
- 
+
       int64add4(W[j], s1, W[j-7], s0, W[j-16]);
     }
- 
+
     for(j = 0; j < 80; j++)
     {
       //Ch
       Ch.l = (e.l & f.l) ^ (~e.l & g.l);
       Ch.h = (e.h & f.h) ^ (~e.h & g.h);
- 
+
       //Sigma1
       int64rrot(r1, e, 14);
       int64rrot(r2, e, 18);
       int64revrrot(r3, e, 9);
       s1.l = r1.l ^ r2.l ^ r3.l;
       s1.h = r1.h ^ r2.h ^ r3.h;
- 
+
       //Sigma0
       int64rrot(r1, a, 28);
       int64revrrot(r2, a, 2);
       int64revrrot(r3, a, 7);
       s0.l = r1.l ^ r2.l ^ r3.l;
       s0.h = r1.h ^ r2.h ^ r3.h;
- 
+
       //Maj
       Maj.l = (a.l & b.l) ^ (a.l & c.l) ^ (b.l & c.l);
       Maj.h = (a.h & b.h) ^ (a.h & c.h) ^ (b.h & c.h);
- 
+
       int64add5(T1, h, s1, Ch, sha512_k[j], W[j]);
       int64add(T2, s0, Maj);
- 
+
       int64copy(h, g);
       int64copy(g, f);
       int64copy(f, e);
@@ -411,7 +423,7 @@ new int64(0x5be0cd19, 0x137e2179));
     int64add(H[6], H[6], g);
     int64add(H[7], H[7], h);
   }
- 
+
   //represent the hash as an array of 32-bit dwords
   var hash = new Array(16);
   for(i=0; i<8; i++)
@@ -421,7 +433,7 @@ new int64(0x5be0cd19, 0x137e2179));
   }
   return hash;
 }
- 
+
 //A constructor for 64-bit numbers
 function int64(h, l)
 {
@@ -429,14 +441,14 @@ function int64(h, l)
   this.l = l;
   //this.toString = int64toString;
 }
- 
+
 //Copies src into dst, assuming both are 64-bit numbers
 function int64copy(dst, src)
 {
   dst.h = src.h;
   dst.l = src.l;
 }
- 
+
 //Right-rotates a 64-bit number by shift
 //Won't handle cases of shift>=32
 //The function revrrot() is for that
@@ -445,7 +457,7 @@ function int64rrot(dst, x, shift)
     dst.l = (x.l >>> shift) | (x.h << (32-shift));
     dst.h = (x.h >>> shift) | (x.l << (32-shift));
 }
- 
+
 //Reverses the dwords of the source and then rotates right by shift.
 //This is equivalent to rotation by 32+shift
 function int64revrrot(dst, x, shift)
@@ -453,7 +465,7 @@ function int64revrrot(dst, x, shift)
     dst.l = (x.h >>> shift) | (x.l << (32-shift));
     dst.h = (x.l >>> shift) | (x.h << (32-shift));
 }
- 
+
 //Bitwise-shifts right a 64-bit number by shift
 //Won't handle shift>=32, but it's never needed in SHA512
 function int64shr(dst, x, shift)
@@ -461,7 +473,7 @@ function int64shr(dst, x, shift)
     dst.l = (x.l >>> shift) | (x.h << (32-shift));
     dst.h = (x.h >>> shift);
 }
- 
+
 //Adds two 64-bit numbers
 //Like the original implementation, does not rely on 32-bit operations
 function int64add(dst, x, y)
@@ -473,7 +485,7 @@ function int64add(dst, x, y)
    dst.l = (w0 & 0xffff) | (w1 << 16);
    dst.h = (w2 & 0xffff) | (w3 << 16);
 }
- 
+
 //Same, except with 4 addends. Works faster than adding them one by one.
 function int64add4(dst, a, b, c, d)
 {
@@ -484,7 +496,7 @@ function int64add4(dst, a, b, c, d)
    dst.l = (w0 & 0xffff) | (w1 << 16);
    dst.h = (w2 & 0xffff) | (w3 << 16);
 }
- 
+
 //Same, except with 5 addends
 function int64add5(dst, a, b, c, d, e)
 {
@@ -503,7 +515,7 @@ function int64add5(dst, a, b, c, d, e)
  * Author: qinshaoxuan qsxuan.com
  * Github: https://github.com/qinshaoxuan/ScrollBoard
  * Demo: https://qinshaoxuan.github.io/ScrollBoard/
- * 
+ *
  */
 
 /**
@@ -512,7 +524,7 @@ function int64add5(dst, a, b, c, d, e)
 const TEST_BACKEND_API = '';
 
 /**
- * 
+ *
  * 提交结果状态值与HOJ的对应转换
  * @value 0 Accepted
  * @value 1 Presentation Error
@@ -560,7 +572,7 @@ function getContestInfo(cid){
         success: function(result) {
             if(result.status == 200){
                 let info = result.data;
-                contestInfo = new ContestInfo(info.id, info.rankShowName, info.problemCount, 
+                contestInfo = new ContestInfo(info.id, info.rankShowName, info.problemCount,
                     info.startTime, info.sealRankTime, info.starUserList, info.balloonColor);
             }else{
                 closeLoading();
@@ -668,7 +680,7 @@ function getRequestParams() {
 function showErrorMessage(title, message){
     $('#myModalTitle').text(title);
     $('#errorMsg').text(message);
-    $('#myModal').modal(); 
+    $('#myModal').modal();
 }
 
 /**
@@ -745,8 +757,8 @@ function PrefixInteger(num, m) {
  */
  function ContestInfo(id, rankShowName, problemCount, startTime, sealRankTime, starUserList, balloonColor) {
     this.id = id;
-    this.rankShowName = rankShowName; 
-    this.problemCount = problemCount; 
+    this.rankShowName = rankShowName;
+    this.problemCount = problemCount;
     this.startTime = startTime;
     this.sealRankTime = sealRankTime;
     this.starUserList = starUserList;
@@ -793,9 +805,9 @@ function TeamProblem() {
     this.penalty = 0; //罚时毫秒数
     this.acceptedTime = new Date(); //AC时间
     this.submitCount = 0; //AC前提交次数，如果AC了，值加1
-	this.realCount = 0;
+    this.realCount = 0;
     this.isUnkonwn = false; //是否为封榜后提交，如果封榜前已AC，也为false
-	this.ACsubmitID = 0;
+    this.ACsubmitID = 0;
 }
 
 /**
@@ -819,7 +831,7 @@ function Team(teamId, teamName, teamMember, official, girl, teamSchool) {
     this.submitList = []; //提交列表
     this.lastRank = 0; //最终排名
     this.nowRank = 0; //当前排名
-	this.lastAC = 0;
+    this.lastAC = 0;
 }
 
 /**
@@ -828,9 +840,9 @@ function Team(teamId, teamName, teamMember, official, girl, teamSchool) {
  * @param  {Date}   freezeBoardTime 封榜时间
  */
 Team.prototype.init = function(board) {
-	//按提交顺序排序
-	var startTime = board.startTime;
-	var freezeBoardTime = board.freezeBoardTime;
+    //按提交顺序排序
+    var startTime = board.startTime;
+    var freezeBoardTime = board.freezeBoardTime;
     this.submitList.sort(function(a, b) {
         return a.submitId - b.submitId;
     });
@@ -843,11 +855,11 @@ Team.prototype.init = function(board) {
         p.alphabetId = sub.alphabetId;
         //已经AC的题目不再计算
         if (p.isAccepted) continue;
-		if (sub.resultId == 7) continue;
-		if (sub.resultId==-1){
+        if (sub.resultId == 7) continue;
+        if (sub.resultId==-1){
             p.isUnkonwn = true;
             this.unkonwnAlphabetIdMap[p.alphabetId] = true;
-		}
+        }
         //封榜后的提交设置isUnkonwn为true
         if (sub.subTime > freezeBoardTime) {
             p.isUnkonwn = true;
@@ -855,24 +867,24 @@ Team.prototype.init = function(board) {
         }
         //增加提交次数
         p.submitCount++;
-		if (!p.isAccepted && sub.resultId!=7) p.realCount++;
+        if (!p.isAccepted && sub.resultId!=7) p.realCount++;
         //更新AC状态
         p.isAccepted = (sub.resultId == 0);
         //如果当前提交AC
         if (p.isAccepted) {
             //则保存AC时间
             p.acceptedTime = (sub.subTime.getTime() - startTime.getTime()) *1.0 /60000;
-			p.acceptedTime = p.acceptedTime*60000;
-			p.ACsubmitID = sub.submitId;
-			if (parseInt(sub.submitId) > parseInt(this.lastAC))
-				this.lastAC=sub.submitId;
-			if (parseInt(board.FBList[sub.alphabetId.charCodeAt(0)-65])==0||parseInt(board.FBList[sub.alphabetId.charCodeAt(0)-65])>parseInt(p.ACsubmitID))
-			{
-				board.FBList[sub.alphabetId.charCodeAt(0)-65]=p.ACsubmitID;
-			}
+            p.acceptedTime = p.acceptedTime*60000;
+            p.ACsubmitID = sub.submitId;
+            if (parseInt(sub.submitId) > parseInt(this.lastAC))
+                this.lastAC=sub.submitId;
+            if (parseInt(board.FBList[sub.alphabetId.charCodeAt(0)-65])==0||parseInt(board.FBList[sub.alphabetId.charCodeAt(0)-65])>parseInt(p.ACsubmitID))
+            {
+                board.FBList[sub.alphabetId.charCodeAt(0)-65]=p.ACsubmitID;
+            }
             //如果为封榜前AC，则计算罚时,且队伍通过题数加1
             if (p.acceptedTime < freezeBoardTime - startTime) {
-				p.submitCount = p.realCount;
+                p.submitCount = p.realCount;
                 p.penalty += p.acceptedTime + (p.submitCount - 1) * 20 * 60 * 1000;
                 this.solved++;
                 this.penalty += p.penalty;
@@ -902,16 +914,16 @@ Team.prototype.countUnkonwnProblme = function() {
  */
 Team.prototype.updateOneProblem = function() {
     for (let key in board.balloonColor) {
-		var subProblem = this.submitProblemList[key];
-		if (!subProblem) continue;
-		//如果题目结果未知
+        var subProblem = this.submitProblemList[key];
+        if (!subProblem) continue;
+        //如果题目结果未知
         if (subProblem.isUnkonwn) {
             //更新题目状态
             subProblem.isUnkonwn = false;
             delete this.unkonwnAlphabetIdMap[subProblem.alphabetId];
             //如果AC，则更新题目状态
             if (subProblem.isAccepted) {
-				subProblem.submitCount = subProblem.realCount;
+                subProblem.submitCount = subProblem.realCount;
                 subProblem.penalty += subProblem.acceptedTime + (subProblem.submitCount - 1) * 20 * 60 * 1000;
                 this.solved++;
                 this.penalty += subProblem.penalty;
@@ -934,9 +946,9 @@ function TeamCompare(a, b) {
         return a.solved > b.solved ? -1 : 1;
     if (a.penalty != b.penalty) //第二关键字，罚时少者排位高
         return a.penalty < b.penalty ? -1 : 1;
-	// if (parseInt(a.lastAC) != parseInt(b.lastAC))
+    // if (parseInt(a.lastAC) != parseInt(b.lastAC))
  //    	return parseInt(a.lastAC) < parseInt(b.lastAC) ? -1 : 1; //第三关键字，last AC小者排位高
-	return a.teamId.localeCompare(b.teamId);//对于0题队固定顺序
+    return a.teamId.localeCompare(b.teamId);//对于0题队固定顺序
 }
 
 
@@ -963,14 +975,14 @@ function Board(contestInfo, medalCounts, removeStar) {
     this.teamCount = 0; //队伍数量
     this.displayTeamPos = 0; //当前展示的队伍位置
     this.noAnimate = true; //当前无动画进行
-	this.FBList = [];
+    this.FBList = [];
     this.nowPos = 0;
     //根据题目数量设置alphabetId
     for (let key in this.balloonColor)
-	{
+    {
         this.problemList.push(key);
-		this.FBList.push(0);
-	}
+        this.FBList.push(0);
+    }
 
     //计算medalRanks
     this.medalRanks[0] = medalCounts[0];
@@ -1046,7 +1058,7 @@ Board.prototype.updateTeamSequence = function() {
 Board.prototype.UpdateOneTeam = function() {
     //得到需要更新的队伍在当前排名中的的位置
     var updateTeamPos = this.nowPos;
-    
+
     // while (updateTeamPos >= 0 && this.teamNextSequence[updateTeamPos].countUnkonwnProblme() < 1)
     //     updateTeamPos--;
     //如果有队伍可更新
@@ -1095,7 +1107,7 @@ Board.prototype.showInitBoard = function() {
     //题目列
     for (var i = 0; i < this.problemList.length; i++) {
         var alphabetId = this.problemList[i];
-        var bodyHTML = "<th width=\"" + problemStatusPer + "%\">" 
+        var bodyHTML = "<th width=\"" + problemStatusPer + "%\">"
 
         var color = this.balloonColor[alphabetId];
         if(color){
@@ -1113,13 +1125,13 @@ Board.prototype.showInitBoard = function() {
             >\
                 <path\
                 d="M575.872 849.408c-104.576 0-117.632-26.56-119.232-31.808-6.528-22.528 32.896-70.592 63.744-96.768l-1.728-2.624c137.6-42.688 243.648-290.112 243.648-433.472A284.544 284.544 0 0 0 478.016 0a284.544 284.544 0 0 0-284.288 284.736c0 150.4 116.352 415.104 263.744 438.336-25.152 29.568-50.368 70.784-39.104 108.928 12.608 43.136 62.72 63.232 157.632 63.232 7.872 0 11.52 9.408 4.352 19.52-21.248 29.248-77.888 63.424-167.68 63.424V1024c138.944 0 215.936-74.816 215.936-126.528a46.72 46.72 0 0 0-16.32-36.608 56.32 56.32 0 0 0-36.416-11.456zM297.152 297.472c0 44.032-38.144 25.344-38.144-38.656 0-108.032 85.248-195.712 190.592-195.712 62.592 0 81.216 39.232 38.08 39.232-105.152 0.064-190.528 87.04-190.528 195.136z"\
-                fill="'+ this.balloonColor[alphabetId]+'"\
+                fill="'+ safeBoardColor(color)+'"\
                 p-id="5841"\
                 ></path>\
             </svg>';
         }
 
-        bodyHTML = bodyHTML + alphabetId + "</th>";
+        bodyHTML = bodyHTML + escapeBoardHtml(alphabetId) + "</th>";
 
         $('.ranktable-head tr').append(bodyHTML);
     }
@@ -1136,11 +1148,11 @@ Board.prototype.showInitBoard = function() {
         var medal = -1;
         var girl = team.girl;
         if (team.solved != 0) {
-			if (team.official==true)
-			{
-            	rank = maxRank;
-            	maxRank = rank + 1;
-			}
+            if (team.official==true)
+            {
+                rank = maxRank;
+                maxRank = rank + 1;
+            }
             for (var j = this.medalRanks.length - 1; j >= 0; j--) {
                 if (rank <= this.medalRanks[j])
                     medal = j;
@@ -1153,35 +1165,35 @@ Board.prototype.showInitBoard = function() {
 
         //构造HTML
         var headHTML =
-            "<div id=\"team_" + team.teamId + "\" class=\"team-item\" team-id=\"" + team.teamId + "\"> \
+            "<div id=\"team_" + escapeBoardHtml(team.teamId) + "\" class=\"team-item\" team-id=\"" + escapeBoardHtml(team.teamId) + "\"> \
                     <table class=\"table\"> \
                         <tr>";
-		var rankHTML;
-		if (team.official==true)
-        	 rankHTML = "<th class=\"rank\" width=\"" + rankPer + "%\">" + rank + "</th>";
-		else rankHTML = "<th class=\"rank\" width=\"" + rankPer + "%\">" + "*" + "</th>";
-        var teamHTML = "<td class=\"team-name\" width=\"" + teamPer + "%\"><span class=\"fw-bold\">" + team.teamName + "</span><span class=\"univ\">" + team.teamSchool + "</span></td>";
-        var solvedHTML = "<td class=\"solved fw-bold\" width=\"" + solvedPer + "%\">" + team.solved + "</td>";
+        var rankHTML;
+        if (team.official==true)
+             rankHTML = "<th class=\"rank\" width=\"" + rankPer + "%\">" + rank + "</th>";
+        else rankHTML = "<th class=\"rank\" width=\"" + rankPer + "%\">" + "*" + "</th>";
+        var teamHTML = "<td class=\"team-name\" width=\"" + teamPer + "%\"><span class=\"fw-bold\">" + escapeBoardHtml(team.teamName) + "</span><span class=\"univ\">" + escapeBoardHtml(team.teamSchool) + "</span></td>";
+        var solvedHTML = "<td class=\"solved fw-bold\" width=\"" + solvedPer + "%\">" + Number(team.solved) + "</td>";
         var penaltyHTML = "<td class=\"penalty\" width=\"" + penaltyPer + "%\">" + parseInt(team.penalty / 1000.0 / 60.0) + "</td>";
         var problemHTML = "";
         for (var key in this.problemList) {
-            problemHTML += "<td class=\"problem-status\" width=\"" + problemStatusPer + "%\" alphabet-id=\"" + this.problemList[key] + "\">";
+            problemHTML += "<td class=\"problem-status\" width=\"" + problemStatusPer + "%\" alphabet-id=\"" + escapeBoardHtml(this.problemList[key]) + "\">";
             var tProblem = team.submitProblemList[this.problemList[key]];
             if (tProblem) {
                 var tryCount = tProblem.submitCount > 1 ? 'tries' : 'try';
                 if (tProblem.isUnkonwn){
-                    problemHTML += "<span class=\"label label-warning\"> ? <div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
+                    problemHTML += "<span class=\"label label-warning\"> ? <div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
                 }
                 else {
                     if (tProblem.isAccepted) {
-						if (tProblem.ACsubmitID==board.FBList[tProblem.alphabetId.charCodeAt(0)-65]){
-                            problemHTML += "<span class=\"label label-primary\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
+                        if (tProblem.ACsubmitID==board.FBList[tProblem.alphabetId.charCodeAt(0)-65]){
+                            problemHTML += "<span class=\"label label-primary\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
                         }else{
-							problemHTML += "<span class=\"label label-success\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
+                            problemHTML += "<span class=\"label label-success\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
                         }
-                        //problemHTML += "<span class=\"label label-success\">" + tProblem.submitCount + "/" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "</span></td>";
+                        //problemHTML += "<span class=\"label label-success\">" + Number(tProblem.submitCount) + "/" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "</span></td>";
                     } else {
-                        problemHTML += "<span class=\"label label-danger\"> × <div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
+                        problemHTML += "<span class=\"label label-danger\"> × <div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
                     }
                 }
             }
@@ -1196,9 +1208,9 @@ Board.prototype.showInitBoard = function() {
         $('body').append(HTML);
         //设置奖牌对应的CSS样式
         if (medal != -1 && team.official == true)
-            $("#team_" + team.teamId + ' .rank').addClass(this.medalStr[medal]);
+            boardTeamElement(team.teamId).find('.rank').addClass(this.medalStr[medal]);
         if(girl == true){
-            $("#team_" + team.teamId + ' .team-name').addClass("girl");
+            boardTeamElement(team.teamId).find('.team-name').addClass("girl");
         }
 
     }
@@ -1215,7 +1227,7 @@ Board.prototype.showInitBoard = function() {
     var penaltyHTML = "<td class=\"penalty\" width=\"" + penaltyPer + "%\"></td>";
     var problemHTML = "";
     for (var key in this.problemList) {
-        problemHTML += "<td class=\"problem-status\" width=\"" + problemStatusPer + "%\" alphabet-id=\"" + this.problemList[key] + "\"></td>";
+        problemHTML += "<td class=\"problem-status\" width=\"" + problemStatusPer + "%\" alphabet-id=\"" + escapeBoardHtml(this.problemList[key]) + "\"></td>";
     }
     var footHTML =
         "</tr> \
@@ -1234,7 +1246,7 @@ Board.prototype.showInitBoard = function() {
     for (var i = 0; i < this.teamCount; ++i) {
         //var teamId = this.teamList[this.teamNowSequence[i]].teamId;
         var teamId = this.teamNowSequence[i].teamId;
-        $("div[team-id=\"" + teamId + "\"]").stop().animate({ top: i * teamHeight + headerHeight }, 300);
+        boardTeamElement(teamId).stop().animate({ top: i * teamHeight + headerHeight }, 300);
     }
     //移到底部
     $("#team-void").stop().animate({ top: this.teamCount * teamHeight + headerHeight }, 300);
@@ -1254,22 +1266,22 @@ Board.prototype.updateTeamStatus = function(team) {
             problemHTML = "";
             if (tProblem.isUnkonwn){
                 var tryCount = tProblem.submitCount > 1 ? 'tries' : 'try';
-                problemHTML = "<span class=\"label label-warning\"> ? <div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
+                problemHTML = "<span class=\"label label-warning\"> ? <div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
             }
             else {
                 var tryCount = tProblem.submitCount > 1 ? 'tries' : 'try';
                 if (tProblem.isAccepted) {
-					if (tProblem.ACsubmitID==board.FBList[tProblem.alphabetId.charCodeAt(0)-65])
-						problemHTML = "<span class=\"label label-primary\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
-					else
-                    	problemHTML = "<span class=\"label label-success\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
+                    if (tProblem.ACsubmitID==board.FBList[tProblem.alphabetId.charCodeAt(0)-65])
+                        problemHTML = "<span class=\"label label-primary\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
+                    else
+                        problemHTML = "<span class=\"label label-success\">" + parseInt(tProblem.acceptedTime / 1000.0 / 60.0) + "<div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
                 } else {
-                    problemHTML = "<span class=\"label label-danger\"> × <div class=\"try-count\">"+ tProblem.submitCount+ " " + tryCount +"</div></sapn></td>";
+                    problemHTML = "<span class=\"label label-danger\"> × <div class=\"try-count\">"+ Number(tProblem.submitCount) + " " + tryCount +"</div></sapn></td>";
                 }
             }
 
 
-            var $problemStatus = $("#team_" + team.teamId + " .problem-status[alphabet-id=\"" + key + "\"]");
+            var $problemStatus = boardTeamElement(team.teamId).find('.problem-status').filter(function() { return $(this).attr('alphabet-id') === String(key); });
             var $statusSpan = $problemStatus.children('span[class="label label-warning"]');
 
 
@@ -1278,7 +1290,7 @@ Board.prototype.updateTeamStatus = function(team) {
 
                 //加高亮边框前去掉所有高亮边框
                 $('.team-item.hold').removeClass("hold");
-                var $team = $("div[team-id=\"" + team.teamId + "\"]");
+                var $team = $("div[team-id=\"" + escapeBoardHtml(team.teamId) + "\"]");
                 //加高亮边框
                 $team.addClass("hold");
 
@@ -1332,11 +1344,11 @@ Board.prototype.updateTeamStatus = function(team) {
                 var rankValue = maxRank-1;
                 var girl = t.girl;
                 if (t.solved != 0) {
-					if (t.official==true)
-					{
-                    	rankValue = maxRank;
-                    	maxRank = rankValue + 1;
-					}
+                    if (t.official==true)
+                    {
+                        rankValue = maxRank;
+                        maxRank = rankValue + 1;
+                    }
                     for (var j = thisBoard.medalRanks.length - 1; j >= 0; j--) {
                         if (rankValue <= thisBoard.medalRanks[j])
                             medal = j;
@@ -1345,25 +1357,25 @@ Board.prototype.updateTeamStatus = function(team) {
                     rankValue = maxRank;
                     medal = -1;
                 }
-				
+
 
                 if (medal != -1 && t.official == true)
-                    $("div[team-id=\"" + t.teamId + "\"]  .rank").addClass(thisBoard.medalStr[medal]);
+                    boardTeamElement(t.teamId).find('.rank').addClass(thisBoard.medalStr[medal]);
                 if(girl == true){
-                    $("div[team-id=\"" + t.teamId + "\"]  .team-name").addClass("girl");
+                    boardTeamElement(t.teamId).find('.team-name').addClass("girl");
                 }
-				if (t.official==true)
-                	$("#team_" + t.teamId + " .rank").html(rankValue);
-				else 
-					$("#team_" + t.teamId + " .rank").html("*");
+                if (t.official==true)
+                    boardTeamElement(t.teamId).find('.rank').html(rankValue);
+                else
+                    boardTeamElement(t.teamId).find('.rank').html("*");
 
             }
 
             //更新Solved
-            $("#team_" + team.teamId + " .solved").html(team.solved);
+            boardTeamElement(team.teamId).find('.solved').text(team.solved);
 
             //更新Penaly
-            $("#team_" + team.teamId + " .penalty").html(parseInt(team.penalty / 1000.0 / 60.0));
+            boardTeamElement(team.teamId).find('.penalty').html(parseInt(team.penalty / 1000.0 / 60.0));
         }, false);
 
     })(thisBoard, team);
@@ -1385,11 +1397,11 @@ Board.prototype.moveTeam = function(toPos) {
             var teamId = thisBoard.teamNextSequence[i].teamId;
             //延时1.5s后更新位置，为了等待题目状态更新完成
             if(toPos != -1)
-                $("div[team-id=\"" + teamId + "\"]").animate({ margin: 0 }, 2000).animate({ top: i * teamHeight + headerHeight }, 1000, function() {
+                boardTeamElement(teamId).animate({ margin: 0 }, 2000).animate({ top: i * teamHeight + headerHeight }, 1000, function() {
                     thisBoard.noAnimate = true;
                 });
             else
-                $("div[team-id=\"" + teamId + "\"]").animate({ margin: 0 }, 300 ,function() {
+                boardTeamElement(teamId).animate({ margin: 0 }, 300 ,function() {
                     thisBoard.noAnimate = true;
                 });
         }

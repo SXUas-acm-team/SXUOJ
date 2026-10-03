@@ -19,17 +19,15 @@ spring:
     name: hoj-judgeserver
   cloud:
     nacos:
-      config:
-        enabled: ${NACOS_ENABLED:true}
       discovery:
         enabled: ${NACOS_ENABLED:true}
-      discovery:
         username: ${NACOS_USERNAME:nacos}
-        password: ${NACOS_PASSWORD:nacos}
+        password: ${NACOS_PASSWORD:}
         server-addr: ${hoj-judge-server.nacos-url} #配置Nacos地址
       config:
+        enabled: ${NACOS_ENABLED:true}
         username: ${NACOS_USERNAME:nacos}
-        password: ${NACOS_PASSWORD:nacos}
+        password: ${NACOS_PASSWORD:}
         server-addr: ${hoj-judge-server.nacos-url} #Nacos 作为配置中心地址
         file-extension: yml #指定yaml格式的配置
         group: DEFAULT_GROUP  # 指定分组

@@ -1,5 +1,7 @@
 package top.hcode.hoj.remoteJudge.task.Impl;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HtmlUtil;
@@ -58,8 +60,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         login();
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
         if (remoteJudgeDTO.getLoginStatus() != 302) {
-            log.error("Login to AtCoder failed, the response status:{},username:{},password:{}",
-                    remoteJudgeDTO.getLoginStatus(), remoteJudgeDTO.getUsername(), remoteJudgeDTO.getPassword());
+            log.error("Login to AtCoder failed, response status:{}", remoteJudgeDTO.getLoginStatus());
             throw new RuntimeException("[AtCoder] Failed to Login, the response status:" + remoteJudgeDTO.getLoginStatus());
         }
 
@@ -68,11 +69,15 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         if (response.getStatus() == 200) { // 说明被限制提交频率了，
             String timeStr = ReUtil.get("Wait for (\\d+) second to submit again.", response.body(), 1);
             if (timeStr != null) {
-                int time = Integer.parseInt(timeStr);
+                int time;
+                try { time = Integer.parseInt(timeStr); }
+                catch (NumberFormatException e) { throw new IllegalStateException("Invalid AtCoder retry delay"); }
+                if (time < 0 || time > 10) throw new IllegalStateException("AtCoder retry delay exceeds limit");
                 try {
                     TimeUnit.SECONDS.sleep(time + 1);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("AtCoder submission interrupted", e);
                 }
                 response = trySubmit();
             }
@@ -103,7 +108,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         String csrfToken = remoteJudgeDTO.getCsrfToken();
 
         String submitUrl = HOST + String.format(SUBMIT_URL, remoteJudgeDTO.getContestId());
-        HttpRequest request = HttpUtil.createPost(submitUrl);
+        HttpRequest request = SecureHttp.post(submitUrl);
         HttpRequest httpRequest = request.form(MapUtil.builder(new HashMap<String, Object>())
                 .put("data.TaskScreenName", remoteJudgeDTO.getCompleteProblemId())
                 .put("data.LanguageId", getLanguage(remoteJudgeDTO.getLanguage()))
@@ -121,7 +126,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
 
         String url = HOST + String.format(SUBMISSION_RESULT_URL, remoteJudgeDTO.getContestId(), remoteJudgeDTO.getSubmitId());
-        String body = HttpUtil.get(url);
+        String body = SecureHttp.getBody(url);
         String status = ReUtil.get("<th>Status</th>[\\s\\S]*?<td id=\"judge-status\" class=\"[\\s\\S]*?\"><span [\\s\\S]*?>([\\s\\S]*?)</span></td>", body, 1);
         Constants.Judge judgeStatus = statusMap.get(status);
         if (judgeStatus == Constants.Judge.STATUS_JUDGING || judgeStatus == Constants.Judge.STATUS_PENDING) {
@@ -153,7 +158,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
 
         String csrfToken = getCsrfToken(HOST + LOGIN_URL);
-        HttpRequest request = HttpUtil.createPost(HOST + LOGIN_URL);
+        HttpRequest request = SecureHttp.post(HOST + LOGIN_URL);
         request.addHeaders(headers);
         HttpResponse response = request.form(MapUtil.builder(new HashMap<String, Object>())
                 .put("username", remoteJudgeDTO.getUsername())
@@ -175,7 +180,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         HttpRequest.getCookieManager().getCookieStore().removeAll();
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
         String url = HOST + String.format("/contests/%s/submissions?f.Task=%s&f.User=%s", contestId, problemId, username);
-        HttpRequest httpRequest = HttpUtil.createGet(url);
+        HttpRequest httpRequest = SecureHttp.get(url);
         httpRequest.cookie(remoteJudgeDTO.getCookies());
         httpRequest.addHeaders(headers);
         String body = httpRequest.execute().body();
@@ -184,7 +189,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
     }
 
     private String getCsrfToken(String url) {
-        HttpRequest request = HttpUtil.createGet(url);
+        HttpRequest request = SecureHttp.get(url);
         request.addHeaders(headers);
         HttpResponse response = request.execute();
         String body = response.body();

@@ -66,8 +66,8 @@ public class AdminProblemManager {
     private RemoteProblemManager remoteProblemManager;
 
     public IPage<Problem> getProblemList(Integer limit, Integer currentPage, String keyword, Integer auth, String oj) {
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
         IPage<Problem> iPage = new Page<>(currentPage, limit);
         IPage<Problem> problemList;
 

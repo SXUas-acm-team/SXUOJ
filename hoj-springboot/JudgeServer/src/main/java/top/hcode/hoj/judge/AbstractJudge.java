@@ -142,19 +142,15 @@ public abstract class AbstractJudge {
         } else if (output.startsWith("partially correct ")) {
             res.set("errMsg", output.split("partially correct ")[1]);
             String numStr = ReUtil.get("partially correct \\(([\\s\\S]*?)\\) ", output, 1);
-            double percentage = 0.0;
-            if (!StringUtils.isEmpty(numStr)) {
-                percentage = Integer.parseInt(numStr) * 1.0 / 100;
-            }
+            Double percentage = JudgeUtils.parsePercentage(numStr);
+            if (percentage == null) return res.set("code", SPJ_ERROR);
             res.set("percentage", percentage);
             res.set("code", SPJ_PC);
         } else if (output.startsWith("points ")) {
             res.set("code", SPJ_PC);
             String numStr = output.split("points ")[1].split(" ")[0];
-            double percentage = 0.0;
-            if (!StringUtils.isEmpty(numStr)) {
-                percentage = Double.parseDouble(numStr) / 100;
-            }
+            Double percentage = JudgeUtils.parsePercentage(numStr);
+            if (percentage == null) return res.set("code", SPJ_ERROR);
             if (percentage == 1) {
                 res.set("code", SPJ_AC);
             } else {
@@ -176,6 +172,6 @@ public abstract class AbstractJudge {
     // 去除行末尾空白符
     protected String rtrim(String value) {
         if (value == null) return null;
-        return EOL_PATTERN.matcher(StrUtil.trimEnd(value)).replaceAll("");
+        return JudgeUtils.trimLineEnds(value);
     }
 }

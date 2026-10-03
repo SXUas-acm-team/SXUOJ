@@ -27,10 +27,13 @@ public class RemoteJudgeServiceImpl implements RemoteJudgeService {
     private JudgeServerEntityService judgeServerEntityService;
 
     @Override
-    public void changeAccountStatus(String remoteJudge, String username) {
+    public void changeAccountStatus(String remoteJudge, String username, Long version) {
+        if (version == null) return;
 
         UpdateWrapper<RemoteJudgeAccount> remoteJudgeAccountUpdateWrapper = new UpdateWrapper<>();
         remoteJudgeAccountUpdateWrapper.set("status", true)
+                .eq("version", version)
+                .eq("status", false)
                 .eq("username", username);
         if (remoteJudge.equals("GYM")) {
             remoteJudge = "CF";
@@ -39,9 +42,7 @@ public class RemoteJudgeServiceImpl implements RemoteJudgeService {
 
         boolean isOk = remoteJudgeAccountEntityService.update(remoteJudgeAccountUpdateWrapper);
 
-        if (!isOk) { // 重试8次
-            tryAgainUpdateAccount(remoteJudgeAccountUpdateWrapper, remoteJudge, username);
-        }
+        // A stale or already-released lease is deliberately a no-op.
     }
 
     private void tryAgainUpdateAccount(UpdateWrapper<RemoteJudgeAccount> updateWrapper, String remoteJudge, String username) {

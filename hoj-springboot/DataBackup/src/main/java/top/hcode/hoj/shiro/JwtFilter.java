@@ -11,26 +11,35 @@ import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.web.filter.authc.AuthenticatingFilter;
 import org.apache.shiro.web.util.WebUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.BeanFactoryUtils;
+import org.springframework.boot.autoconfigure.web.servlet.error.BasicErrorController;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerExecutionChain;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.support.RequestContextUtils;
 import top.hcode.hoj.annotation.AnonApi;
 import top.hcode.hoj.common.result.CommonResult;
 import top.hcode.hoj.common.result.ResultStatus;
 import top.hcode.hoj.utils.JwtUtils;
 import top.hcode.hoj.utils.RedisUtils;
+import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.utils.ServiceContextUtils;
 
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
+import javax.servlet.DispatcherType;
+import javax.servlet.RequestDispatcher;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpServletRequestWrapper;
 import java.io.IOException;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @Author: Himit_ZH
@@ -50,13 +59,15 @@ public class JwtFilter extends AuthenticatingFilter {
     @Override
     protected boolean isAccessAllowed(ServletRequest request, ServletResponse response, Object mappedValue) {
         HttpServletRequest httpRequest = WebUtils.toHttp(request);
-        WebUtils.saveRequest(httpRequest);
-        WebApplicationContext ctx = RequestContextUtils.findWebApplicationContext(httpRequest);
-        RequestMappingHandlerMapping mapping = ctx.getBean(
-                "requestMappingHandlerMapping", RequestMappingHandlerMapping.class);
         try {
-            HandlerExecutionChain handler = mapping.getHandler(httpRequest);
+            HandlerExecutionChain handler = getRequestHandler(httpRequest);
+            if (handler == null) return false;
+            if (handler.getHandler() instanceof org.springframework.web.servlet.resource.ResourceHttpRequestHandler) {
+                return "GET".equals(httpRequest.getMethod()) || "HEAD".equals(httpRequest.getMethod());
+            }
+            if (!(handler.getHandler() instanceof HandlerMethod)) return false;
             HandlerMethod handlerClazz = (HandlerMethod) handler.getHandler();
+            if (isMissingPublicResourceError(httpRequest, handlerClazz)) return true;
             // 判断请求是否访问的是公共接口，如果拥有@AnonApi注解则不再走登录认证，直接访问controller对应的方法
             AnonApi anonApi = ServiceContextUtils.getAnnotation(handlerClazz.getMethod(),
                     handlerClazz.getBeanType(),
@@ -72,7 +83,7 @@ public class JwtFilter extends AuthenticatingFilter {
                             return true;
                         }
                         String userId = claim.getSubject();
-                        boolean hasToken = jwtUtils.hasToken(userId);
+                        boolean hasToken = jwtUtils.hasValidSession(userId, jwt);
                         // 缓存中不存在，说明了token失效，则不进行登录尝试
                         if (!hasToken) {
                             return true;
@@ -92,8 +103,45 @@ public class JwtFilter extends AuthenticatingFilter {
                 return false;
             }
         } catch (Exception e) {
-            return true;
+            log.debug("Request handler lookup failed; authentication is required");
+            return false;
         }
+    }
+
+    private boolean isMissingPublicResourceError(HttpServletRequest request, HandlerMethod handler) throws Exception {
+        if (request.getDispatcherType() != DispatcherType.ERROR
+                || !Integer.valueOf(404).equals(request.getAttribute(RequestDispatcher.ERROR_STATUS_CODE))
+                || (!"GET".equals(request.getMethod()) && !"HEAD".equals(request.getMethod()))
+                || !BasicErrorController.class.isAssignableFrom(handler.getBeanType())) return false;
+        Object original = request.getAttribute(RequestDispatcher.ERROR_REQUEST_URI);
+        if (!(original instanceof String)) return false;
+        String originalUri = (String) original;
+        String contextPath = request.getContextPath();
+        if (!originalUri.startsWith(contextPath)) return false;
+        String lookupPath = originalUri.substring(contextPath.length());
+        if (!lookupPath.startsWith(Constants.File.IMG_API.getPath())
+                && !lookupPath.startsWith(Constants.File.FILE_API.getPath())) return false;
+        HttpServletRequest originalRequest = new HttpServletRequestWrapper(request) {
+            @Override public String getRequestURI() { return originalUri; }
+            @Override public String getServletPath() { return lookupPath; }
+            @Override public String getPathInfo() { return null; }
+        };
+        HandlerExecutionChain originalHandler = getRequestHandler(originalRequest);
+        return originalHandler != null && originalHandler.getHandler()
+                instanceof org.springframework.web.servlet.resource.ResourceHttpRequestHandler;
+    }
+
+    protected HandlerExecutionChain getRequestHandler(HttpServletRequest request) throws Exception {
+        WebApplicationContext ctx = RequestContextUtils.findWebApplicationContext(request);
+        if (ctx == null) throw new IllegalStateException("Request application context is unavailable");
+        List<HandlerMapping> mappings = new ArrayList<>(BeanFactoryUtils
+                .beansOfTypeIncludingAncestors(ctx, HandlerMapping.class, true, false).values());
+        AnnotationAwareOrderComparator.sort(mappings);
+        for (HandlerMapping mapping : mappings) {
+            HandlerExecutionChain handler = mapping.getHandler(request);
+            if (handler != null) return handler;
+        }
+        return null;
     }
 
     @Override
@@ -113,7 +161,7 @@ public class JwtFilter extends AuthenticatingFilter {
         HttpServletRequest request = (HttpServletRequest) servletRequest;
         String token = request.getHeader("Authorization");
         if (StrUtil.isBlank(token)) {
-            return true;
+            return this.onLoginFailure(null, new AuthenticationException("请先登录！"), servletRequest, servletResponse);
         } else {
             // 判断是否已过期
             Claims claim = jwtUtils.getClaimByToken(token);
@@ -123,19 +171,22 @@ public class JwtFilter extends AuthenticatingFilter {
             }
             String userId = claim.getSubject();
 
-            // 如果校验请求携带的token 与 redis缓存对应的token
-            // 那就会造成一个地方登录，另一个地方老的token就直接失效。
-            // 对于OJ来说，允许多地方登录在线。
-            boolean hasToken = jwtUtils.hasToken(userId);
+            // Each issued session has its own token hash; logout revokes the user's epoch.
+            boolean hasToken = jwtUtils.hasValidSession(userId, token);
             if (!hasToken) {
                 return this.onLoginFailure(null,
                         new AuthenticationException("登录状态已失效，请重新登录！"), servletRequest, servletResponse);
             }
-            if (!redisUtils.hasKey(ShiroConstant.SHIRO_TOKEN_REFRESH + userId)) {
+            if (jwtUtils.needsRefresh(userId, token)) {
                 //过了需更新token时间，但是还未过期，则进行token刷新
                 HttpServletResponse httpResponse = (HttpServletResponse) servletResponse;
                 HttpServletRequest httpRequest = (HttpServletRequest) servletRequest;
-                this.refreshToken(httpRequest, httpResponse, userId);
+                try {
+                    this.refreshToken(httpRequest, httpResponse, userId);
+                } catch (IllegalStateException revoked) {
+                    return this.onLoginFailure(null, new AuthenticationException("登录状态已失效，请重新登录！"),
+                            servletRequest, servletResponse);
+                }
             }
         }
         // 执行自动登录
@@ -154,14 +205,17 @@ public class JwtFilter extends AuthenticatingFilter {
         String requestId = UUID.randomUUID().toString();
         boolean locked = redisUtils.getLock(ShiroConstant.SHIRO_TOKEN_LOCK + userId, 20, requestId);// 获取锁20s
         if (locked) {
-            String newToken = jwtUtils.generateToken(userId);
-            response.setHeader("Access-Control-Allow-Credentials", "true");
-            response.setHeader("Authorization", newToken); //放到信息头部
-            response.setHeader("Access-Control-Expose-Headers", "Refresh-Token,Authorization,Url-Type"); //让前端可用访问
-            response.setHeader("Url-Type", request.getHeader("Url-Type")); // 为了前端能区别请求来源
-            response.setHeader("Refresh-Token", "true"); //告知前端需要刷新token
+            try {
+                String newToken = jwtUtils.refreshToken(userId, request.getHeader("Authorization"));
+                response.setHeader("Access-Control-Allow-Credentials", "true");
+                response.setHeader("Authorization", newToken); //放到信息头部
+                response.setHeader("Access-Control-Expose-Headers", "Refresh-Token,Authorization,Url-Type"); //让前端可用访问
+                if (request.getHeader("Url-Type") != null) response.setHeader("Url-Type", request.getHeader("Url-Type"));
+                response.setHeader("Refresh-Token", "true"); //告知前端需要刷新token
+            } finally {
+                redisUtils.releaseLock(ShiroConstant.SHIRO_TOKEN_LOCK + userId, requestId);
+            }
         }
-        redisUtils.releaseLock(ShiroConstant.SHIRO_TOKEN_LOCK + userId, requestId);
     }
 
 
@@ -182,7 +236,7 @@ public class JwtFilter extends AuthenticatingFilter {
             httpResponse.setContentType("application/json;charset=utf-8");
             httpResponse.setHeader("Access-Control-Expose-Headers", "Refresh-Token,Authorization,Url-Type"); //让前端可用访问
             httpResponse.setHeader("Access-Control-Allow-Credentials", "true");
-            httpResponse.setHeader("Url-Type", httpRequest.getHeader("Url-Type")); // 为了前端能区别请求来源
+            if (httpRequest.getHeader("Url-Type") != null) httpResponse.setHeader("Url-Type", httpRequest.getHeader("Url-Type"));
             httpResponse.setStatus(resultStatus.getStatus());
             httpResponse.getWriter().print(json);
         } catch (IOException e1) {

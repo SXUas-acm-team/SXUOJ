@@ -1,5 +1,7 @@
 package top.hcode.hoj.crawler.problem;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpRequest;
@@ -77,7 +79,7 @@ public class GYMProblemStrategy extends CFProblemStrategy {
         Problem problem = new Problem();
 
         String url = HOST + "/gym/" + contestNum;
-        HttpRequest request = HttpRequest.get(url)
+        HttpRequest request = SecureHttp.get(url)
                 .header("cookie", "RCPC=" + CodeForcesUtils.getRCPC())
                 .timeout(20000);
         if (cookies != null) {
@@ -89,7 +91,7 @@ public class GYMProblemStrategy extends CFProblemStrategy {
         if (html.contains("Redirecting... Please, wait.")) {
             List<String> list = ReUtil.findAll("[a-z0-9]+[a-z0-9]{31}", html, 0, new ArrayList<>());
             CodeForcesUtils.updateRCPC(list);
-            html = HttpRequest.get(url)
+            html = SecureHttp.get(url)
                     .header("cookie", "RCPC=" + CodeForcesUtils.getRCPC())
                     .timeout(20000)
                     .execute()
@@ -167,7 +169,7 @@ public class GYMProblemStrategy extends CFProblemStrategy {
     public void login(String username, String password) {
         HashMap<String, Object> keyMap = getCsrfToken(IMAGE_HOST + LOGIN_URL, false);
 
-        HttpRequest httpRequest = new HttpRequest(IMAGE_HOST + LOGIN_URL);
+        HttpRequest httpRequest = SecureHttp.create(IMAGE_HOST + LOGIN_URL);
         httpRequest.setConnectionTimeout(60000);
         httpRequest.setReadTimeout(60000);
         httpRequest.setMethod(Method.POST);
@@ -187,7 +189,7 @@ public class GYMProblemStrategy extends CFProblemStrategy {
 
     public HashMap<String, Object> getCsrfToken(String url, boolean needTTA) {
 
-        HttpRequest request = HttpUtil.createGet(url);
+        HttpRequest request = SecureHttp.get(url);
 
         request.header("cookie", "RCPC=" + CodeForcesUtils.getRCPC());
 

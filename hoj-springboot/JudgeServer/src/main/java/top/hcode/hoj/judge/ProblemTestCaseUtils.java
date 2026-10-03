@@ -185,7 +185,9 @@ public class ProblemTestCaseUtils {
             String infoStr = fileReader.readString();
             JSONObject testcaseInfo = JSONUtil.parseObj(infoStr);
             // 测试样例被改动需要重新生成
-            if (!testcaseInfo.getStr("version", null).equals(version)) {
+            if (!java.util.Objects.equals(testcaseInfo.getStr("version"), version)
+                    || !java.util.Objects.equals(testcaseInfo.getStr("mode"), judgeMode)
+                    || !java.util.Objects.equals(testcaseInfo.getStr("judgeCaseMode"), judgeCaseMode)) {
                 return tryInitTestCaseInfo(testCasesDir, problemId, version, judgeMode, judgeCaseMode);
             }
             return testcaseInfo;

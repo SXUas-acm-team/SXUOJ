@@ -88,6 +88,12 @@ public class DruidConfigure {
     @Value("${spring.datasource.maxWait:60000}")
     private Integer maxWait;
 
+    @Value("${spring.datasource.connectTimeout:0}")
+    private Integer connectTimeout;
+
+    @Value("${spring.datasource.socketTimeout:0}")
+    private Integer socketTimeout;
+
     @Autowired
     private DataSourceConfigure dataSourceConfigure;
 
@@ -101,14 +107,16 @@ public class DruidConfigure {
         String mysqlUsername = Optional.ofNullable(dataSourceConfigure.getUsername()).orElseGet(() -> username);
         String mysqlUserPassword = Optional.ofNullable(dataSourceConfigure.getPassword()).orElseGet(() -> password);
 
-        log.warn("[MySQL] [Config Init] name:[{}], host:[{}], port:[{}], username:[{}], password:[{}]",
-                mysqlName, mysqlHost, mysqlPort, mysqlUsername, mysqlUserPassword);
+        log.warn("[MySQL] [Config Init] name:[{}], host:[{}], port:[{}], username:[{}]",
+                mysqlName, mysqlHost, mysqlPort, mysqlUsername);
 
         DruidDataSource datasource = new DruidDataSource();
         String url = "jdbc:mysql://" + mysqlHost + ":" + mysqlPort + "/" + mysqlName + "?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowMultiQueries=true&rewriteBatchedStatements=true";
         datasource.setUrl(url);
         datasource.setUsername(mysqlUsername);
         datasource.setPassword(mysqlUserPassword);
+        datasource.addConnectionProperty("connectTimeout", connectTimeout.toString());
+        datasource.addConnectionProperty("socketTimeout", socketTimeout.toString());
         datasource.setDriverClassName(driverClassName);
         datasource.setDbType(type);
         datasource.setMaxActive(maxActive);

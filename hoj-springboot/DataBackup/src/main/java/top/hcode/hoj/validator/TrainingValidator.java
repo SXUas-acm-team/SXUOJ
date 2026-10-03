@@ -53,7 +53,7 @@ public class TrainingValidator {
         boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
 
         if (training.getIsGroup()) {
-            if (!groupValidator.isGroupMember(userRolesVo.getUid(), training.getGid()) && !isRoot) {
+            if (!isRoot && (userRolesVo == null || !groupValidator.isGroupMember(userRolesVo.getUid(), training.getGid()))) {
                 throw new StatusForbiddenException("对不起，您并非该团队内的成员，无权操作！");
             }
         }
@@ -91,6 +91,9 @@ public class TrainingValidator {
     }
 
     public boolean isInTrainingOrAdmin(Training training, AccountProfile userRolesVo) throws StatusAccessDeniedException {
+        if (training == null || !Boolean.TRUE.equals(training.getStatus())) return false;
+        if (Boolean.TRUE.equals(training.getIsGroup()) && !SecurityUtils.getSubject().hasRole("root")
+                && (userRolesVo == null || !groupValidator.isGroupMember(userRolesVo.getUid(), training.getGid()))) return false;
         if (Constants.Training.AUTH_PRIVATE.getValue().equals(training.getAuth())) {
             if (userRolesVo == null) {
                 throw new StatusAccessDeniedException("该训练属于私有题单，请先登录以校验权限！");

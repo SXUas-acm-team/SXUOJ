@@ -1,5 +1,7 @@
 package top.hcode.hoj.crawler.problem;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.json.JSONArray;
@@ -48,7 +50,7 @@ public class LibreProblemStrategy extends ProblemStrategy {
         param.put("judgeInfo", Boolean.TRUE);
         String body = null;
         try {
-            body = HttpRequest.post(API_HOST + PROBLEM_URL)
+            body = SecureHttp.post(API_HOST + PROBLEM_URL)
                     .body(param.toString())
                     .timeout(5000)
                     .execute()
@@ -59,7 +61,7 @@ public class LibreProblemStrategy extends ProblemStrategy {
             } catch (InterruptedException ignored) {
             }
             // 超时重试
-            body = HttpRequest.post(API_HOST + PROBLEM_URL)
+            body = SecureHttp.post(API_HOST + PROBLEM_URL)
                     .body(param.toString())
                     .timeout(5000)
                     .execute()

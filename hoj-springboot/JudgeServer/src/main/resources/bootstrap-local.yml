@@ -1,0 +1,11 @@
+# Load this profile during bootstrap so local startup never contacts Nacos.
+spring:
+  cloud:
+    nacos:
+      config:
+        enabled: false
+      discovery:
+        enabled: false
+    service-registry:
+      auto-registration:
+        enabled: false

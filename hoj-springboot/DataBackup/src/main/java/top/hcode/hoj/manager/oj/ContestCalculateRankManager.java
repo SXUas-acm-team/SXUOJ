@@ -142,14 +142,14 @@ public class ContestCalculateRankManager {
         boolean isNeedSetAward = contest.getAwardType() != null && contest.getAwardType() > 0;
         if (removeStar) {
             // 如果选择了移除打星队伍，同时该用户属于打星队伍，则将其移除
-            orderResultList.removeIf(acmContestRankVo -> starAccountMap.containsKey(acmContestRankVo.getUsername()));
+            orderResultList.removeIf(acmContestRankVo -> starAccountMap.containsKey(top.hcode.hoj.utils.RequestLimits.normalizeAccount(acmContestRankVo.getUsername())));
             if (isNeedSetAward) {
                 awardConfigVoList = getContestAwardConfigList(contest.getAwardConfig(), contest.getAwardType(), orderResultList.size());
             }
         } else {
             if (isNeedSetAward) {
                 if (contest.getAwardType() == 1) {
-                    long count = orderResultList.stream().filter(e -> !starAccountMap.containsKey(e.getUsername())).count();
+                    long count = orderResultList.stream().filter(e -> !starAccountMap.containsKey(top.hcode.hoj.utils.RequestLimits.normalizeAccount(e.getUsername()))).count();
                     awardConfigVoList = getContestAwardConfigList(contest.getAwardConfig(), contest.getAwardType(), (int) count);
                 } else {
                     awardConfigVoList = getContestAwardConfigList(contest.getAwardConfig(), contest.getAwardType(), orderResultList.size());
@@ -158,11 +158,12 @@ public class ContestCalculateRankManager {
         }
         // 记录当前用户排名数据和关注列表的用户排名数据
         List<ACMContestRankVO> topACMRankVoList = new ArrayList<>();
+        Set<String> concernedIds = new HashSet<>(top.hcode.hoj.utils.RequestLimits.boundedDistinct(concernedList, 100));
         boolean needAddConcernedUser = false;
         if (!CollectionUtils.isEmpty(concernedList)) {
             needAddConcernedUser = true;
             // 移除关注列表与当前用户重复
-            concernedList.remove(currentUserId);
+            concernedIds.remove(currentUserId);
         }
 
         int rankNum = 1;
@@ -171,7 +172,7 @@ public class ContestCalculateRankManager {
         ContestAwardConfigVO configVo = null;
         for (int i = 0; i < len; i++) {
             ACMContestRankVO currentACMRankVo = orderResultList.get(i);
-            if (!removeStar && starAccountMap.containsKey(currentACMRankVo.getUsername())) {
+            if (!removeStar && starAccountMap.containsKey(top.hcode.hoj.utils.RequestLimits.normalizeAccount(currentACMRankVo.getUsername()))) {
                 // 打星队伍排名为-1
                 currentACMRankVo.setRank(-1);
                 currentACMRankVo.setIsWinAward(false);
@@ -223,7 +224,7 @@ public class ContestCalculateRankManager {
 
             // 需要添加关注用户
             if (needAddConcernedUser) {
-                if (concernedList.contains(currentACMRankVo.getUid())) {
+                if (concernedIds.contains(currentACMRankVo.getUid())) {
                     topACMRankVoList.add(currentACMRankVo);
                 }
             }
@@ -426,14 +427,14 @@ public class ContestCalculateRankManager {
         boolean isNeedSetAward = contest.getAwardType() != null && contest.getAwardType() > 0;
         if (removeStar) {
             // 如果选择了移除打星队伍，同时该用户属于打星队伍，则将其移除
-            orderResultList.removeIf(acmContestRankVo -> starAccountMap.containsKey(acmContestRankVo.getUsername()));
+            orderResultList.removeIf(acmContestRankVo -> starAccountMap.containsKey(top.hcode.hoj.utils.RequestLimits.normalizeAccount(acmContestRankVo.getUsername())));
             if (isNeedSetAward) {
                 awardConfigVoList = getContestAwardConfigList(contest.getAwardConfig(), contest.getAwardType(), orderResultList.size());
             }
         } else {
             if (isNeedSetAward) {
                 if (contest.getAwardType() == 1) {
-                    long count = orderResultList.stream().filter(e -> !starAccountMap.containsKey(e.getUsername())).count();
+                    long count = orderResultList.stream().filter(e -> !starAccountMap.containsKey(top.hcode.hoj.utils.RequestLimits.normalizeAccount(e.getUsername()))).count();
                     awardConfigVoList = getContestAwardConfigList(contest.getAwardConfig(), contest.getAwardType(), (int) count);
                 } else {
                     awardConfigVoList = getContestAwardConfigList(contest.getAwardConfig(), contest.getAwardType(), orderResultList.size());
@@ -443,11 +444,12 @@ public class ContestCalculateRankManager {
 
         // 记录当前用户排名数据和关注列表的用户排名数据
         List<OIContestRankVO> topOIRankVoList = new ArrayList<>();
+        Set<String> concernedIds = new HashSet<>(top.hcode.hoj.utils.RequestLimits.boundedDistinct(concernedList, 100));
         boolean needAddConcernedUser = false;
         if (!CollectionUtils.isEmpty(concernedList)) {
             needAddConcernedUser = true;
             // 移除关注列表与当前用户重复
-            concernedList.remove(currentUserId);
+            concernedIds.remove(currentUserId);
         }
 
         int rankNum = 1;
@@ -456,7 +458,7 @@ public class ContestCalculateRankManager {
         int len = orderResultList.size();
         for (int i = 0; i < len; i++) {
             OIContestRankVO currentOIRankVo = orderResultList.get(i);
-            if (!removeStar && starAccountMap.containsKey(currentOIRankVo.getUsername())) {
+            if (!removeStar && starAccountMap.containsKey(top.hcode.hoj.utils.RequestLimits.normalizeAccount(currentOIRankVo.getUsername()))) {
                 // 打星队伍排名为-1
                 currentOIRankVo.setRank(-1);
                 currentOIRankVo.setIsWinAward(false);
@@ -509,7 +511,7 @@ public class ContestCalculateRankManager {
 
             // 需要添加关注用户
             if (needAddConcernedUser) {
-                if (concernedList.contains(currentOIRankVo.getUid())) {
+                if (concernedIds.contains(currentOIRankVo.getUid())) {
                     topOIRankVoList.add(currentOIRankVo);
                 }
             }
@@ -673,7 +675,7 @@ public class ContestCalculateRankManager {
         HashMap<String, Boolean> res = new HashMap<>();
         for (String str : list) {
             if (!StringUtils.isEmpty(str)) {
-                res.put(str, true);
+                res.put(top.hcode.hoj.utils.RequestLimits.normalizeAccount(str), true);
             }
         }
         return res;

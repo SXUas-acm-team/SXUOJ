@@ -326,7 +326,6 @@ export default {
         this.$notify.error({
           title: this.$i18n.t('m.Error'),
           message: response.msg,
-          dangerouslyUseHTMLString: true,
           duration: 8000
         });
       } else {

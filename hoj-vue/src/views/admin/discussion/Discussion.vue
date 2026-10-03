@@ -414,21 +414,18 @@ export default {
       }
     },
     openReportDialog(content) {
-      let reg = '#(.*?)# ';
-      let re = RegExp(reg, 'g');
-      let tmp;
-      let showContent = '<strong>' + this.$i18n.t('m.Tags') + '</strong>：';
-      while ((tmp = re.exec(content))) {
-        showContent += tmp[1] + ' ';
-      }
-      showContent +=
-        '<br><br><strong>' +
-        this.$i18n.t('m.Content') +
-        '</strong>：' +
-        content.replace(/#(.*?)# /g, '');
+      const text = String(content == null ? '' : content);
+      const tags = (text.match(/#(.*?)# /g) || []).map(tag => tag.slice(1, -2));
+      const h = this.$createElement;
+      const showContent = h('div', [
+        h('strong', this.$i18n.t('m.Tags') + '：'),
+        h('span', tags.join(' ')),
+        h('br'),
+        h('strong', this.$i18n.t('m.Content') + '：'),
+        h('pre', { style: { whiteSpace: 'pre-wrap', wordBreak: 'break-word' } }, text.replace(/#(.*?)# /g, '')),
+      ]);
       this.$alert(showContent, this.$i18n.t('m.Report_Content'), {
         confirmButtonText: this.$i18n.t('m.OK'),
-        dangerouslyUseHTMLString: true,
       });
     },
   },

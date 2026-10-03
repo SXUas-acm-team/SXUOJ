@@ -60,13 +60,13 @@
               <div
                 class="content"
                 v-if="item.sourceContent != null"
-                v-html="item.sourceContent"
+                v-dompurify-html="item.sourceContent"
               ></div>
 
               <div
                 class="orginal-reply"
                 v-if="item.quoteContent != null"
-                v-html="item.quoteContent"
+                v-dompurify-html="item.quoteContent"
               ></div>
             </div>
             <div class="extra-info">

@@ -28,14 +28,10 @@ public class RemoteJudgeDispatcher {
     @Autowired
     private RemoteJudgeReceiver remoteJudgeReceiver;
 
-    @Value("${hoj.judge.token:no_judge_token}")
-    private String judgeToken;
-
     public void sendTask(Long judgeId, Long pid, String remoteJudgeProblem, Boolean isContest, Boolean isHasSubmitIdRemoteReJudge) {
         JSONObject task = new JSONObject();
         task.set("judgeId", judgeId);
         task.set("remoteJudgeProblem", remoteJudgeProblem);
-        task.set("token", judgeToken);
         task.set("isContest", isContest);
         task.set("isHasSubmitIdRemoteReJudge", isHasSubmitIdRemoteReJudge);
         try {

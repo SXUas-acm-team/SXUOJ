@@ -8,6 +8,7 @@ import top.hcode.hoj.utils.IpUtils;
  * @Date 2022/10/26
  */
 @Data
+@lombok.ToString(onlyExplicitlyIncluded = true)
 public class WebConfig {
 
     // 邮箱配置

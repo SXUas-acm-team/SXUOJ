@@ -33,6 +33,9 @@ public class ChooseUtils {
     @Autowired
     private NacosDiscoveryProperties discoveryProperties;
 
+    @Value("${spring.cloud.nacos.discovery.enabled:true}")
+    private boolean nacosDiscoveryEnabled;
+
     @Value("${service-url.name}")
     private String JudgeServiceName;
 
@@ -150,6 +153,9 @@ public class ChooseUtils {
      * @Since 2021/4/15
      */
     private List<Instance> getInstances(String serviceId) {
+        if (!nacosDiscoveryEnabled) {
+            return Collections.emptyList();
+        }
         // 获取服务发现的相关API
         NamingService namingService = discoveryProperties.namingServiceInstance();
         try {
@@ -173,12 +179,14 @@ public class ChooseUtils {
                 if (remoteJudgeAccount.getUsername().equals(username)) {
                     int count = remoteJudgeAccountMapper.updateAccountStatusById(remoteJudgeAccount.getId());
                     if (count > 0) {
+                        remoteJudgeAccount.setVersion(remoteJudgeAccount.getVersion() == null ? 1L : remoteJudgeAccount.getVersion() + 1);
                         return remoteJudgeAccount;
                     }
                 }
             } else {
                 int count = remoteJudgeAccountMapper.updateAccountStatusById(remoteJudgeAccount.getId());
                 if (count > 0) {
+                    remoteJudgeAccount.setVersion(remoteJudgeAccount.getVersion() == null ? 1L : remoteJudgeAccount.getVersion() + 1);
                     return remoteJudgeAccount;
                 }
             }
@@ -201,6 +209,7 @@ public class ChooseUtils {
             RemoteJudgeAccount remoteJudgeAccount = remoteJudgeAccountList.get(i);
             int count = remoteJudgeAccountMapper.updateAccountStatusById(remoteJudgeAccount.getId());
             if (count > 0) {
+                remoteJudgeAccount.setVersion(remoteJudgeAccount.getVersion() == null ? 1L : remoteJudgeAccount.getVersion() + 1);
                 HashMap<String, Object> result = new HashMap<>();
                 result.put("index", i);
                 result.put("size", len);

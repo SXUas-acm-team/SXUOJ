@@ -35,16 +35,24 @@ public class GroupRankManager {
     @Autowired
     private GroupMemberEntityService groupMemberEntityService;
 
+    @Autowired
+    private top.hcode.hoj.validator.GroupValidator groupValidator;
+
 
     public IPage<OIRankVO> getGroupRankList(Integer limit,
                                             Integer currentPage,
                                             String searchUser,
                                             Integer type,
                                             Long gid) throws StatusFailException {
+        top.hcode.hoj.shiro.AccountProfile viewer = (top.hcode.hoj.shiro.AccountProfile) org.apache.shiro.SecurityUtils.getSubject().getPrincipal();
+        if (!org.apache.shiro.SecurityUtils.getSubject().hasRole("root")
+                && (viewer == null || !groupValidator.isGroupMember(viewer.getUid(), gid))) {
+            throw new StatusFailException("您无权查看该团队的榜单！");
+        }
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 30;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
 
         // 根据type查询不同 进行不同排序方式
         String rankType;

@@ -45,6 +45,7 @@ export default {
       loading: false,
       options: {
         tooltip: {
+          renderMode: "richText",
           trigger: "axis",
           axisPointer: {
             type: "cross",

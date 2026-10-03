@@ -13,6 +13,8 @@ import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.context.ApplicationContext;
 import org.springframework.util.StringUtils;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.dao.user.UserInfoEntityService;
@@ -55,9 +57,12 @@ public class AdminUserManager {
     @Autowired
     private RedisUtils redisUtils;
 
+    @Autowired
+    private ApplicationContext applicationContext;
+
     public IPage<UserRolesVO> getUserList(Integer limit, Integer currentPage, Boolean onlyAdmin, String keyword) {
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 10;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
         if (keyword != null) {
             keyword = keyword.trim();
         }
@@ -165,7 +170,7 @@ public class AdminUserManager {
             HashSet<String> failedUserNameSet = new HashSet<>();
             for (List<String> user : users) {
                 try {
-                    String uuid = addNewUser(user);
+                    String uuid = applicationContext.getBean(AdminUserManager.class).addNewUser(user);
                     if (uuid != null) {
                         successUidList.add(uuid);
                     } else {
@@ -191,7 +196,7 @@ public class AdminUserManager {
         }
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
     public String addNewUser(List<String> user) throws StatusFailException {
         String uuid = IdUtil.simpleUUID();
         UserInfo userInfo = new UserInfo()

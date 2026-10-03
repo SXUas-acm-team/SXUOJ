@@ -43,10 +43,13 @@ public class RemoteJudgeGetResult {
 
     private final static Map<String, Future> futureTaskMap = new ConcurrentHashMap<>(Runtime.getRuntime().availableProcessors() * 2);
 
+    private final static java.util.Set<String> activeTasks = ConcurrentHashMap.newKeySet();
+
     public void process(RemoteJudgeStrategy remoteJudgeStrategy) {
 
         RemoteJudgeDTO remoteJudgeDTO = remoteJudgeStrategy.getRemoteJudgeDTO();
-        String key = UUID.randomUUID().toString() + remoteJudgeDTO.getSubmitId();
+        String key = remoteJudgeDTO.getOj() + ":" + remoteJudgeDTO.getJudgeId();
+        if (!activeTasks.add(key)) return;
         AtomicInteger count = new AtomicInteger(0);
         Runnable getResultTask = new Runnable() {
             @Override
@@ -65,7 +68,8 @@ public class RemoteJudgeGetResult {
                             remoteJudgeDTO.getUsername(),
                             remoteJudgeDTO.getServerIp(),
                             remoteJudgeDTO.getServerPort(),
-                            remoteJudgeDTO.getSubmitId());
+                            remoteJudgeDTO.getSubmitId(), remoteJudgeDTO.getAccountVersion());
+                    activeTasks.remove(key);
 
                     Future future = futureTaskMap.get(key);
                     if (future != null) {
@@ -104,7 +108,8 @@ public class RemoteJudgeGetResult {
                             remoteJudgeDTO.getUsername(),
                             remoteJudgeDTO.getServerIp(),
                             remoteJudgeDTO.getServerPort(),
-                            remoteJudgeDTO.getSubmitId());
+                            remoteJudgeDTO.getSubmitId(), remoteJudgeDTO.getAccountVersion());
+                    activeTasks.remove(key);
 
                     Integer time = remoteJudgeRes.getTime();
                     Integer memory = remoteJudgeRes.getMemory();
@@ -172,16 +177,16 @@ public class RemoteJudgeGetResult {
             }
         };
         ScheduledFuture<?> beeperHandle = scheduler.scheduleWithFixedDelay(
-                getResultTask, 0, 2500, TimeUnit.MILLISECONDS);
+                getResultTask, 2500, 2500, TimeUnit.MILLISECONDS);
         futureTaskMap.put(key, beeperHandle);
     }
 
 
-    private void changeRemoteJudgeLock(String remoteJudge, String username, String ip, Integer port, Long resultSubmitId) {
+    private void changeRemoteJudgeLock(String remoteJudge, String username, String ip, Integer port, Long resultSubmitId, Long version) {
         log.info("After Get Result,remote_judge:[{}],submit_id: [{}]! Begin to return the account to other task!",
                 remoteJudge, resultSubmitId);
         // 将账号变为可用
-        remoteJudgeService.changeAccountStatus(remoteJudge, username);
+        remoteJudgeService.changeAccountStatus(remoteJudge, username, version);
         if (RemoteJudgeContext.openCodeforcesFixServer) {
             if (remoteJudge.equals(Constants.RemoteJudge.GYM_JUDGE.getName())
                     || remoteJudge.equals(Constants.RemoteJudge.CF_JUDGE.getName())) {

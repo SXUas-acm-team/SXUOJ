@@ -7,6 +7,9 @@ import com.wf.captcha.base.Captcha;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import org.apache.shiro.SecurityUtils;
+import top.hcode.hoj.shiro.AccountProfile;
+import top.hcode.hoj.validator.GroupValidator;
 import top.hcode.hoj.dao.problem.*;
 import top.hcode.hoj.dao.training.TrainingCategoryEntityService;
 import top.hcode.hoj.pojo.entity.problem.*;
@@ -52,6 +55,21 @@ public class CommonManager {
 
     @Autowired
     private TrainingCategoryEntityService trainingCategoryEntityService;
+
+    @Autowired
+    private GroupValidator groupValidator;
+
+    private Problem readableProblem(Long pid) {
+        Problem problem = pid == null ? null : problemEntityService.getById(pid);
+        if (problem == null) return null;
+        if (SecurityUtils.getSubject().hasRole("root") || SecurityUtils.getSubject().hasRole("problem_admin")) return problem;
+        AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        if (Boolean.TRUE.equals(problem.getIsGroup())) {
+            if (user == null || !groupValidator.isGroupMember(user.getUid(), problem.getGid())) return null;
+            if (groupValidator.isGroupAdmin(user.getUid(), problem.getGid())) return problem;
+        }
+        return Objects.equals(problem.getAuth(), 1) ? problem : null;
+    }
 
     public CaptchaVO getCaptcha() {
         ArithmeticCaptcha specCaptcha = new ArithmeticCaptcha(90, 30, 4);
@@ -148,6 +166,8 @@ public class CommonManager {
 
 
     public Collection<Tag> getProblemTags(Long pid) {
+        Problem problem = readableProblem(pid);
+        if (problem == null) return Collections.emptyList();
         Map<String, Object> map = new HashMap<>();
         map.put("pid", pid);
         List<Long> tidList = problemTagEntityService.listByMap(map)
@@ -157,7 +177,10 @@ public class CommonManager {
         if (CollectionUtils.isEmpty(tidList)) {
             return new ArrayList<>();
         }
-        return tagEntityService.listByIds(tidList);
+        QueryWrapper<Tag> tags = new QueryWrapper<Tag>().in("id", tidList);
+        if (Boolean.TRUE.equals(problem.getIsGroup())) tags.eq("gid", problem.getGid());
+        else tags.isNull("gid");
+        return tagEntityService.list(tags);
     }
 
 
@@ -165,7 +188,8 @@ public class CommonManager {
 
         String oj = "ME";
         if (pid != null) {
-            Problem problem = problemEntityService.getById(pid);
+            Problem problem = readableProblem(pid);
+            if (problem == null) return Collections.emptyList();
             if (problem.getIsRemote()) {
                 oj = problem.getProblemId().split("-")[0];
             }
@@ -185,6 +209,7 @@ public class CommonManager {
     }
 
     public Collection<Language> getProblemLanguages(Long pid) {
+        if (readableProblem(pid) == null) return Collections.emptyList();
         QueryWrapper<ProblemLanguage> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("pid", pid).select("lid");
         List<Long> idList = problemLanguageEntityService.list(queryWrapper)
@@ -199,6 +224,7 @@ public class CommonManager {
     }
 
     public List<CodeTemplate> getProblemCodeTemplate(Long pid) {
+        if (readableProblem(pid) == null) return Collections.emptyList();
         QueryWrapper<CodeTemplate> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("pid", pid);
         return codeTemplateEntityService.list(queryWrapper);

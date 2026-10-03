@@ -411,17 +411,13 @@ export default {
               readAnnouncementList.push(newAnnounceList[i].id);
               this.$notify({
                 title: newAnnounceList[i].title,
-                message:
-                  '<p style="text-align:center;"><i class="el-icon-time"> ' +
-                  time.utcToLocal(newAnnounceList[i].gmtCreate) +
-                  '</i></p>' +
-                  '<p style="text-align:center;color:#409eff">' +
-                  this.$i18n.t(
-                    'm.Please_check_the_contest_announcement_for_details'
-                  ) +
-                  '</p>',
+                message: this.$createElement('div', [
+                  this.$createElement('p', { style: { textAlign: 'center' } },
+                    time.utcToLocal(newAnnounceList[i].gmtCreate)),
+                  this.$createElement('p', { style: { textAlign: 'center', color: '#409eff' } },
+                    this.$i18n.t('m.Please_check_the_contest_announcement_for_details')),
+                ]),
                 type: 'warning',
-                dangerouslyUseHTMLString: true,
                 duration: 0,
               });
             }

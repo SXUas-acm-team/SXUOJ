@@ -13,6 +13,7 @@ import top.hcode.hoj.pojo.vo.ProblemCountVO;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -61,6 +62,7 @@ public interface JudgeMapper extends BaseMapper<Judge> {
     List<ProblemCountVO> getProblemListCount(@Param("pidList") List<Long> pidList);
 
     List<Judge> getLastYearUserJudgeList(@Param("uid") String uid, @Param("username") String username);
+    List<Map<String, Object>> getLastYearUserJudgeCounts(@Param("uid") String uid, @Param("username") String username);
 
     List<ContestScrollBoardSubmissionVO> getContestScrollBoardSubmission(@Param("cid") Long cid,
                                                                          @Param("uidList") List<String> uidList);

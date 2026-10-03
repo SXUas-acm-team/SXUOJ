@@ -378,6 +378,10 @@ public class SandboxRun {
         cmd.set("copyIn", copyIn);
         cmd.set("copyOut", copyOut);
 
+        // Bound copied file-I/O output and writable files to the same per-case quota.
+        cmd.set("copyOutMax", maxOutputSize);
+        cmd.set("fsizeLimit", maxOutputSize);
+
         JSONObject param = new JSONObject();
         param.set("cmd", new JSONArray().put(cmd));
 

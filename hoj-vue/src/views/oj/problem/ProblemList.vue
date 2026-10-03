@@ -331,6 +331,7 @@
 </template>
 
 <script>
+import { normalizeDifficulty } from "@/common/viewSafety";
 import { mapGetters } from 'vuex';
 import api from '@/common/api';
 import {
@@ -424,7 +425,7 @@ export default {
     init() {
       this.routeName = this.$route.name;
       let query = this.$route.query;
-      this.query.difficulty = query.difficulty || '';
+      this.query.difficulty = normalizeDifficulty(query.difficulty);
       this.query.oj = query.oj || 'Mine';
       this.query.keyword = query.keyword || '';
       try {

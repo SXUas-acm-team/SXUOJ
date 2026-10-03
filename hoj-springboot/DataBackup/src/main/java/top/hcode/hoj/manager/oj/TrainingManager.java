@@ -26,6 +26,7 @@ import top.hcode.hoj.pojo.entity.training.*;
 import top.hcode.hoj.pojo.vo.*;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.RedisUtils;
 import top.hcode.hoj.validator.GroupValidator;
 import top.hcode.hoj.validator.TrainingValidator;
 
@@ -74,6 +75,9 @@ public class TrainingManager {
     @Resource
     private TrainingValidator trainingValidator;
 
+    @Resource
+    private RedisUtils redisUtils;
+
     /**
      * @param limit
      * @param currentPage
@@ -92,8 +96,8 @@ public class TrainingManager {
                                              String auth) {
 
         // 页数，每页题数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 20;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 20);
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
@@ -125,7 +129,7 @@ public class TrainingManager {
 
         Long gid = training.getGid();
         if (training.getIsGroup()) {
-            if (!isRoot && !groupValidator.isGroupMember(userRolesVo.getUid(), training.getGid())) {
+            if (!isRoot && (userRolesVo == null || !groupValidator.isGroupMember(userRolesVo.getUid(), training.getGid()))) {
                 throw new StatusForbiddenException("对不起，您无权限操作！");
             }
         } else {
@@ -195,6 +199,17 @@ public class TrainingManager {
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+
+        if (Boolean.TRUE.equals(training.getIsGroup()) && !SecurityUtils.getSubject().hasRole("root")
+                && !groupValidator.isGroupMember(userRolesVo.getUid(), training.getGid())) {
+            throw new StatusForbiddenException("无权注册该团队训练！");
+        }
+        if (!redisUtils.isWithinRateLimit("training:register:" + userRolesVo.getUid(), 60)) {
+            throw new StatusForbiddenException("注册过于频繁，请一分钟后重试！");
+        }
+        if (trainingProblemEntityService.count(new QueryWrapper<TrainingProblem>().eq("tid", tid)) > 1000) {
+            throw new StatusFailException("该训练题目过多，请联系管理员拆分题单后注册！");
+        }
 
         QueryWrapper<TrainingRegister> registerQueryWrapper = new QueryWrapper<>();
         registerQueryWrapper.eq("tid", tid).eq("uid", userRolesVo.getUid());
@@ -266,8 +281,8 @@ public class TrainingManager {
         trainingValidator.validateTrainingAuth(training);
 
         // 页数，每页数若为空，设置默认值
-        if (currentPage == null || currentPage < 1) currentPage = 1;
-        if (limit == null || limit < 1) limit = 30;
+        currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
+        limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
 
         if (StrUtil.isNotBlank(keyword)) {
             keyword = keyword.toLowerCase();

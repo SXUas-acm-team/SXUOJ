@@ -26,6 +26,7 @@ import top.hcode.hoj.pojo.entity.problem.Problem;
 import top.hcode.hoj.pojo.entity.problem.ProblemCase;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.SafeFiles;
 
 import javax.annotation.Resource;
 import javax.xml.parsers.DocumentBuilder;
@@ -87,13 +88,15 @@ public class ImportFpsProblemManager {
         List<String> skippedNoTestCase = new ArrayList<>();
         // 收集无法解析的XML文件名称
         List<String> failedXmlFiles = new ArrayList<>();
+        List<java.nio.file.Path> testcaseRoots = new ArrayList<>();
+        try {
         if ("zip".equalsIgnoreCase(suffix)){
             String fileDirId = IdUtil.simpleUUID();
                 String testcaseTmpBase = ensureWritableDir(Constants.File.TESTCASE_TMP_FOLDER.getPath(), 
                     System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "zip");
                 log.info("[FPS-Upload] testcaseTmpBase: {}", testcaseTmpBase);
             String fileDir = testcaseTmpBase + File.separator + fileDirId;
-            String filePath = fileDir + File.separator + file.getOriginalFilename();
+            String filePath = SafeFiles.child(fileDir, file.getOriginalFilename()).getPath();
             // 文件夹不存在就新建
             FileUtil.mkdir(fileDir);
                 log.info("[FPS-Upload] unzip dir: {}", fileDir);
@@ -105,8 +108,9 @@ public class ImportFpsProblemManager {
                 throw new StatusFailException("服务器异常：FPS题目上传失败！");
             }
 
+            try {
             // 将压缩包压缩到指定文件夹
-            ZipUtil.unzip(filePath, fileDir);
+            SafeFiles.unzip(filePath, fileDir);
 
             // 删除zip文件
             FileUtil.del(filePath);
@@ -126,7 +130,7 @@ public class ImportFpsProblemManager {
             for (File xml : xmlFiles) {
                 try (java.io.FileInputStream fis = new java.io.FileInputStream(xml)) {
                     try {
-                        List<ProblemDTO> parsed = parseFps(fis, userRolesVo.getUsername(), skippedNoTestCase);
+                        List<ProblemDTO> parsed = parseFps(fis, userRolesVo.getUsername(), skippedNoTestCase, testcaseRoots);
                         problemDTOList.addAll(parsed);
                     } catch (StatusFailException e) {
                         String msg = e.getMessage();
@@ -141,10 +145,13 @@ public class ImportFpsProblemManager {
                     }
                 }
             }
+            } finally {
+                SafeFiles.deleteTree(new File(fileDir).toPath());
+            }
         }else{
             try (InputStream in = file.getInputStream()) {
                 try {
-                    problemDTOList = parseFps(in, userRolesVo.getUsername(), skippedNoTestCase);
+                    problemDTOList = parseFps(in, userRolesVo.getUsername(), skippedNoTestCase, testcaseRoots);
                 } catch (StatusFailException e) {
                     if (e.getMessage() != null && e.getMessage().startsWith("读取xml失败")) {
                         log.warn("[FPS-Upload] 单文件导入解析失败，文件名:{} 原因:{}", originalName, e.getMessage());
@@ -219,16 +226,32 @@ public class ImportFpsProblemManager {
             }
         }
 
+        } finally {
+            testcaseRoots.forEach(SafeFiles::deleteTree);
+        }
     }
 
     private List<ProblemDTO> parseFps(InputStream inputStream, String username, List<String> skippedNoTestCase) throws StatusFailException {
+        return parseFps(inputStream, username, skippedNoTestCase, new ArrayList<>());
+    }
+
+    private List<ProblemDTO> parseFps(InputStream inputStream, String username, List<String> skippedNoTestCase,
+                                      List<java.nio.file.Path> testcaseRoots) throws StatusFailException {
 
         Document document = null;
         try {
             DocumentBuilderFactory documentBuilderFactory = XmlUtil.createDocumentBuilderFactory();
-            documentBuilderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false);
+            documentBuilderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            documentBuilderFactory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            documentBuilderFactory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            documentBuilderFactory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            documentBuilderFactory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            documentBuilderFactory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            documentBuilderFactory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            documentBuilderFactory.setXIncludeAware(false);
+            documentBuilderFactory.setExpandEntityReferences(false);
             DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-            document = documentBuilder.parse(inputStream);
+            document = documentBuilder.parse(new java.io.ByteArrayInputStream(SafeFiles.readLimited(inputStream, 8 * 1024 * 1024)));
         } catch (ParserConfigurationException e) {
             log.error("build  DocumentBuilder error:", e);
         } catch (IOException e) {
@@ -250,6 +273,7 @@ public class ImportFpsProblemManager {
             System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "zip");
         log.info("[FPS-Parse] testcaseTmpBase: {}", testcaseTmpBase);
         String fileDir = testcaseTmpBase + File.separator + fileDirId;
+        testcaseRoots.add(new File(fileDir).toPath());
         // 确保基础目录存在
         String markdownDir = ensureWritableDir(Constants.File.MARKDOWN_FILE_FOLDER.getPath(),
                 System.getProperty("user.home") + File.separator + "hoj" + File.separator + "file" + File.separator + "md");
@@ -289,13 +313,18 @@ public class ImportFpsProblemManager {
                     continue;
                 }
                 String src = srcElement.getTextContent();
-                String base64 = XmlUtil.getElement(img, "base64").getTextContent();
-                String[] split = src.split("\\.");
-
+                Element base64Element = XmlUtil.getElement(img, "base64");
+                if (base64Element == null) continue;
+                String base64 = base64Element.getTextContent();
+                String extension = src.substring(src.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+                if (!Arrays.asList("png", "jpg", "jpeg", "gif", "webp").contains(extension)) {
+                    throw new StatusFailException("FPS 图片格式不受支持！");
+                }
                 byte[] decode = Base64.getDecoder().decode(base64);
-                String fileName = IdUtil.fastSimpleUUID() + "." + split[split.length - 1];
+                if (decode.length > 4 * 1024 * 1024) throw new StatusFailException("FPS 图片超过大小限制！");
+                String fileName = IdUtil.fastSimpleUUID() + "." + extension;
 
-                FileUtil.writeBytes(decode, markdownDir + File.separator + fileName);
+                FileUtil.writeBytes(decode, SafeFiles.child(markdownDir, fileName));
                 srcMapUrl.put(src, Constants.File.IMG_API.getPath() + fileName);
             }
 

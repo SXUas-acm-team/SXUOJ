@@ -1,5 +1,7 @@
 package top.hcode.hoj.crawler.problem;
 
+import top.hcode.hoj.http.SecureHttp;
+
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HtmlUtil;
@@ -62,7 +64,7 @@ public class CFProblemStrategy extends ProblemStrategy {
             throw new IllegalArgumentException("Codeforces: Incorrect problem id format!");
         }
 
-        HttpRequest request = HttpRequest.get(getProblemUrl(contestId, problemNum))
+        HttpRequest request = SecureHttp.get(getProblemUrl(contestId, problemNum))
                 .header("cookie", "RCPC=" + CodeForcesUtils.getRCPC())
                 .timeout(20000);
         if (cookies != null) {
@@ -73,7 +75,7 @@ public class CFProblemStrategy extends ProblemStrategy {
         if (html.contains("Redirecting... Please, wait.")) {
             List<String> list = ReUtil.findAll("[a-z0-9]+[a-z0-9]{31}", html, 0, new ArrayList<>());
             CodeForcesUtils.updateRCPC(list);
-            html = HttpRequest.get(getProblemUrl(contestId, problemNum))
+            html = SecureHttp.get(getProblemUrl(contestId, problemNum))
                     .header("cookie", "RCPC=" + CodeForcesUtils.getRCPC())
                     .timeout(20000)
                     .execute()

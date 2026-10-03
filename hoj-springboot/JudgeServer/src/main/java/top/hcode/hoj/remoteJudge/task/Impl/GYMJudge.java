@@ -1,5 +1,7 @@
 package top.hcode.hoj.remoteJudge.task.Impl;
 
+import top.hcode.hoj.http.SecureHttp;
+
 
 import cn.hutool.core.lang.PatternPool;
 import cn.hutool.core.map.MapUtil;
@@ -38,7 +40,7 @@ public class GYMJudge extends CodeForcesJudge {
     }
 
     public static void main(String[] args) {
-        String S = HttpUtil.get(HOST + "/submissions/zhanshihui");
+        String S = SecureHttp.getBody(HOST + "/submissions/zhanshihui");
 
         String regex = "<span .*? submissionId=\"170036627\" submissionVerdict=\"(.*?)\" .*?>.*?</span>.*?<i .*?></i>[\\s]*?</td>[\\s]*?" +
                 "<td class=\"time.*?\">[\\s]*?(\\d+)&nbsp;ms[\\s]*?</td>[\\s]*?" +
@@ -71,7 +73,7 @@ public class GYMJudge extends CodeForcesJudge {
             login();
         }
         String url = getRunIdUrl();
-        HttpRequest homeRequest = HttpUtil.createGet(url);
+        HttpRequest homeRequest = SecureHttp.get(url);
         homeRequest.cookie(remoteJudgeDTO.getCookies());
         HttpResponse homeResponse = homeRequest.execute();
 
@@ -102,7 +104,7 @@ public class GYMJudge extends CodeForcesJudge {
             }
             remoteJudgeRes.setStatus(statusType.getStatus());
             if (statusType == Constants.Judge.STATUS_COMPILE_ERROR) {
-                HttpRequest CEINFORequest = HttpUtil.createPost(HOST + JUDGE_PROTOCOL)
+                HttpRequest CEINFORequest = SecureHttp.post(HOST + JUDGE_PROTOCOL)
                         .cookie(remoteJudgeDTO.getCookies())
                         .timeout(30000);
                 CEINFORequest.form(MapUtil

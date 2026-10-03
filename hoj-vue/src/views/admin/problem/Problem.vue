@@ -1038,6 +1038,7 @@ export default {
       PROBLEM_LEVEL: {},
       JUDGE_CASE_MODE: {},
       spjRecord: {
+        judgeMode: "default",
         spjCode: "",
         spjLanguage: "",
       },
@@ -1221,6 +1222,7 @@ export default {
           data.spjLanguage = data.spjLanguage || "C";
           this.spjRecord.spjLanguage = data.spjLanguage;
           this.spjRecord.spjCode = data.spjCode;
+          this.spjRecord.judgeMode = data.judgeMode || "default";
           this.judgeCaseModeRecord = data.judgeCaseModeRecord;
           this.problem = data;
           this.problem["examples"] = utils.stringToExamples(data.examples);
@@ -1298,6 +1300,10 @@ export default {
     },
 
     switchMode(mode) {
+      this.testCaseUploaded = false;
+      this.problem.uploadTestcaseDir = "";
+      this.problem.testCaseScore = [];
+      this.problem.spjCompileOk = false;
       let modeName = "General_Judge";
       let modeTips = "General_Judge_Mode_Tips";
       if (mode == "spj") {
@@ -1748,6 +1754,7 @@ export default {
       //   return;
       // }
       let isChangeModeCode =
+        this.spjRecord.judgeMode !== this.problem.judgeMode ||
         this.spjRecord.spjLanguage != this.problem.spjLanguage ||
         this.spjRecord.spjCode != this.problem.spjCode;
       if (!this.problem.isRemote) {
@@ -1849,7 +1856,7 @@ export default {
           }
         } else {
           // 原本是spj或交互，但现在关闭了
-          if (!this.spjRecord.spjCode) {
+          if (this.spjRecord.judgeMode !== "default") {
             problemDto["changeModeCode"] = true;
             this.problem.spjCode = null;
             this.problem.spjLanguage = null;

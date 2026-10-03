@@ -51,7 +51,7 @@
             <span
               class="content markdown-body"
               v-highlight
-              v-html="$markDown.render(item.content)"
+              v-dompurify-html="$markDown.render(item.content)"
             >
             </span>
           </div>
