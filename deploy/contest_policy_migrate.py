@@ -60,27 +60,84 @@ def inspect(query):
     definitions(cid_type)
     state = {}
     for table in definitions(cid_type):
-        state[table] = query("SELECT COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_KEY FROM "
+        state[table] = query("SELECT COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_KEY,"
+                             "IF(COLUMN_DEFAULT IS NULL,'1','0'),COALESCE(COLUMN_DEFAULT,''),EXTRA,"
+                             "COALESCE(CHARACTER_SET_NAME,''),COALESCE(COLLATION_NAME,'') FROM "
                              "information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() "
                              f"AND TABLE_NAME='{table}' ORDER BY ORDINAL_POSITION;")
         if state[table]:
-            validate(table, state[table], cid_type)
+            indexes = query("SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,"
+                            "COALESCE(CAST(SUB_PART AS CHAR),''),INDEX_TYPE FROM "
+                            "information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() "
+                            f"AND TABLE_NAME='{table}' ORDER BY INDEX_NAME,SEQ_IN_INDEX;")
+            validate(table, state[table], cid_type, indexes)
     return version, cid_type, state
 
 
-def validate(table, rows, cid_type):
+def integer_type(column_type):
+    """Integer display widths differ between 5.7 and 8 without changing storage."""
+    return re.sub(r"\(\d+\)", "", column_type.lower())
+
+
+def current_timestamp(value):
+    return re.fullmatch(r"current_timestamp(?:\((?:0)?\))?", value, re.I) is not None
+
+
+def validate(table, rows, cid_type, indexes):
+    if any(len(row) != 9 for row in rows) or any(len(row) != 6 for row in indexes):
+        raise MigrationError(table + " returned incomplete schema metadata.")
     actual = {row[0]: row[1:] for row in rows}
     required = {"cid", "release_at", "gmt_create", "gmt_modified"} if table == "contest_access_policy" \
         else {"cid", "resource_hash", "resource_path"}
-    if not required.issubset(actual):
+    if required != set(actual) or len(actual) != len(rows):
         raise MigrationError(table + " exists with an incompatible structure; no automatic repair performed.")
-    if actual["cid"][0].lower() != cid_type or actual["cid"][1] != "NO" or actual["cid"][2] != "PRI":
-        raise MigrationError(table + ".cid must match contest.id and be a non-null primary key.")
+
+    def check_column(name, column_type, nullable, charset="", collation="", timestamp=False, on_update=False):
+        kind, null, _, default_null, default, extra, encoding, ordering = actual[name]
+        if name == "cid":
+            matches_type = integer_type(kind) == integer_type(cid_type)
+        elif column_type == "datetime":
+            matches_type = kind.lower() in (column_type, column_type + "(0)")
+        else:
+            matches_type = kind.lower() == column_type
+        # 8.0 marks CURRENT_TIMESTAMP defaults as DEFAULT_GENERATED; 5.7 does not.
+        normalized_extra = re.sub(r"\bdefault_generated\b", "", extra.lower()).strip()
+        if on_update:
+            expected_extra = normalized_extra.startswith("on update ") \
+                and current_timestamp(normalized_extra[len("on update "):])
+        else:
+            expected_extra = normalized_extra == ""
+        valid_default = default_null == "0" and current_timestamp(default) if timestamp else default_null == "1"
+        if not (matches_type and null == nullable and valid_default and expected_extra
+                and encoding.lower() == charset and ordering.lower() == collation):
+            raise MigrationError(table + "." + name + " has an incompatible type, nullability, default, "
+                                 "generation rule or character encoding; no automatic repair performed.")
+
+    check_column("cid", cid_type, "NO")
     if table == "contest_access_policy":
-        if actual["release_at"][0].lower() != "datetime" or actual["release_at"][1] != "YES":
-            raise MigrationError("release_at must be a nullable DATETIME.")
-    elif actual["resource_hash"][0].lower() != "char(64)" or actual["resource_hash"][2] != "PRI":
-        raise MigrationError("resource_hash must be CHAR(64) and part of the primary key.")
+        check_column("release_at", "datetime", "YES")
+        check_column("gmt_create", "datetime", "NO", timestamp=True)
+        check_column("gmt_modified", "datetime", "NO", timestamp=True, on_update=True)
+    else:
+        check_column("resource_hash", "char(64)", "NO", "ascii", "ascii_bin")
+        check_column("resource_path", "text", "NO", "utf8mb4", "utf8mb4_bin")
+
+    grouped = {}
+    for row in indexes:
+        grouped.setdefault(row[0], []).append(row)
+    primary = grouped.get("PRIMARY", [])
+    expected_primary = ["cid"] if table == "contest_access_policy" else ["cid", "resource_hash"]
+    if [row[3] for row in primary] != expected_primary or any(
+            row[1] != "0" or row[2] != str(position) or row[4] != "" or row[5].upper() != "BTREE"
+            for position, row in enumerate(primary, 1)):
+        raise MigrationError(table + " has an incompatible primary key; no automatic repair performed.")
+    secondary = [index for name, index in grouped.items() if name != "PRIMARY"]
+    if any(row[1] != "1" for index in secondary for row in index):
+        raise MigrationError(table + " has an unexpected unique index that can reject valid associations.")
+    if table == "contest_protected_resource" and not any(
+            index[0][2] == "1" and index[0][3] == "resource_hash" and index[0][4] == ""
+            and index[0][5].upper() == "BTREE" for index in secondary):
+        raise MigrationError(table + " requires a full, non-unique secondary index beginning with resource_hash.")
 
 
 def main(argv=None):

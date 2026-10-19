@@ -1,0 +1,75 @@
+{
+  "registry": "docker.io",
+  "namespace": "yunyunjuan",
+  "tag": "contest-security-20261019",
+  "images": {
+    "backend": {
+      "reference": "yunyunjuan/sxuoj-backend:contest-security-20261019",
+      "digest": "sha256:c30876011986339bcb5ebd1b4645555da9bfac61d77fc68bfeeac3595462d973",
+      "pinned_reference": "yunyunjuan/sxuoj-backend@sha256:c30876011986339bcb5ebd1b4645555da9bfac61d77fc68bfeeac3595462d973",
+      "image_id": "sha256:c30876011986339bcb5ebd1b4645555da9bfac61d77fc68bfeeac3595462d973",
+      "architecture": "amd64",
+      "os": "linux"
+    },
+    "frontend": {
+      "reference": "yunyunjuan/sxuoj-frontend:contest-security-20261019",
+      "digest": "sha256:6221a4abe9e84e91aeb82914ba624bc3018a5106c2975ac1cbb917b1ce38d041",
+      "pinned_reference": "yunyunjuan/sxuoj-frontend@sha256:6221a4abe9e84e91aeb82914ba624bc3018a5106c2975ac1cbb917b1ce38d041",
+      "image_id": "sha256:6221a4abe9e84e91aeb82914ba624bc3018a5106c2975ac1cbb917b1ce38d041",
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "published_at": "2026-10-19T16:39:38.641592+08:00",
+  "source": {
+    "repository": "https://github.com/SXUas-acm-team/SXUOJ",
+    "branch": "codex/contest-security-20261019",
+    "tested_application_commit": "2218bf63d78ddc2d1c2a496c63edd89e94f5f0ff",
+    "note": "The release branch also contains subsequent deployment-script and documentation corrections; application image sources are unchanged."
+  },
+  "validation": {
+    "backend_tests_passed": 255,
+    "frontend_tests_passed": 88,
+    "deployment_tests_passed": 41,
+    "http_integration_assertions_passed": 105,
+    "production_backup_mysql_version": "8.0.43",
+    "migration_also_verified_on_mysql": "5.7.44",
+    "original_backup_counts_preserved_on_first_upgrade": {
+      "contest": 18,
+      "problem": 4483,
+      "judge": 10572
+    },
+    "registry_digest_upgrade": {
+      "registry_digest_upgrade": "passed",
+      "counts_unchanged": {
+        "contest": 24,
+        "problem": 4486,
+        "judge": 10575,
+        "contest_access_policy": 3,
+        "contest_protected_resource": 6
+      },
+      "mysql_and_redis_preserved": true,
+      "backend_and_frontend_match_tested_image_ids": true,
+      "both_services_healthy": true,
+      "api_status": 200,
+      "page_status": 200,
+      "pinned_images": {
+        "backend": "yunyunjuan/sxuoj-backend@sha256:c30876011986339bcb5ebd1b4645555da9bfac61d77fc68bfeeac3595462d973",
+        "frontend": "yunyunjuan/sxuoj-frontend@sha256:6221a4abe9e84e91aeb82914ba624bc3018a5106c2975ac1cbb917b1ce38d041"
+      }
+    },
+    "registry_upgrade_counts_include_synthetic_ctest_fixtures": true,
+    "judging_scope": "Submission and contest_record persistence verified; isolated test stack has no live judge verdict service."
+  },
+  "production_changed": false,
+  "offline_artifacts": {
+    "images.tar": {
+      "bytes": 307756032,
+      "sha256": "3bb9d0064f9ea0545046e5aecdfee49b5e19c227411663d2ea7d57ef264d6e3b"
+    },
+    "frontend-dist.zip": {
+      "bytes": 5717948,
+      "sha256": "1824e4f9e7a1e52fbdecab57b67e95c711e10708c48b553612c2d6edfeff883e"
+    }
+  }
+}

@@ -2,14 +2,14 @@
 
 本文用于现有 SXUOJ/HOJ 生产部署的增量更新。本地镜像构建、备份恢复和验收已完成；生产环境尚未执行迁移或替换服务。镜像发布状态与不可变标识见发布清单。
 
-发布版本标签（使用你的 Docker Hub 命名空间）：
+发布版本标签（Docker Hub 命名空间 `yunyunjuan`）：
 
 ```text
-YOUR_DOCKERHUB_USERNAME/sxuoj-backend:contest-security-20261019
-YOUR_DOCKERHUB_USERNAME/sxuoj-frontend:contest-security-20261019
+yunyunjuan/sxuoj-backend:contest-security-20261019
+yunyunjuan/sxuoj-frontend:contest-security-20261019
 ```
 
-上线前将实际提交号、构建结果和两个镜像的不可变 digest 填入文末记录。生产优先固定 digest，避免标签之后变化。
+实际源码提交、构建结果和镜像 digest 见[发布清单](contest-security-release-2026-10-19.json)。生产优先固定 digest，避免标签之后变化。本次本地验证及发布镜像的平台为 `linux/amd64`；上线前核对生产主机架构，ARM 主机需另行构建对应镜像。
 
 ## 1. 本次行为与变更范围
 
@@ -61,6 +61,8 @@ YOUR_DOCKERHUB_USERNAME/sxuoj-frontend:contest-security-20261019
 
 以下均为服务器路径示例；替换为实际路径，沿用原部署全部 `-f`、`--env-file` 及 `-p` 参数。不要输出完整 `docker compose config`、`docker inspect` 环境变量或 `.env` 内容到共享日志。
 
+`SOURCE_DIR` 应指向已检出的源码分支 `codex/contest-security-20261019` 根目录，或第 11 节离线交付目录的根目录；其下必须存在 `deploy/backend.py` 和 `deploy/contest_policy_migrate.py`。
+
 ```bash
 SOURCE_DIR=/opt/sxuoj
 COMPOSE_DIR=/opt/hoj
@@ -71,6 +73,7 @@ RELEASE_DIR="$COMPOSE_DIR/releases/contest-security-20261019"
 umask 077
 mkdir -p "$RELEASE_DIR"
 docker compose ls
+docker info --format '{{.OSType}}/{{.Architecture}}'
 docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" config --services
 docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' hoj-backend
 docker inspect --format '{{.Image}}' hoj-backend
@@ -181,7 +184,7 @@ WHERE p.release_at IS NOT NULL AND p.release_at < c.end_time;
 先确认镜像已经发布，并将下面的标签替换为本次确认的 digest。未发布时不要将拉取失败描述为升级成功。
 
 ```bash
-BACKEND_IMAGE=YOUR_DOCKERHUB_USERNAME/sxuoj-backend:contest-security-20261019
+BACKEND_IMAGE=yunyunjuan/sxuoj-backend@sha256:c30876011986339bcb5ebd1b4645555da9bfac61d77fc68bfeeac3595462d973
 
 python3 "$SOURCE_DIR/deploy/backend.py" update \
   -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" \
@@ -206,7 +209,7 @@ python3 "$SOURCE_DIR/deploy/backend.py" status \
 从新前端镜像提取静态产物，不启动临时容器：
 
 ```bash
-FRONTEND_IMAGE=YOUR_DOCKERHUB_USERNAME/sxuoj-frontend:contest-security-20261019
+FRONTEND_IMAGE=yunyunjuan/sxuoj-frontend@sha256:6221a4abe9e84e91aeb82914ba624bc3018a5106c2975ac1cbb917b1ce38d041
 docker pull "$FRONTEND_IMAGE"
 mkdir -p "$RELEASE_DIR/dist"
 extract_container=$(docker create "$FRONTEND_IMAGE")
@@ -227,8 +230,8 @@ WEB_ROOT="$COMPOSE_DIR/1015"
 test -d "$WEB_ROOT"
 test -f "$WEB_ROOT/index.html"
 tar -C "$WEB_ROOT" -czf "$RELEASE_DIR/frontend-before-upgrade.tar.gz" .
-rsync -a --exclude=index.html "$RELEASE_DIR/dist/" "$WEB_ROOT/"
-cp "$RELEASE_DIR/dist/index.html" "$WEB_ROOT/.index.security-upgrade.html"
+rsync -a --chmod=D755,F644 --exclude=index.html "$RELEASE_DIR/dist/" "$WEB_ROOT/"
+install -m 0644 "$RELEASE_DIR/dist/index.html" "$WEB_ROOT/.index.security-upgrade.html"
 mv "$WEB_ROOT/.index.security-upgrade.html" "$WEB_ROOT/index.html"
 docker exec hoj-frontend nginx -t
 docker exec hoj-frontend nginx -s reload
@@ -330,17 +333,17 @@ python3 "$SOURCE_DIR/deploy/backend.py" rollback \
 
 | 记录项 | 结果 |
 | --- | --- |
-| 源码 | 已推送独立分支 `codex/contest-security-20261019`；当前工作分支与原暂存区保留。最终提交号见发布清单。 |
+| 源码 | 已推送独立分支 `codex/contest-security-20261019`；当前工作分支与原暂存区保留。已测试的应用源码提交见发布清单，分支另外包含最终部署脚本与手册修正。 |
 | 后端构建 | 255 项 Java 回归全部通过（api 10、主后端 208、JudgeServer 37）；镜像标识见发布清单。 |
 | 前端构建 | 88 项测试全部通过，生产构建完成；镜像标识见发布清单。 |
-| 镜像实际发布位置及时间 | 待补 |
+| 镜像实际发布位置及时间 | Docker Hub `yunyunjuan/sxuoj-backend`、`yunyunjuan/sxuoj-frontend`；2026-10-19T16:39:38.641592+08:00；digest 见发布清单。 |
 | 隔离恢复 | `mysql:8.0.43`；无网络恢复容器 `sxuoj-contest-backup-reader`，副本卷 `sxuoj-contest-source-mysql`；业务测试库使用全新 `sxuoj-contest-test8_mysql-data` 卷。 |
 | 数据与业务验收 | 4 张关键表 CHECK TABLE QUICK 为 OK；镜像更新前后 18 场比赛、4483 道题、10572 条提交计数相同，MySQL/Redis 容器保留；105 项真实 HTTP 断言全部通过。 |
 | 备份来源 | 用户提供的 `main.zip` 与 `main/` 原样保留，未打包进源码或镜像；可恢复性已在独立卷验证。 |
-| 生产迁移只读检查 / apply / 复检 | 待执行或待补 |
-| 后端 / 前端上线时间 | 待执行或待补 |
+| 生产迁移只读检查 / apply / 复检 | 尚未执行；按本手册在生产维护窗口操作。 |
+| 后端 / 前端上线时间 | 生产尚未更新；本地已拉取 Docker Hub digest 并更新两个服务，镜像标识、健康状态与数据保留核验通过。 |
 | 本地验收 | `deploy/tests/contest_integration.py` 105/105；单字符提交及 contest_record 落库已验证，测试环境没有真实判题服务，未宣称得到 AC。生产矩阵仍须上线后执行。 |
-| 首次启用保密策略时间及安全回退目标 | 待执行或待补 |
+| 首次启用保密策略时间及安全回退目标 | 生产尚未启用；上线验收后登记，回退目标必须保留保密鉴权能力。 |
 
 
 ### 本地测试复现与验证范围
@@ -354,3 +357,19 @@ python deploy/tests/contest_integration.py --base-url http://127.0.0.1:16688 --c
 脚本校验回环地址、测试容器前缀、Compose 项目归属和入口端口，随后只追加 `ctest_` 合成账号、题目与比赛。真实接口覆盖密码验证、改密撤权、自然时间结束、附件裸链与短期访问凭证、匿名公开、定时公开、重封、多场复用及移题后的历史保密。不会修改原有用户记录。
 
 迁移还在单独 MySQL 5.7.44 历史结构库中演练并复检通过。生产副本验证的实际 `contest.id` 为 `bigint unsigned`；迁移脚本按现场类型生成两张新表，保留原业务表结构与数据。
+
+## 11. 离线交付产物
+
+工作区的 `dist/contest-security-20261019/` 包含 `images.tar`（前后端两个已测试镜像）、`frontend-dist.zip`（根目录即 `index.html`）、迁移与部署脚本、手册、发布清单及 `SHA256SUMS`。不包含生产备份、环境变量、测试数据库或访问凭据。
+
+将该目录传到服务器后，先校验，再导入镜像：
+
+```bash
+cd /实际路径/contest-security-20261019
+sha256sum -c SHA256SUMS
+docker load -i images.tar
+```
+
+将 `SOURCE_DIR` 设为离线目录根路径，确认其下有 `deploy/` 和 `docs/`。离线方式仍须先完成第 4 节的空表迁移。第 5 节后端更新命令改用 `--image sxuoj-backend:contest-security-20261019 --no-pull`，其余原部署参数保持一致。
+
+前端可将 `frontend-dist.zip` 解压到新的临时目录，再按第 6 节更新原静态目录；必须保留该节 `rsync --chmod=D755,F644` 和 `install -m 0644` 参数，统一目录与文件权限，避免受 `umask 077` 或 ZIP 权限位影响导致页面、脚本和样式返回 403。不要用离线包覆盖原 `.env`、Compose、Nginx 或证书。
