@@ -13,4 +13,9 @@ public class AccessVO {
 
     @ApiModelProperty(value = "是否有进入比赛或训练的权限")
     private Boolean access;
+
+    private Boolean canViewProblems;
+    private Boolean canSubmit;
+    private String accessReason;
+    private Boolean released;
 }

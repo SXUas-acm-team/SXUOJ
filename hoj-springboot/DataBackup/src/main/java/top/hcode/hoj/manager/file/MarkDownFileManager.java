@@ -14,11 +14,13 @@ import top.hcode.hoj.common.exception.StatusSystemErrorException;
 import top.hcode.hoj.dao.common.FileEntityService;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.UploadFileUtils;
 import top.hcode.hoj.validator.GroupValidator;
 
 import javax.annotation.Resource;
 import java.io.File;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * @Author: Himit_ZH
@@ -56,10 +58,7 @@ public class MarkDownFileManager {
             throw new StatusFailException("上传的图片文件大小不能大于4M！");
         }
         //获取文件后缀
-        String suffix = image.getOriginalFilename().substring(image.getOriginalFilename().lastIndexOf(".") + 1);
-        if (!"jpg,jpeg,gif,png,webp".toUpperCase().contains(suffix.toUpperCase())) {
-            throw new StatusFailException("请选择jpg,jpeg,gif,png,webp格式的图片！");
-        }
+        String suffix = UploadFileUtils.requireExtension(image, "jpg", "jpeg", "gif", "png", "webp");
 
         //若不存在该目录，则创建目录
         FileUtil.mkdir(Constants.File.MARKDOWN_FILE_FOLDER.getPath());
@@ -80,6 +79,7 @@ public class MarkDownFileManager {
                 .setFilePath(Constants.File.MARKDOWN_FILE_FOLDER.getPath() + File.separator + filename)
                 .setSuffix(suffix)
                 .setType("md")
+                .setGid(gid)
                 .setUid(userRolesVo.getUid());
         fileEntityService.save(file);
 
@@ -98,7 +98,7 @@ public class MarkDownFileManager {
             throw new StatusFailException("错误：文件不存在！");
         }
 
-        if (!file.getType().equals("md")) {
+        if (!"md".equals(file.getType())) {
             throw new StatusForbiddenException("错误：不支持删除！");
         }
 
@@ -107,7 +107,7 @@ public class MarkDownFileManager {
 
         Long gid = file.getGid();
 
-        if (!file.getUid().equals(userRolesVo.getUid())
+        if (!Objects.equals(file.getUid(), userRolesVo.getUid())
                 && !isRoot
                 && !isProblemAdmin
                 && !(gid != null && groupValidator.isGroupAdmin(userRolesVo.getUid(), gid))) {

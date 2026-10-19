@@ -148,7 +148,7 @@ const ojRoutes = [
     name: 'ContestDetails',
     path: '/contest/:contestID/',
     component:ContestDetails,
-    meta: {title: 'Contest Details',requireAuth:true},
+    meta: {title: 'Contest Details'},
     children: [
       {
         name: 'ContestSubmissionList',
@@ -190,13 +190,13 @@ const ojRoutes = [
         name: 'ContestACInfo',
         path: 'ac-info',
         component: ACMInfoAdmin,
-        meta: { title: 'Contest AC Info'}
+        meta: { title: 'Contest AC Info', requireAuth: true }
       },
       {
         name:'ContestRejudgeAdmin',
         path:'rejudge',
         component:ContestRejudgeAdmin,
-        meta: { title: 'Contest Rejudge',requireSuperAdmin:true }
+        meta: { title: 'Contest Rejudge', requireAuth: true, requireSuperAdmin: true }
       },
       {
         name: 'ContestComment',
@@ -208,19 +208,19 @@ const ojRoutes = [
         name: 'ContestPrint',
         path:'print',
         component: ContestPrint,
-        meta: { title: 'Contest Print'}
+        meta: { title: 'Contest Print', requireAuth: true }
       },
       {
         name: 'ContestAdminPrint',
         path:'admin-print',
         component: ContestAdminPrint,
-        meta: { title: 'Contest Admin Print'}
+        meta: { title: 'Contest Admin Print', requireAuth: true }
       },
       {
         name: 'ScrollBoard',
         path:'scroll-board',
         component: ScrollBoard,
-        meta: { title: 'Contest Scroll Board'}
+        meta: { title: 'Contest Scroll Board', requireAuth: true }
       }
     ]
   },

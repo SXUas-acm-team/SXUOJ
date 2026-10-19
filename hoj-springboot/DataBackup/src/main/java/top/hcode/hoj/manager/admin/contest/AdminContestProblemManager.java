@@ -212,6 +212,7 @@ public class AdminContestProblemManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Map<Object, Object> addProblem(ProblemDTO problemDto) throws StatusFailException {
 
         QueryWrapper<Problem> queryWrapper = new QueryWrapper<>();
@@ -231,6 +232,7 @@ public class AdminContestProblemManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateProblem(ProblemDTO problemDto) throws StatusForbiddenException, StatusFailException {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -270,6 +272,7 @@ public class AdminContestProblemManager {
         return contestProblem;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public ContestProblem setContestProblem(ContestProblem contestProblem) throws StatusFailException {
         requireContestOwner(contestProblem.getCid());
         if (contestProblem.getId() != null) {

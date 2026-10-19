@@ -36,6 +36,7 @@ import top.hcode.hoj.utils.RedisUtils;
 import top.hcode.hoj.validator.AccessValidator;
 import top.hcode.hoj.validator.CommonValidator;
 import top.hcode.hoj.validator.GroupValidator;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
 
 import java.util.List;
 import java.util.UUID;
@@ -80,6 +81,9 @@ public class DiscussionManager {
 
     @Autowired
     private CommonValidator commonValidator;
+
+    @Autowired
+    private ProblemContentAccessValidator problemContentAccessValidator;
 
     public IPage<Discussion> getDiscussionList(Integer limit,
                                                Integer currentPage,
@@ -133,6 +137,7 @@ public class DiscussionManager {
         }
         IPage<Discussion> discussionIPage = discussionEntityService.page(iPage, discussionQueryWrapper);
         List<Discussion> records = discussionIPage.getRecords();
+        records.removeIf(discussion -> !problemContentAccessValidator.canAccessProblemId(discussion.getPid()));
         if (!CollectionUtils.isEmpty(records)) {
             for (Discussion discussion : records) {
                 if (userRolesVo == null) {
@@ -163,6 +168,7 @@ public class DiscussionManager {
         if (discussionVo == null) {
             throw new StatusNotFoundException("对不起，该讨论不存在！");
         }
+        problemContentAccessValidator.validateProblemIdAccess(discussionVo.getPid());
 
         if (discussionVo.getGid() != null && uid == null) {
             throw new StatusNotFoundException("对不起，请先登录后再访问团队讨论！");
@@ -191,6 +197,7 @@ public class DiscussionManager {
         return discussionVo;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void addDiscussion(Discussion discussion) throws StatusFailException, StatusForbiddenException, StatusNotFoundException {
 
         if (discussion.getId() != null) throw new StatusFailException("新讨论不能指定已有讨论ID！");
@@ -216,6 +223,7 @@ public class DiscussionManager {
             if (problem == null) {
                 throw new StatusNotFoundException("对不起，该题目不存在，无法发布题解!");
             }
+            problemContentAccessValidator.validateProblemAccess(problem.getId(), null);
             if (Boolean.TRUE.equals(problem.getIsGroup())) {
                 if (!isRoot && !groupValidator.isGroupMember(userRolesVo.getUid(), problem.getGid())) {
                     throw new StatusForbiddenException("无权访问该团队题目！");
@@ -274,6 +282,7 @@ public class DiscussionManager {
     }
 
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateDiscussion(Discussion discussion) throws StatusFailException, StatusForbiddenException, StatusNotFoundException {
 
         commonValidator.validateNotEmpty(discussion.getId(), "讨论ID");
@@ -284,13 +293,14 @@ public class DiscussionManager {
 
         QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
         discussionQueryWrapper
-                .select("id", "uid", "gid")
+                .select("id", "uid", "gid", "pid")
                 .eq("id", discussion.getId());
 
         Discussion oriDiscussion = discussionEntityService.getOne(discussionQueryWrapper);
         if (oriDiscussion == null) {
             throw new StatusNotFoundException("更新失败，该讨论不存在！");
         }
+        problemContentAccessValidator.validateProblemIdAccess(oriDiscussion.getPid());
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 

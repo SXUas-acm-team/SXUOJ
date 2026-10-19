@@ -172,6 +172,7 @@ public class GroupManager {
         }
         group.setOwner(userRolesVo.getUsername());
         group.setUid(userRolesVo.getUid());
+        group.setId(null).setStatus(0).setGmtCreate(null).setGmtModified(null);
 
         if (!StringUtils.isEmpty(group.getName()) && (group.getName().length() < 5 || group.getName().length() > 25)) {
             throw new StatusFailException("团队名称的长度应为 5 到 25！");
@@ -217,20 +218,33 @@ public class GroupManager {
         if (!isOk) {
             throw new StatusFailException("创建失败，请重新尝试！");
         } else {
-            groupMemberEntityService.save(new GroupMember()
+            boolean memberSaved = groupMemberEntityService.save(new GroupMember()
                     .setUid(userRolesVo.getUid())
                     .setGid(group.getId())
                     .setAuth(5));
+            if (!memberSaved) {
+                throw new StatusFailException("创建团队成员失败，请重新尝试！");
+            }
         }
     }
 
     public void updateGroup(Group group) throws StatusFailException, StatusForbiddenException {
+        if (group == null || group.getId() == null) {
+            throw new StatusFailException("团队ID不能为空！");
+        }
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
         Group storedGroup = groupEntityService.getById(group.getId());
         if (storedGroup == null) throw new StatusFailException("团队不存在！");
+        if (!isRoot && Integer.valueOf(1).equals(storedGroup.getStatus())) {
+            throw new StatusForbiddenException("该团队已被封禁，请联系管理员！");
+        }
         group.setUid(storedGroup.getUid()).setOwner(storedGroup.getOwner());
+        group.setGmtCreate(null).setGmtModified(null);
+        if (!isRoot) {
+            group.setStatus(storedGroup.getStatus());
+        }
 
         if (!groupValidator.isGroupRoot(userRolesVo.getUid(), group.getId()) && !isRoot) {
             throw new StatusForbiddenException("对不起，您无权限操作！");

@@ -1,0 +1,5 @@
+# Linux deployment scripts must remain executable by /bin/sh after Windows edits.
+*.sh text eol=lf
+*.Dockerfile text eol=lf
+/docker/backend-tests.txt text eol=lf
+/.github/workflows/*.yml text eol=lf

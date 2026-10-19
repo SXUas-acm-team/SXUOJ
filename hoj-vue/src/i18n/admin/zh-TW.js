@@ -1,4 +1,23 @@
 export const m = {
+  Confidential_Contest: "密码保密赛",
+  Confidential_Contest_Tips: "使用私有赛密码入场，不检查参赛名单。比赛结束后封存全部比赛内容；手动或定时解封后向所有人公开，登录用户可直接补题。",
+  Contest_Release_Mode: "赛后解封方式",
+  Manual_Release: "管理员手动解封",
+  Scheduled_Release: "指定时间解封",
+  Contest_Release_Time: "公开解封时间",
+  Contest_Confidential_Status: "保密状态",
+  Contest_Released: "已公开解封",
+  Contest_Sealed: "已封存",
+  Release_Contest_Now: "立即公开解封",
+  Seal_Contest_Again: "重新封存",
+  Release_Action_Saves_Contest: "操作将保存当前比赛设置。重新封存无法收回已被下载或保存的内容。",
+  Confidential_Requires_Private: "密码保密赛必须使用私有赛权限。",
+  Contest_Release_After_End: "解封时间必须有效，且不得早于比赛结束时间。",
+  Contest_Released_Public_Tips: "比赛已公开解封，所有人可查看；登录后可直接补题。",
+  Contest_Sealed_Tips: "比赛内容已封存，请等待管理员手动或定时解封。",
+  Contest_Not_Started_Tips: "比赛尚未开始，题目暂不可查看。",
+  Confidential_Contest_Password_Tips: "本场为密码保密赛，登录并验证比赛密码后才能查看。比赛结束后自动封存。",
+  Contest_Content_Unavailable: "当前无法查看比赛内容，请返回比赛概览查看状态或验证密码。",
   Tips: '提示',
   Warning: '警告',
   Successfully: '成功',
@@ -460,6 +479,7 @@ export const m = {
 
   // components/admin/AddExtraFile.vue
   Delete_Extra_File_Tips: '你是否確定要刪除該額外檔案?',
+  Invalid_Extra_File_Config: '額外檔案配置無效，請檢查檔案名稱和內容。已有配置損壞時，請先修復後重新載入，以免覆蓋原配置。',
   File_Name: '檔案名字',
   File_Content: '檔案內容'
 }

@@ -64,6 +64,8 @@ public class ContestServiceImpl implements ContestService {
             return CommonResult.successResponse(contestManager.getContestAccess(cid));
         } catch (StatusFailException e) {
             return CommonResult.errorResponse(e.getMessage());
+        } catch (StatusForbiddenException e) {
+            return CommonResult.errorResponse(e.getMessage(), ResultStatus.FORBIDDEN);
         }
     }
 

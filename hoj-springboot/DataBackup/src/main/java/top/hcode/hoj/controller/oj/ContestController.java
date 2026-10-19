@@ -55,7 +55,7 @@ public class ContestController {
      * @Since 2020/10/28
      */
     @GetMapping("/get-contest-info")
-    @RequiresAuthentication
+    @AnonApi
     public CommonResult<ContestVO> getContestInfo(@RequestParam(value = "cid", required = true) Long cid) {
 
         return contestService.getContestInfo(cid);
@@ -79,7 +79,7 @@ public class ContestController {
      * @Return
      * @Since 2020/10/28
      */
-    @RequiresAuthentication
+    @AnonApi
     @GetMapping("/get-contest-access")
     public CommonResult<AccessVO> getContestAccess(@RequestParam(value = "cid") Long cid) {
 
@@ -94,6 +94,7 @@ public class ContestController {
      * @Since 2020/10/28
      */
     @GetMapping("/get-contest-problem")
+    @AnonApi
     public CommonResult<List<ContestProblemVO>> getContestProblem(@RequestParam(value = "cid", required = true) Long cid,
                                                                   @RequestParam(value = "containsEnd", defaultValue = "false") Boolean containsEnd) {
 
@@ -101,7 +102,7 @@ public class ContestController {
     }
 
     @GetMapping("/get-contest-problem-details")
-    @RequiresAuthentication
+    @AnonApi
     public CommonResult<ProblemInfoVO> getContestProblemDetails(@RequestParam(value = "cid", required = true) Long cid,
                                                                 @RequestParam(value = "displayId", required = true) String displayId,
                                                                 @RequestParam(value = "containsEnd", defaultValue = "false") Boolean containsEnd) {
@@ -111,7 +112,7 @@ public class ContestController {
 
 
     @GetMapping("/contest-submissions")
-    @RequiresAuthentication
+    @AnonApi
     public CommonResult<IPage<JudgeVO>> getContestSubmissionList(@RequestParam(value = "limit", required = false) Integer limit,
                                                                  @RequestParam(value = "currentPage", required = false) Integer currentPage,
                                                                  @RequestParam(value = "onlyMine", required = false) Boolean onlyMine,
@@ -143,7 +144,7 @@ public class ContestController {
      * @Since 2020/10/28
      */
     @PostMapping("/get-contest-rank")
-    @RequiresAuthentication
+    @AnonApi
     public CommonResult<IPage> getContestRank(@RequestBody ContestRankDTO contestRankDto) {
 
         return contestService.getContestRank(contestRankDto);
@@ -157,7 +158,7 @@ public class ContestController {
      * @Since 2020/10/28
      */
     @GetMapping("/get-contest-announcement")
-    @RequiresAuthentication
+    @AnonApi
     public CommonResult<IPage<AnnouncementVO>> getContestAnnouncement(@RequestParam(value = "cid", required = true) Long cid,
                                                                       @RequestParam(value = "limit", required = false) Integer limit,
                                                                       @RequestParam(value = "currentPage", required = false) Integer currentPage) {
@@ -174,7 +175,7 @@ public class ContestController {
      * @Since 2021/7/17
      */
     @PostMapping("/get-contest-not-read-announcement")
-    @RequiresAuthentication
+    @AnonApi
     public CommonResult<List<Announcement>> getContestUserNotReadAnnouncement(@RequestBody UserReadContestAnnouncementDTO userReadContestAnnouncementDto) {
         return contestService.getContestUserNotReadAnnouncement(userReadContestAnnouncementDto);
     }

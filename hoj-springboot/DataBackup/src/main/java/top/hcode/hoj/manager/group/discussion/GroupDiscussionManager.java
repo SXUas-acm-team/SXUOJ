@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
@@ -24,6 +25,7 @@ import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.utils.RedisUtils;
 import top.hcode.hoj.validator.CommonValidator;
 import top.hcode.hoj.validator.GroupValidator;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
 
 /**
  * @Author: LengYun
@@ -54,6 +56,9 @@ public class GroupDiscussionManager {
     @Autowired
     private CommonValidator commonValidator;
 
+    @Autowired
+    private ProblemContentAccessValidator problemContentAccessValidator;
+
     public IPage<Discussion> getDiscussionList(Integer limit,
                                                Integer currentPage,
                                                Long gid,
@@ -83,7 +88,8 @@ public class GroupDiscussionManager {
             discussionQueryWrapper.eq("pid", pid);
         }
 
-        IPage<Discussion> iPage = new Page<>(currentPage, limit);
+        IPage<Discussion> iPage = new Page<>(top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage),
+                top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10));
 
         discussionQueryWrapper
                 .eq("status", 0)
@@ -93,7 +99,9 @@ public class GroupDiscussionManager {
                 .orderByDesc("like_num")
                 .orderByDesc("view_num");
 
-        return discussionEntityService.page(iPage, discussionQueryWrapper);
+        IPage<Discussion> result = discussionEntityService.page(iPage, discussionQueryWrapper);
+        result.getRecords().removeIf(discussion -> !problemContentAccessValidator.canAccessProblemId(discussion.getPid()));
+        return result;
     }
 
     public IPage<Discussion> getAdminDiscussionList(Integer limit, Integer currentPage, Long gid) throws StatusNotFoundException, StatusForbiddenException {
@@ -118,7 +126,8 @@ public class GroupDiscussionManager {
 
         QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
 
-        IPage<Discussion> iPage = new Page<>(currentPage, limit);
+        IPage<Discussion> iPage = new Page<>(top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage),
+                top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10));
 
         discussionQueryWrapper
                 .eq("gid", gid)
@@ -130,6 +139,7 @@ public class GroupDiscussionManager {
         return discussionEntityService.page(iPage, discussionQueryWrapper);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void addDiscussion(Discussion discussion) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
 
         if (discussion.getId() != null) throw new StatusFailException("新讨论不能指定已有讨论ID！");
@@ -175,6 +185,7 @@ public class GroupDiscussionManager {
                     throw new StatusForbiddenException("题目与讨论必须属于同一团队！");
                 }
             }
+            problemContentAccessValidator.validateProblemAccess(problem.getId(), null);
         }
 
         if (!isRoot && !isProblemAdmin && !isAdmin) {
@@ -216,6 +227,7 @@ public class GroupDiscussionManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateDiscussion(Discussion discussion) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
 
         commonValidator.validateNotEmpty(discussion.getId(), "讨论ID");
@@ -226,13 +238,14 @@ public class GroupDiscussionManager {
 
         QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
         discussionQueryWrapper
-                .select("id", "uid", "gid")
+                .select("id", "uid", "gid", "pid")
                 .eq("id", discussion.getId());
 
         Discussion oriDiscussion = discussionEntityService.getOne(discussionQueryWrapper);
         if (oriDiscussion == null) {
             throw new StatusNotFoundException("更新失败，该讨论不存在！");
         }
+        problemContentAccessValidator.validateProblemIdAccess(oriDiscussion.getPid());
 
         Long gid = oriDiscussion.getGid();
         if (gid == null) {
@@ -277,6 +290,9 @@ public class GroupDiscussionManager {
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
 
         Discussion discussion = discussionEntityService.getById(did);
+        if (discussion == null) {
+            throw new StatusNotFoundException("删除失败，该讨论不存在！");
+        }
 
         Long gid = discussion.getGid();
         if (gid == null) {

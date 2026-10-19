@@ -156,6 +156,24 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
         List<CodeTemplate> oldProblemTemplate = (List<CodeTemplate>) codeTemplateEntityService.listByMap(map);
         List<ProblemTag> oldProblemTags = (List<ProblemTag>) problemTagEntityService.listByMap(map);
 
+        // Client IDs may only update child rows already owned by this problem.
+        Set<Integer> existingTemplateIds = oldProblemTemplate.stream().map(CodeTemplate::getId)
+                .collect(Collectors.toSet());
+        Set<Long> existingCaseIds = oldProblemCases.stream().map(ProblemCase::getId)
+                .collect(Collectors.toSet());
+        for (CodeTemplate template : problemDto.getCodeTemplates()) {
+            if (template.getId() != null && !existingTemplateIds.contains(template.getId())) {
+                throw new IllegalArgumentException("Code template belongs to a different problem");
+            }
+            template.setPid(pid).setGmtCreate(null).setGmtModified(null);
+        }
+        for (ProblemCase sample : problemDto.getSamples()) {
+            if (sample.getId() != null && !existingCaseIds.contains(sample.getId())) {
+                throw new IllegalArgumentException("Test case belongs to a different problem");
+            }
+            sample.setPid(pid).setGmtCreate(null).setGmtModified(null);
+        }
+
         Map<Long, Integer> mapOldPT = new HashMap<>();
         Map<Long, Integer> mapOldPL = new HashMap<>();
         Map<Integer, Integer> mapOldPCT = new HashMap<>();
@@ -404,6 +422,18 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
         validateProblemFiles(problemDto);
 
         Problem problem = problemDto.getProblem();
+
+        problem.setId(null).setGmtCreate(null).setGmtModified(null);
+        if (problemDto.getCodeTemplates() != null) {
+            for (CodeTemplate template : problemDto.getCodeTemplates()) {
+                template.setId(null).setGmtCreate(null).setGmtModified(null);
+            }
+        }
+        if (problemDto.getSamples() != null) {
+            for (ProblemCase sample : problemDto.getSamples()) {
+                sample.setId(null).setGmtCreate(null).setGmtModified(null);
+            }
+        }
 
         if (Constants.JudgeMode.DEFAULT.getMode().equals(problemDto.getJudgeMode())) {
             problem.setSpjLanguage(null)
@@ -805,7 +835,7 @@ public class ProblemEntityServiceImpl extends ServiceImpl<ProblemMapper, Problem
 
         if (!StringUtils.isEmpty(problem.getJudgeExtraFile())) {
             HashMap<String, String> judgeExtraFileMap = (HashMap<String, String>) JSONUtil.toBean(problem.getJudgeExtraFile(), Map.class);
-            importProblemVo.setUserExtraFile(judgeExtraFileMap);
+            importProblemVo.setJudgeExtraFile(judgeExtraFileMap);
         }
 
         QueryWrapper<ProblemTag> problemTagQueryWrapper = new QueryWrapper<>();

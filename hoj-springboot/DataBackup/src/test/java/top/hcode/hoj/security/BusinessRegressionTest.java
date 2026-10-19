@@ -382,6 +382,7 @@ class BusinessRegressionTest {
 
     private GroupContestManager groupContestManager(ContestEntityService contests) {
         GroupContestManager manager = new GroupContestManager();
+        inject(manager, "contestAccessPolicyManager", mock(top.hcode.hoj.manager.oj.ContestAccessPolicyManager.class));
         inject(manager, "contestEntityService", contests);
         inject(manager, "groupEntityService", groups);
         inject(manager, "groupValidator", validator);
@@ -405,7 +406,7 @@ class BusinessRegressionTest {
     @Test void groupContestEditsCannotMoveContestOrChangeItsOwner() throws Exception {
         ContestEntityService contests = mock(ContestEntityService.class);
         GroupContestManager manager = groupContestManager(contests);
-        when(contests.getById(10L)).thenReturn(new Contest().setId(10L).setUid("operator").setAuthor("operator")
+        when(contests.getByIdForUpdate(10L)).thenReturn(new Contest().setId(10L).setUid("operator").setAuthor("operator")
                 .setGid(7L).setIsGroup(true).setAuth(0));
         AdminContestVO request = contestRequest();
         request.setGid(999L);

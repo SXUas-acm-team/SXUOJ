@@ -1,5 +1,8 @@
 <template>
   <div class="scoreboard-body">
+    <el-alert v-if="scoreboardMenuDisabled" :title="$t('m.Contest_Content_Unavailable')" type="warning" :closable="false" show-icon />
+    <router-link v-if="scoreboardMenuDisabled" :to="{ name: 'ContestDetails', params: { contestID: $route.params.contestID } }">{{ $t('m.Overview') }}</router-link>
+    <template v-if="!scoreboardMenuDisabled">
     <el-card
       shadow
       v-loading="loading.info"
@@ -427,12 +430,15 @@
               >
                 <div slot="content">
                   {{ problem.displayId + '. ' + problem.displayTitle }}
-                  <br />
-                  {{ 'Accepted: ' + problem.ac }}
-                  <br />
-                  {{ 'Rejected: ' + (problem.total - problem.ac) }}
+                  <template v-if="problem.ac != null && problem.total != null">
+                    <br />
+                    {{ 'Accepted: ' + problem.ac }}
+                    <br />
+                    {{ 'Rejected: ' + (problem.total - problem.ac) }}
+                  </template>
                 </div>
-                <span>({{ problem.ac }}/{{ problem.total }}) </span>
+                <span v-if="problem.ac != null && problem.total != null">({{ problem.ac }}/{{ problem.total }}) </span>
+                <span v-else>—</span>
               </el-tooltip>
             </span>
           </template>
@@ -491,6 +497,7 @@
         :layout="'prev, pager, next, sizes'"
       ></Pagination>
     </el-card>
+    </template>
   </div>
 </template>
 <script>

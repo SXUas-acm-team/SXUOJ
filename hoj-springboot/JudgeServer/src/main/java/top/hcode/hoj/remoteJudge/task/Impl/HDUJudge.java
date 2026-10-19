@@ -54,8 +54,9 @@ public class HDUJudge extends RemoteJudgeStrategy {
         login();
 
         List<HttpCookie> cookies = remoteJudgeDTO.getCookies();
+        Long previousId = getMaxRunId(remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
 
-        HttpRequest request = SecureHttp.post(HOST + SUBMIT_URL)
+        HttpRequest request = postRequest(HOST + SUBMIT_URL)
                 .addHeaders(headers)
                 .form(MapUtil
                         .builder(new HashMap<String, Object>())
@@ -70,11 +71,7 @@ public class HDUJudge extends RemoteJudgeStrategy {
         remoteJudgeDTO.setSubmitStatus(response.getStatus());
         // 提交频率限制了 等待5秒再次提交
         if (response.getStatus() == 200 && response.body() != null && response.body().contains("Please don't re-submit")) {
-            try {
-                TimeUnit.SECONDS.sleep(5);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            pauseBeforeRetry(5);
             response = request.execute();
             remoteJudgeDTO.setSubmitStatus(response.getStatus());
             if (response.getStatus() != 302) {
@@ -87,16 +84,12 @@ public class HDUJudge extends RemoteJudgeStrategy {
         }
         // 获取提交的题目id
         Long maxRunId = getMaxRunId(remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
-        if (maxRunId == -1L) { // 等待2s再次查询，如果还是失败，则表明提交失败了
-            try {
-                TimeUnit.SECONDS.sleep(2);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        if (maxRunId <= previousId) {
+            pauseBeforeRetry(2);
             maxRunId = getMaxRunId(remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
         }
         remoteJudgeDTO.setCookies(cookies)
-                .setSubmitId(maxRunId);
+                .setSubmitId(maxRunId > previousId ? maxRunId : -1L);
     }
 
     @Override
@@ -191,8 +184,9 @@ public class HDUJudge extends RemoteJudgeStrategy {
 
 
     public Long getMaxRunId(String userName, String problemId) {
-        String url = HOST + String.format(STATUS_URL, userName, problemId);
-        HttpResponse response = SecureHttp.get(url).addHeaders(headers).execute();
+        String url = HOST + String.format(STATUS_URL, queryValue(userName), queryValue(problemId));
+        HttpResponse response = getRequest(url).cookie(getRemoteJudgeDTO().getCookies()).addHeaders(headers).execute();
+        if (response.getStatus() != 200) throw new IllegalStateException("HDU submission list is unavailable");
         String maxRunId = ReUtil.get("<td height=22px>(\\d+)", response.body(), 1);
         return maxRunId != null ? Long.parseLong(maxRunId) : -1L;
     }

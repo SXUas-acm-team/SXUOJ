@@ -27,6 +27,15 @@ hoj_judgeserver/
 .env
 .env.*
 !.env.example
+# Deployment snapshots contain resolved runtime credentials.
+.sxuoj-deploy/
+deploy/*.env
+/dist/
+/sxuoj-backend*.tar
+# Production backup supplied for isolated local verification only.
+/main/
+/main.zip
+/sxuoj-frontend*.tar
 extand/*.xls
 extand/*.xlsx
 SECURITY_REMEDIATION.md

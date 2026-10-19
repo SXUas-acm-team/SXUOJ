@@ -23,6 +23,7 @@ import top.hcode.hoj.pojo.entity.user.UserInfo;
 import top.hcode.hoj.pojo.vo.UserRolesVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.UploadFileUtils;
 import top.hcode.hoj.validator.GroupValidator;
 
 import java.io.File;
@@ -61,10 +62,7 @@ public class ImageManager {
             throw new StatusFailException("上传的头像图片文件大小不能大于2M！");
         }
         //获取文件后缀
-        String suffix = image.getOriginalFilename().substring(image.getOriginalFilename().lastIndexOf(".") + 1);
-        if (!"jpg,jpeg,gif,png,webp".toUpperCase().contains(suffix.toUpperCase())) {
-            throw new StatusFailException("请选择jpg,jpeg,gif,png,webp格式的头像图片！");
-        }
+        String suffix = UploadFileUtils.requireExtension(image, "jpg", "jpeg", "gif", "png", "webp");
         //若不存在该目录，则创建目录
         FileUtil.mkdir(Constants.File.USER_AVATAR_FOLDER.getPath());
         //通过UUID生成唯一文件名
@@ -136,10 +134,7 @@ public class ImageManager {
             throw new StatusFailException("上传的头像图片文件大小不能大于2M！");
         }
 
-        String suffix = image.getOriginalFilename().substring(image.getOriginalFilename().lastIndexOf(".") + 1);
-        if (!"jpg,jpeg,gif,png,webp".toUpperCase().contains(suffix.toUpperCase())) {
-            throw new StatusFailException("请选择jpg,jpeg,gif,png,webp格式的头像图片！");
-        }
+        String suffix = UploadFileUtils.requireExtension(image, "jpg", "jpeg", "gif", "png", "webp");
 
         FileUtil.mkdir(Constants.File.GROUP_AVATAR_FOLDER.getPath());
 
@@ -179,10 +174,7 @@ public class ImageManager {
         }
 
         //获取文件后缀
-        String suffix = image.getOriginalFilename().substring(image.getOriginalFilename().lastIndexOf(".") + 1);
-        if (!"jpg,jpeg,gif,png,webp,jfif,svg".toUpperCase().contains(suffix.toUpperCase())) {
-            throw new StatusFailException("请选择jpg,jpeg,gif,png,webp,jfif,svg格式的头像图片！");
-        }
+        String suffix = UploadFileUtils.requireExtension(image, "jpg", "jpeg", "gif", "png", "webp", "jfif", "svg");
         //若不存在该目录，则创建目录
         FileUtil.mkdir(Constants.File.HOME_CAROUSEL_FOLDER.getPath());
         //通过UUID生成唯一文件名

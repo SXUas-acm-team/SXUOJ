@@ -207,7 +207,6 @@ public class JwtFilter extends AuthenticatingFilter {
         if (locked) {
             try {
                 String newToken = jwtUtils.refreshToken(userId, request.getHeader("Authorization"));
-                response.setHeader("Access-Control-Allow-Credentials", "true");
                 response.setHeader("Authorization", newToken); //放到信息头部
                 response.setHeader("Access-Control-Expose-Headers", "Refresh-Token,Authorization,Url-Type"); //让前端可用访问
                 if (request.getHeader("Url-Type") != null) response.setHeader("Url-Type", request.getHeader("Url-Type"));
@@ -235,7 +234,6 @@ public class JwtFilter extends AuthenticatingFilter {
             String json = JSONUtil.toJsonStr(result);
             httpResponse.setContentType("application/json;charset=utf-8");
             httpResponse.setHeader("Access-Control-Expose-Headers", "Refresh-Token,Authorization,Url-Type"); //让前端可用访问
-            httpResponse.setHeader("Access-Control-Allow-Credentials", "true");
             if (httpRequest.getHeader("Url-Type") != null) httpResponse.setHeader("Url-Type", httpRequest.getHeader("Url-Type"));
             httpResponse.setStatus(resultStatus.getStatus());
             httpResponse.getWriter().print(json);
@@ -250,7 +248,9 @@ public class JwtFilter extends AuthenticatingFilter {
     protected boolean preHandle(ServletRequest request, ServletResponse response) throws Exception {
         HttpServletRequest httpServletRequest = WebUtils.toHttp(request);
         HttpServletResponse httpServletResponse = WebUtils.toHttp(response);
-        httpServletResponse.setHeader("Access-control-Allow-Origin", httpServletRequest.getHeader("Origin"));
+        // Authentication uses an explicit Authorization header, never ambient cookies.
+        // Keep public/token-based CORS support without trusting arbitrary origins with credentials.
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
         httpServletResponse.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PUT,DELETE");
         httpServletResponse.setHeader("Access-Control-Allow-Headers", httpServletRequest.getHeader("Access-Control-Request-Headers"));
         httpServletResponse.setHeader("Access-Control-Expose-Headers",

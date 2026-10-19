@@ -50,6 +50,7 @@ public class AdminContestAnnouncementManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateAnnouncement(AnnouncementDTO announcementDto) throws StatusFailException {
         boolean isOk = announcementEntityService.saveOrUpdate(announcementDto.getAnnouncement());
         if (!isOk) { // 删除成功

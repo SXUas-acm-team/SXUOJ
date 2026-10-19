@@ -42,7 +42,7 @@ public class SPOJProblemStrategy extends ProblemStrategy {
 
     @Override
     public RemoteProblemInfo getProblemInfo(String problemId, String author) throws Exception {
-        problemId = problemId.toUpperCase();
+        problemId = RemoteProblemId.spoj(problemId);
         String body = SecureHttp.getBody(getProblemUrl(problemId));
         String title = ReUtil.get("<h2 id=\"problem-name\" class=\"text-center\">[\\s\\S]*? - ([\\s\\S]*?)</h2>", body, 1);
         String timeLimit = ReUtil.get("Time limit:</td><td>([\\s\\S]*?)s", body, 1);

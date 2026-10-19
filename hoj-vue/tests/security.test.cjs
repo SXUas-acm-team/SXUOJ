@@ -7,6 +7,7 @@ const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://oj.example/', runScripts: 'outside-only' });
 global.window = dom.window;
 global.document = dom.window.document;
+global.Node = dom.window.Node;
 global.navigator = dom.window.navigator;
 const Vue = require('vue');
 const compiler = require('vue-template-compiler');
@@ -224,3 +225,70 @@ test('guarded VXE still installs and renders ordinary and hostile text cells', a
   assert.equal(app.$el.querySelectorAll('img,script').length,0);assert.ok(app.$el.textContent.includes(name));
   const element=app.$el;app.$destroy();element.remove();
 });
+
+for (const page of ['ACMRank', 'OIRank']) {
+  test(`${page} signatures render Markdown and math safely across row updates`, async () => {
+    const { secureMarkdownRenderer } = require('../src/common/security');
+    const previousRenderer = Vue.prototype.$markDown;
+    const markdown = require('mavon-editor').mavonEditor.getMarkdownIt();
+    Vue.prototype.$markDown = secureMarkdownRenderer(markdown, require('highlight.js'));
+    const katexPlugin = loadJS(fs.readFileSync(path.join(__dirname, '../src/common/katex.js'), 'utf8'), {
+      'katex/dist/katex.min.css': {},
+    }).default;
+    Vue.use(katexPlugin);
+    const Markdown = loadComponent('components/oj/common/Markdown.vue');
+    const RankSignature = loadComponent('components/oj/common/RankSignature.vue', {
+      '@/components/oj/common/Markdown': Markdown,
+    });
+    const component = loadComponent(`views/oj/rank/${page}.vue`, {
+      '@/components/oj/common/RankSignature': RankSignature,
+    });
+    const rank = new Vue({ ...component,
+      components: { ...component.components, Pagination: { render: h => h('div') } },
+      computed: {}, created: [], beforeDestroy: [],
+      methods: { ...component.methods, $t: key => key },
+      beforeCreate() { this.$i18n = { t: key => key }; },
+    });
+    function signatureColumn(vnode) {
+      const props = (vnode.componentOptions && vnode.componentOptions.propsData) || (vnode.data && vnode.data.attrs) || {};
+      if (props.title === 'm.Signature') return vnode;
+      const children = vnode.children || (vnode.componentOptions && vnode.componentOptions.children) || [];
+      for (const child of children) {
+        const found = signatureColumn(child);
+        if (found) return found;
+      }
+    }
+    const column = signatureColumn(rank._render());
+    assert.ok(column, 'the ranking page must expose its signature column');
+    const app = new Vue({
+      data: { row: { signature: '**粗体简介** *斜体* [主页](https://example.com) `code` $x^2$\n\n第二段\n\n' + payloads.join('') } },
+      render(h) { return h('div', column.data.scopedSlots.default({ row: this.row })); },
+    });
+    try {
+      app.$mount();
+      const body = app.$el.querySelector('.rank-signature-body');
+      assert.ok(body);
+      assert.equal(body.querySelector('strong').textContent, '粗体简介');
+      assert.equal(body.querySelector('em').textContent, '斜体');
+      assert.equal(body.querySelector('a').href, 'https://example.com/');
+      assert.equal(body.querySelector('code').textContent, 'code');
+      assert.ok(body.querySelector('.katex'));
+      assert.match(body.textContent, /第二段/);
+      assertSafeHtml(body.innerHTML);
+
+      app.row.signature = '**新简介** $y^3$ <img src=x onerror="window.pwned=1">';
+      await Vue.nextTick();
+      assert.equal(app.$el.querySelector('strong').textContent, '新简介');
+      assert.ok(app.$el.querySelector('.katex'));
+      assertSafeHtml(app.$el.innerHTML);
+
+      app.row.signature = null;
+      await Vue.nextTick();
+      assert.equal(app.$el.textContent, '');
+      assert.equal(app.$el.querySelector('.rank-signature-body'), null);
+    } finally {
+      app.$destroy(); rank.$destroy();
+      Vue.prototype.$markDown = previousRenderer;
+    }
+  });
+}

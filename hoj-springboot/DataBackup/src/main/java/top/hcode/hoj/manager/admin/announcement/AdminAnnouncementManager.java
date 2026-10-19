@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.dao.common.AnnouncementEntityService;
 import top.hcode.hoj.pojo.entity.common.Announcement;
@@ -51,6 +52,7 @@ public class AdminAnnouncementManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateAnnouncement(Announcement announcement) throws StatusFailException {
         boolean isOk = announcementEntityService.saveOrUpdate(announcement);
         if (!isOk) {

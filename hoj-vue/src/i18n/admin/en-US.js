@@ -1,4 +1,23 @@
 export const m = {
+  Confidential_Contest: "Password confidential contest",
+  Confidential_Contest_Tips: "A password is the only entry requirement after login; account lists are ignored. All content is sealed when the contest ends. Manual or scheduled release makes it public and allows logged-in users to submit.",
+  Contest_Release_Mode: "Release after contest",
+  Manual_Release: "Manual release",
+  Scheduled_Release: "Scheduled release",
+  Contest_Release_Time: "Public release time",
+  Contest_Confidential_Status: "Confidential status",
+  Contest_Released: "Released publicly",
+  Contest_Sealed: "Sealed",
+  Release_Contest_Now: "Release publicly now",
+  Seal_Contest_Again: "Seal again",
+  Release_Action_Saves_Contest: "This action saves the current contest settings. Sealing cannot recall content already downloaded or saved.",
+  Confidential_Requires_Private: "A confidential contest must use private contest access.",
+  Contest_Release_After_End: "Enter a valid release time at or after the contest end.",
+  Contest_Released_Public_Tips: "The contest is public. Anyone can view it; log in to submit without a password.",
+  Contest_Sealed_Tips: "Contest content is sealed until manual or scheduled release.",
+  Contest_Not_Started_Tips: "The contest has not started. Problems are not available yet.",
+  Confidential_Contest_Password_Tips: "Log in and verify the contest password to view this confidential contest. Content is sealed automatically when it ends.",
+  Contest_Content_Unavailable: "Contest content is unavailable. Return to the overview for its status or password verification.",
   Tips: 'Tips',
   Warning: 'Warning',
   Successfully: 'Successfully',
@@ -462,6 +481,7 @@ export const m = {
 
   // components/admin/AddExtraFile.vue
   Delete_Extra_File_Tips: 'Are you sure you want to delete this extra file?',
+  Invalid_Extra_File_Config: 'Invalid extra file names or contents. Repair and reload existing invalid configurations before saving to avoid overwriting them.',
   File_Name: 'File Name',
   File_Content: 'File Content'
 }

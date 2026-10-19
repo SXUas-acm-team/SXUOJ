@@ -47,17 +47,20 @@ class BackendAuthorizationTest {
     }
     @Test void groupOutsiderCannotSubmitEvenAfterContestEnds() {
         ContestValidator validator = new ContestValidator();
+        inject(validator, "contestAccessPolicyManager", mock(ContestAccessPolicyManager.class));
         inject(validator, "groupValidator", mock(GroupValidator.class));
         assertThrows(StatusForbiddenException.class, () -> validator.validateJudgeAuth(contest(Constants.Contest.STATUS_ENDED.getCode()), user.getUid()));
     }
     @Test void anonymousPrivateContestReadIsDeniedWithoutNullDereference() {
         ContestValidator validator = new ContestValidator();
+        inject(validator, "contestAccessPolicyManager", mock(ContestAccessPolicyManager.class));
         inject(validator, "groupValidator", mock(GroupValidator.class));
         Contest privateContest = contest(Constants.Contest.STATUS_RUNNING.getCode()).setIsGroup(false).setAuth(1);
         assertThrows(StatusForbiddenException.class, () -> validator.validateContestAuth(privateContest, null, false));
     }
     @Test void externalRankCannotReadPrivateContestOrScheduledContest() throws Exception {
         ContestValidator validator = new ContestValidator();
+        inject(validator, "contestAccessPolicyManager", mock(ContestAccessPolicyManager.class));
         ContestEntityService service = mock(ContestEntityService.class);
         inject(validator, "contestEntityService", service);
         inject(validator, "groupValidator", mock(GroupValidator.class));
@@ -71,6 +74,8 @@ class BackendAuthorizationTest {
     }
     @Test void endedContestResubmitDoesNotMutateJudgingState() {
         JudgeManager manager = new JudgeManager();
+        inject(manager, "problemContentAccessValidator", mock(ProblemContentAccessValidator.class));
+        inject(manager, "contestValidator", mock(ContestValidator.class));
         JudgeEntityService judges = mock(JudgeEntityService.class);
         ContestEntityService contests = mock(ContestEntityService.class);
         RedisUtils redis = new RedisUtils(); RedisTemplate template = mock(RedisTemplate.class); redis.setRedisTemplate(template);
@@ -81,20 +86,26 @@ class BackendAuthorizationTest {
         verifyNoInteractions(template); verify(judges, never()).updateById(any(Judge.class));
     }
     @Test void successfulSubmissionCannotBeRetriedToChangeItsVerdict() {
-        JudgeManager manager = new JudgeManager(); JudgeEntityService judges = mock(JudgeEntityService.class);
+        JudgeManager manager = new JudgeManager();
+        inject(manager, "problemContentAccessValidator", mock(ProblemContentAccessValidator.class));
+        inject(manager, "contestValidator", mock(ContestValidator.class)); JudgeEntityService judges = mock(JudgeEntityService.class);
         inject(manager, "judgeEntityService", judges);
         when(judges.getById(1L)).thenReturn(new Judge().setUid(user.getUid()).setCid(0L).setStatus(Constants.Judge.STATUS_ACCEPTED.getStatus()));
         assertThrows(StatusForbiddenException.class, () -> manager.resubmit(1L));
     }
     @Test void testcaseResultsCannotBeEnumeratedByAnotherUser() {
-        JudgeManager manager = new JudgeManager(); JudgeEntityService judges = mock(JudgeEntityService.class);
+        JudgeManager manager = new JudgeManager();
+        inject(manager, "problemContentAccessValidator", mock(ProblemContentAccessValidator.class));
+        inject(manager, "contestValidator", mock(ContestValidator.class)); JudgeEntityService judges = mock(JudgeEntityService.class);
         inject(manager, "judgeEntityService", judges);
         when(judges.getById(1L)).thenReturn(new Judge().setUid("victim").setCid(0L));
         assertThrows(StatusForbiddenException.class, () -> manager.getALLCaseResult(1L));
     }
     @Test void privateSubmissionMetadataIsDeniedToAnonymousCaller() {
         when(subject.getPrincipal()).thenReturn(null);
-        JudgeManager manager = new JudgeManager(); JudgeEntityService judges = mock(JudgeEntityService.class);
+        JudgeManager manager = new JudgeManager();
+        inject(manager, "problemContentAccessValidator", mock(ProblemContentAccessValidator.class));
+        inject(manager, "contestValidator", mock(ContestValidator.class)); JudgeEntityService judges = mock(JudgeEntityService.class);
         inject(manager, "judgeEntityService", judges);
         when(judges.getById(1L)).thenReturn(new Judge().setUid("victim").setCid(0L).setShare(false));
         assertThrows(StatusAccessDeniedException.class, () -> manager.getSubmission(1L));

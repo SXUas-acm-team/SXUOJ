@@ -57,13 +57,8 @@ public class JudgeValidator {
             throw new StatusFailException("提交的代码的语言错误！请使用" + HOJ_LANGUAGE_LIST + "中之一的语言！");
         }
 
-        if (submitJudgeDto.getCode().length() < 50
-                && !submitJudgeDto.getLanguage().contains("Py")
-                && !submitJudgeDto.getLanguage().contains("PHP")
-                && !submitJudgeDto.getLanguage().contains("Ruby")
-                && !submitJudgeDto.getLanguage().contains("Rust")
-                && !submitJudgeDto.getLanguage().contains("JavaScript")) {
-            throw new StatusFailException("提交的代码是无效的，代码字符长度请不要低于50！");
+        if (!StringUtils.hasText(submitJudgeDto.getCode())) {
+            throw new StatusFailException("提交的代码不可为空！");
         }
 
         if (submitJudgeDto.getCode().length() > 65535) {
@@ -87,7 +82,7 @@ public class JudgeValidator {
                 throw new StatusFailException("请求参数type错误！");
         }
 
-        if (StringUtils.isEmpty(testJudgeDto.getCode())) {
+        if (!StringUtils.hasText(testJudgeDto.getCode())) {
             throw new StatusFailException("在线调试的代码不可为空！");
         }
 
@@ -135,15 +130,6 @@ public class JudgeValidator {
 
         if (testJudgeDto.getPid() == null) {
             throw new StatusFailException("在线调试所属题目的id不能为空！");
-        }
-
-        if (testJudgeDto.getCode().length() < 50
-                && !testJudgeDto.getLanguage().contains("Py")
-                && !testJudgeDto.getLanguage().contains("PHP")
-                && !testJudgeDto.getLanguage().contains("Ruby")
-                && !testJudgeDto.getLanguage().contains("Rust")
-                && !testJudgeDto.getLanguage().contains("JavaScript")) {
-            throw new StatusFailException("提交的代码是无效的，代码字符长度请不要低于50！");
         }
 
         if (testJudgeDto.getCode().length() > 65535) {

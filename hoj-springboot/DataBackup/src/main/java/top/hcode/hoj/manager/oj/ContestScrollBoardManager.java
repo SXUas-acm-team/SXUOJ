@@ -5,6 +5,10 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.stereotype.Component;
+import org.apache.shiro.SecurityUtils;
+import top.hcode.hoj.common.exception.StatusForbiddenException;
+import top.hcode.hoj.shiro.AccountProfile;
+import top.hcode.hoj.validator.ContestValidator;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import top.hcode.hoj.common.exception.StatusFailException;
@@ -34,6 +38,20 @@ import java.util.stream.Collectors;
 public class ContestScrollBoardManager {
 
     @Resource
+    private ContestValidator contestValidator;
+
+    private void validateConfidentialAccess(Contest contest) throws StatusFailException {
+        if (!Boolean.TRUE.equals(contest.getVisible())) throw new StatusFailException("比赛不存在！");
+        if (contestValidator.isConfidential(contest)) {
+            try {
+                contestValidator.validateContestAuth(contest,
+                        (AccountProfile) SecurityUtils.getSubject().getPrincipal(),
+                        SecurityUtils.getSubject().hasRole("root"));
+            } catch (StatusForbiddenException e) { throw new StatusFailException(e.getMessage()); }
+        }
+    }
+
+    @Resource
     private ContestEntityService contestEntityService;
 
     @Resource
@@ -54,6 +72,7 @@ public class ContestScrollBoardManager {
         if (contest == null) {
             throw new StatusFailException("比赛不存在 (The contest does not exist)");
         }
+        validateConfidentialAccess(contest);
 
         if (!Objects.equals(contest.getType(), Constants.Contest.TYPE_ACM.getCode())) {
             throw new StatusFailException("非ACM赛制的比赛无法进行滚榜  (Non - ACM contest board cannot be rolled)");
@@ -116,6 +135,7 @@ public class ContestScrollBoardManager {
         if (contest == null) {
             throw new StatusFailException("比赛不存在 (The contest does not exist)");
         }
+        validateConfidentialAccess(contest);
 
         if (!Objects.equals(contest.getType(), Constants.Contest.TYPE_ACM.getCode())) {
             throw new StatusFailException("非ACM赛制的比赛无法进行滚榜  (Non - ACM contest board cannot be rolled)");

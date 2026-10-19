@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
 import org.springframework.transaction.annotation.Transactional;
 import top.hcode.hoj.common.exception.StatusAccessDeniedException;
 import top.hcode.hoj.common.exception.StatusFailException;
@@ -86,6 +87,9 @@ public class BeforeDispatchInitManager {
     @Resource
     private AccessValidator accessValidator;
 
+    @Resource
+    private ProblemContentAccessValidator problemContentAccessValidator;
+
     public void initCommonSubmission(String problemId, Long gid, Judge judge) throws StatusForbiddenException, AccessException {
         judge.setGid(null);
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -103,6 +107,7 @@ public class BeforeDispatchInitManager {
             throw new StatusForbiddenException("错误！当前题目不可提交！");
         }
 
+        problemContentAccessValidator.validateProblemAccess(problem.getId(), null);
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
         accessValidator.validateAccess(Boolean.TRUE.equals(problem.getIsGroup())
                 ? HOJAccessEnum.GROUP_JUDGE : HOJAccessEnum.PUBLIC_JUDGE);
@@ -137,29 +142,9 @@ public class BeforeDispatchInitManager {
         if (contest == null) {
             throw new StatusNotFoundException("对不起，该比赛不存在！");
         }
-        // 首先判断一下比赛的状态是否是正在进行，结束状态都不能提交(除非开启允许赛后提交)，比赛前比赛管理员可以提交
-        if (Objects.equals(contest.getAllowEndSubmit(), false)){
-            if (contest.getStatus().intValue() == Constants.Contest.STATUS_ENDED.getCode()) {
-                throw new StatusForbiddenException("比赛已结束，不可再提交！");
-            }
-        }
-
-        // 是否为超级管理员或者该比赛的创建者，则为比赛管理者
+        // Every submission uses the same live password, time and publication decision.
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
-        if (!isRoot && !contest.getUid().equals(userRolesVo.getUid())
-                && !(contest.getIsGroup() && groupValidator.isGroupRoot(userRolesVo.getUid(), contest.getGid()))) {
-            if (contest.getStatus().intValue() == Constants.Contest.STATUS_SCHEDULED.getCode()) {
-                throw new StatusForbiddenException("比赛未开始，不可提交！");
-            }
-            // 需要检查是否有权限在当前比赛进行提交
-            contestValidator.validateJudgeAuth(contest, userRolesVo.getUid());
-
-            // 需要校验当前比赛是否为保护或私有比赛，同时是否开启账号规则限制，如果有，需要对当前用户的用户名进行验证
-            if (contest.getOpenAccountLimit()
-                    && !contestValidator.validateAccountRule(contest.getAccountLimitRule(), userRolesVo.getUsername())) {
-                throw new StatusForbiddenException("对不起！本次比赛只允许符合特定账号规则的用户参赛！");
-            }
-        }
+        contestValidator.validateJudgeAuth(contest, userRolesVo, isRoot);
 
         // 查询获取对应的pid和cpid
         QueryWrapper<ContestProblem> contestProblemQueryWrapper = new QueryWrapper<>();
@@ -168,6 +153,7 @@ public class BeforeDispatchInitManager {
         if (contestProblem == null) {
             throw new StatusNotFoundException("该比赛题目不存在！");
         }
+        problemContentAccessValidator.validateProblemAccess(contestProblem.getPid(), cid);
         accessValidator.validateAccess(Boolean.TRUE.equals(contest.getIsGroup())
                 ? HOJAccessEnum.GROUP_JUDGE : HOJAccessEnum.CONTEST_JUDGE);
         judge.setCpid(contestProblem.getId())
@@ -234,6 +220,7 @@ public class BeforeDispatchInitManager {
         if (trainingProblem == null) {
             throw new StatusFailException("该训练题目不存在！");
         }
+        problemContentAccessValidator.validateProblemAccess(trainingProblem.getPid(), null);
         judge.setPid(trainingProblem.getPid());
 
         Problem problem = problemEntityService.getById(trainingProblem.getPid());

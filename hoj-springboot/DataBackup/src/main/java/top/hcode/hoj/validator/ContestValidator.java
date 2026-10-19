@@ -11,6 +11,9 @@ import top.hcode.hoj.dao.contest.ContestRegisterEntityService;
 import top.hcode.hoj.dao.contest.ContestEntityService;
 import top.hcode.hoj.pojo.entity.contest.Contest;
 import top.hcode.hoj.pojo.entity.contest.ContestRegister;
+import top.hcode.hoj.pojo.entity.contest.ContestAccessPolicy;
+import top.hcode.hoj.manager.oj.ContestAccessPolicyManager;
+import top.hcode.hoj.pojo.vo.AccessVO;
 import top.hcode.hoj.pojo.vo.AdminContestVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
@@ -41,6 +44,31 @@ public class ContestValidator {
     @Resource
     private CommonValidator commonValidator;
 
+    @Resource
+    private ContestAccessPolicyManager contestAccessPolicyManager;
+
+    public boolean isConfidential(Contest contest) {
+        return contestAccessPolicyManager.isConfidential(contest);
+    }
+
+    public boolean isReleased(Contest contest) {
+        return contestAccessPolicyManager.isReleased(contest);
+    }
+
+    public boolean isContestAdmin(Contest contest, AccountProfile user, boolean root) {
+        String uid = user == null ? null : user.getUid();
+        return root || (uid != null && Objects.equals(contest.getUid(), uid))
+                || (uid != null && Boolean.TRUE.equals(contest.getIsGroup())
+                && groupValidator.isGroupRoot(uid, contest.getGid()));
+    }
+
+    public boolean hasPasswordAccess(Contest contest, AccountProfile user) {
+        if (user == null) return false;
+        ContestRegister registration = contestRegisterEntityService.getOne(new QueryWrapper<ContestRegister>()
+                .eq("cid", contest.getId()).eq("uid", user.getUid()), false);
+        return registration != null && !Objects.equals(registration.getStatus(), 1);
+    }
+
     public void validateContest(AdminContestVO adminContestVO) throws StatusFailException {
         commonValidator.validateContent(adminContestVO.getTitle(), "比赛标题", 500);
         commonValidator.validateContentLength(adminContestVO.getDescription(), "比赛描述", 65535);
@@ -65,6 +93,7 @@ public class ContestValidator {
     }
 
     public boolean isSealRank(String uid, Contest contest, Boolean forceRefresh, Boolean isRoot) {
+        if (isReleased(contest)) return false;
         if (!contest.getSealRank()) {
             return false;
         }
@@ -95,69 +124,116 @@ public class ContestValidator {
      * @Since 2021/1/17
      */
     public void validateContestAuth(Contest contest, AccountProfile userRolesVo, Boolean isRoot) throws StatusFailException, StatusForbiddenException {
-
-        if (contest == null || !contest.getVisible()) {
+        if (contest == null || !Boolean.TRUE.equals(contest.getVisible())) {
             throw new StatusFailException("对不起，该比赛不存在！");
         }
-
-        String uid = userRolesVo == null ? null : userRolesVo.getUid();
-        boolean isContestAdmin = isRoot || Objects.equals(contest.getUid(), uid);
-        Long gid = contest.getGid();
-        // 若是比赛管理者
-        if (isContestAdmin || (userRolesVo != null && contest.getIsGroup() && groupValidator.isGroupRoot(uid, gid))) {
+        if (isContestAdmin(contest, userRolesVo, Boolean.TRUE.equals(isRoot))) return;
+        ContestAccessPolicy policy = contestAccessPolicyManager.getPolicy(contest.getId());
+        if (policy != null) {
+            Date now = new Date();
+            int status = contestAccessPolicyManager.currentStatus(contest, now);
+            if (status == Constants.Contest.STATUS_SCHEDULED.getCode()) {
+                throw new StatusForbiddenException("比赛还未开始，您无权访问该比赛！");
+            }
+            if (contestAccessPolicyManager.isReleased(contest, policy, now)) return;
+            if (status == Constants.Contest.STATUS_ENDED.getCode()) {
+                throw new StatusForbiddenException("比赛题目已封存，请等待管理员解封！");
+            }
+            if (!hasPasswordAccess(contest, userRolesVo)) {
+                throw new StatusForbiddenException("请先登录并输入比赛密码！");
+            }
             return;
         }
-
-        // 判断一下比赛的状态，还未开始不能查看题目。
-        if (contest.getStatus().intValue() != Constants.Contest.STATUS_RUNNING.getCode() &&
-                contest.getStatus().intValue() != Constants.Contest.STATUS_ENDED.getCode()) {
+        int status = contest.getStatus();
+        if (status != Constants.Contest.STATUS_RUNNING.getCode() && status != Constants.Contest.STATUS_ENDED.getCode()) {
             throw new StatusForbiddenException("比赛还未开始，您无权访问该比赛！");
-        } else {
-
-            if (contest.getIsGroup() && (uid == null || !groupValidator.isGroupMember(uid, gid))) {
-                throw new StatusForbiddenException("对不起，您并非团队内的成员无法参加该团队内的比赛！");
-            }
-
-            // 如果是处于比赛正在进行阶段，需要判断该场比赛是否为私有赛，私有赛需要判断该用户是否已注册
-            if (contest.getAuth().intValue() == Constants.Contest.AUTH_PRIVATE.getCode()) {
-                if (userRolesVo == null) {
-                    throw new StatusForbiddenException("请先登录并注册该比赛！");
-                }
-                QueryWrapper<ContestRegister> registerQueryWrapper = new QueryWrapper<>();
-                registerQueryWrapper.eq("cid", contest.getId()).eq("uid", userRolesVo.getUid());
-                ContestRegister register = contestRegisterEntityService.getOne(registerQueryWrapper);
-                if (register == null) { // 如果数据为空，表示未注册私有赛，不可访问
-                    throw new StatusForbiddenException("对不起，请先到比赛首页输入比赛密码进行注册！");
-                }
-
-                if (contest.getOpenAccountLimit()
-                        && !validateAccountRule(contest.getAccountLimitRule(), userRolesVo.getUsername())) {
-                    throw new StatusForbiddenException("对不起！本次比赛只允许特定账号规则的用户参赛！");
-                }
-            }
         }
-
+        String uid = userRolesVo == null ? null : userRolesVo.getUid();
+        if (Boolean.TRUE.equals(contest.getIsGroup()) && (uid == null
+                || !groupValidator.isGroupMember(uid, contest.getGid()))) {
+            throw new StatusForbiddenException("对不起，您并非团队内的成员无法参加该团队内的比赛！");
+        }
+        if (Objects.equals(contest.getAuth(), Constants.Contest.AUTH_PRIVATE.getCode())) {
+            if (!hasPasswordAccess(contest, userRolesVo)) {
+                throw new StatusForbiddenException("对不起，请先到比赛首页输入比赛密码进行注册！");
+            }
+            validateAccountAccess(contest, userRolesVo);
+        } else if (!Objects.equals(contest.getAuth(), Constants.Contest.AUTH_PUBLIC.getCode())
+                && !Objects.equals(contest.getAuth(), Constants.Contest.AUTH_PROTECT.getCode())) {
+            throw new StatusForbiddenException("比赛权限配置无效！");
+        }
     }
 
 
     public void validateJudgeAuth(Contest contest, String uid) throws StatusForbiddenException {
-
-        if (!Boolean.TRUE.equals(contest.getVisible())
-                || (Boolean.TRUE.equals(contest.getIsGroup())
-                && !groupValidator.isGroupMember(uid, contest.getGid()))) {
-            throw new StatusForbiddenException("您无权向该比赛提交！");
+        AccountProfile viewer = (AccountProfile) org.apache.shiro.SecurityUtils.getSubject().getPrincipal();
+        if (viewer == null || !Objects.equals(viewer.getUid(), uid)) {
+            throw new StatusForbiddenException("请先登录！");
         }
+        validateJudgeAuth(contest, viewer, org.apache.shiro.SecurityUtils.getSubject().hasRole("root"));
+    }
 
-        if (contest.getAuth().intValue() == Constants.Contest.AUTH_PRIVATE.getCode() ||
-                contest.getAuth().intValue() == Constants.Contest.AUTH_PROTECT.getCode()) {
-            QueryWrapper<ContestRegister> queryWrapper = new QueryWrapper<>();
-            queryWrapper.eq("cid", contest.getId()).eq("uid", uid);
-            ContestRegister register = contestRegisterEntityService.getOne(queryWrapper, false);
-            // 如果还没注册
-            if (register == null) {
-                throw new StatusForbiddenException("对不起，请你先注册该比赛，提交代码失败！");
+    public void validateJudgeAuth(Contest contest, AccountProfile user, boolean root) throws StatusForbiddenException {
+        if (user == null) throw new StatusForbiddenException("请先登录！");
+        try {
+            validateContestAuth(contest, user, root);
+        } catch (StatusFailException e) {
+            throw new StatusForbiddenException(e.getMessage());
+        }
+        if (isContestAdmin(contest, user, root)) return;
+        if (isConfidential(contest)) return; // The unified gate already checks time, seal and password.
+        if (Objects.equals(contest.getStatus(), Constants.Contest.STATUS_ENDED.getCode())
+                && !Boolean.TRUE.equals(contest.getAllowEndSubmit())) {
+            throw new StatusForbiddenException("比赛已结束，不可再提交！");
+        }
+        if (!Objects.equals(contest.getAuth(), Constants.Contest.AUTH_PUBLIC.getCode())
+                && !hasPasswordAccess(contest, user)) {
+            throw new StatusForbiddenException("对不起，请先输入比赛密码！");
+        }
+        validateAccountAccess(contest, user);
+    }
+
+    private void validateAccountAccess(Contest contest, AccountProfile user) throws StatusForbiddenException {
+        if (Boolean.TRUE.equals(contest.getOpenAccountLimit()) && (user == null
+                || !validateAccountRule(contest.getAccountLimitRule(), user.getUsername()))) {
+            throw new StatusForbiddenException("对不起！本次比赛只允许特定账号规则的用户参赛！");
+        }
+    }
+
+    public AccessVO getAccess(Contest contest, AccountProfile user, boolean root) throws StatusFailException {
+        if (contest == null || !Boolean.TRUE.equals(contest.getVisible())) {
+            throw new StatusFailException("对不起，该比赛不存在！");
+        }
+        AccessVO access = new AccessVO();
+        access.setAccess(hasPasswordAccess(contest, user));
+        boolean confidential = isConfidential(contest);
+        boolean released = confidential && isReleased(contest);
+        access.setReleased(released);
+        boolean admin = isContestAdmin(contest, user, root);
+        int status = confidential ? contestAccessPolicyManager.currentStatus(contest, new Date()) : contest.getStatus();
+        access.setCanViewProblems(false);
+        access.setCanSubmit(false);
+        if (admin) {
+            access.setCanViewProblems(true); access.setCanSubmit(user != null); access.setAccessReason("ADMIN");
+        } else if (status == Constants.Contest.STATUS_SCHEDULED.getCode()) {
+            access.setAccessReason("SCHEDULED");
+        } else if (confidential && status == Constants.Contest.STATUS_ENDED.getCode() && !released) {
+            access.setAccessReason("SEALED");
+        } else {
+            try {
+                validateContestAuth(contest, user, root);
+                access.setCanViewProblems(true);
+            } catch (StatusForbiddenException e) {
+                access.setAccessReason(user == null ? "LOGIN_REQUIRED" : "PASSWORD_REQUIRED");
             }
+            if (user != null) {
+                try { validateJudgeAuth(contest, user, root); access.setCanSubmit(true); }
+                catch (StatusForbiddenException ignored) { /* Access is a description, not authorization. */ }
+            }
+            if (released) access.setAccessReason("RELEASED");
+            else if (Boolean.TRUE.equals(access.getCanViewProblems())) access.setAccessReason("READY");
         }
+        return access;
     }
 
     public List<Integer> validateExternalRanks(List<Integer> requested, AccountProfile user, boolean root)
@@ -169,8 +245,9 @@ public class ContestValidator {
         if (result.isEmpty()) return null;
         for (Integer id : result) {
             Contest other = contestEntityService.getById(id.longValue());
-            if (other == null || !Boolean.TRUE.equals(other.getVisible()) || !Boolean.TRUE.equals(other.getOpenRank())
-                    || !Objects.equals(other.getStatus(), Constants.Contest.STATUS_ENDED.getCode())
+            boolean released = other != null && isReleased(other);
+            if (other == null || !Boolean.TRUE.equals(other.getVisible()) || (!Boolean.TRUE.equals(other.getOpenRank()) && !released)
+                    || (!released && !Objects.equals(other.getStatus(), Constants.Contest.STATUS_ENDED.getCode()))
                     || isSealRank(user == null ? null : user.getUid(), other, false, false)) {
                 throw new StatusForbiddenException("关联比赛尚未公开最终榜单！");
             }

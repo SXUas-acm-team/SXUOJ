@@ -130,6 +130,18 @@
       </el-col>
     </el-row>
     <div class="sub-menu">
+      <el-alert v-if="contest.confidential" :title="$t('m.' + confidentialStatusText)"
+        :type="isContestReleased ? 'success' : 'warning'" :closable="false" show-icon style="margin-bottom:15px" />
+      <el-card v-if="!isAuthenticated && !isContestReleased && contest.auth === 1" style="margin-bottom:15px">
+        <el-button type="primary" @click="$store.commit('changeModalStatus', { mode: 'Login', visible: true })">{{ $t('m.Please_login_first') }}</el-button>
+      </el-card>
+      <el-card v-if="passwordFormVisible && isAuthenticated" class="password-form-card" style="text-align:center;margin-bottom:15px">
+        <p>{{ $t('m.To_Enter_Need_Password') }}</p>
+        <el-form @submit.native.prevent="checkPassword">
+          <el-input v-model="contestPassword" type="password" :placeholder="$t('m.Enter_the_contest_password')" style="width:70%" />
+          <el-button type="primary" :loading="btnLoading" @click="checkPassword">{{ $t('m.Enter') }}</el-button>
+        </el-form>
+      </el-card>
       <!-- 判断是否需要密码验证 -->
 
       <el-tabs @tab-click="tabClick" v-model="route_name">
@@ -137,37 +149,6 @@
           <span slot="label"
             ><i class="el-icon-s-home"></i>&nbsp;{{ $t('m.Overview') }}</span
           >
-          <el-card
-            v-if="passwordFormVisible"
-            class="password-form-card"
-            style="text-align:center;margin-bottom:15px"
-          >
-            <div slot="header">
-              <span class="panel-title" style="color: #e6a23c;"
-                ><i class="el-icon-warning">
-                  {{ $t('m.Password_Required') }}</i
-                ></span
-              >
-            </div>
-            <p class="password-form-tips">
-              {{ $t('m.To_Enter_Need_Password') }}
-            </p>
-            <el-form>
-              <el-input
-                v-model="contestPassword"
-                type="password"
-                :placeholder="$t('m.Enter_the_contest_password')"
-                @keydown.enter.native="checkPassword"
-                style="width:70%"
-              />
-              <el-button
-                type="primary"
-                @click="checkPassword"
-                style="float:right;"
-                >{{ $t('m.Enter') }}</el-button
-              >
-            </el-form>
-          </el-card>
           <el-card class="box-card">
             <Markdown 
               :isAvoidXss="contest.gid != null" 
@@ -188,7 +169,7 @@
           >
           <transition name="el-zoom-in-bottom">
             <router-view
-              v-if="route_name === 'ContestProblemList'"
+              v-if="route_name === 'ContestProblemList' && !contestMenuDisabled"
             ></router-view>
           </transition>
         </el-tab-pane>
@@ -203,7 +184,7 @@
           >
           <transition name="el-zoom-in-bottom">
             <router-view
-              v-if="route_name === 'ContestSubmissionList'"
+              v-if="route_name === 'ContestSubmissionList' && !contestMenuDisabled"
             ></router-view>
           </transition>
         </el-tab-pane>
@@ -215,7 +196,7 @@
             }}</span
           >
           <transition name="el-zoom-in-bottom">
-            <router-view v-if="route_name === 'ContestRank'"></router-view>
+            <router-view v-if="route_name === 'ContestRank' && !contestMenuDisabled"></router-view>
           </transition>
         </el-tab-pane>
 
@@ -231,7 +212,7 @@
           >
           <transition name="el-zoom-in-bottom">
             <router-view
-              v-if="route_name === 'ContestAnnouncementList'"
+              v-if="route_name === 'ContestAnnouncementList' && !contestMenuDisabled"
             ></router-view>
           </transition>
         </el-tab-pane>
@@ -247,7 +228,7 @@
             }}</span
           >
           <transition name="el-zoom-in-bottom">
-            <router-view v-if="route_name === 'ContestComment'"></router-view>
+            <router-view v-if="route_name === 'ContestComment' && !contestMenuDisabled"></router-view>
           </transition>
         </el-tab-pane>
 
@@ -261,7 +242,7 @@
             ><i class="el-icon-printer"></i>&nbsp;{{ $t('m.Print') }}</span
           >
           <transition name="el-zoom-in-bottom">
-            <router-view v-if="route_name === 'ContestPrint'"></router-view>
+            <router-view v-if="route_name === 'ContestPrint' && !contestMenuDisabled"></router-view>
           </transition>
         </el-tab-pane>
 
@@ -277,7 +258,7 @@
             }}</span
           >
           <transition name="el-zoom-in-bottom">
-            <router-view v-if="route_name === 'ContestACInfo'"></router-view>
+            <router-view v-if="route_name === 'ContestACInfo' && !contestMenuDisabled"></router-view>
           </transition>
         </el-tab-pane>
 
@@ -294,7 +275,7 @@
           >
           <transition name="el-zoom-in-bottom">
             <router-view
-              v-if="route_name === 'ContestAdminPrint'"
+              v-if="route_name === 'ContestAdminPrint' && !contestMenuDisabled"
             ></router-view>
           </transition>
         </el-tab-pane>
@@ -312,7 +293,7 @@
           >
           <transition name="el-zoom-in-bottom">
             <router-view
-              v-if="route_name === 'ContestRejudgeAdmin'"
+              v-if="route_name === 'ContestRejudgeAdmin' && !contestMenuDisabled"
             ></router-view>
           </transition>
         </el-tab-pane>
@@ -330,7 +311,7 @@
           >
           <transition name="el-zoom-in-bottom">
             <router-view
-              v-if="route_name === 'ScrollBoard'"
+              v-if="route_name === 'ScrollBoard' && !contestMenuDisabled"
             ></router-view>
           </transition>
         </el-tab-pane>
@@ -355,8 +336,10 @@ import {
 import myMessage from '@/common/message';
 import storage from '@/common/storage';
 import Markdown from "@/components/oj/common/Markdown";
+import contestAccessPolling from '@/common/contestAccessPolling';
 export default {
   name: 'ContestDetails',
+  mixins: [contestAccessPolling],
   components: {
     Markdown
   },
@@ -364,6 +347,10 @@ export default {
     return {
       route_name: 'contestDetails',
       timer: null,
+      announceTimer: null,
+      contestRequestVersion: 0,
+      contestViewDestroyed: false,
+      announcementPending: null,
       CONTEST_STATUS: {},
       CONTEST_STATUS_REVERSE: {},
       CONTEST_TYPE_REVERSE: {},
@@ -385,7 +372,27 @@ export default {
     this.CONTEST_STATUS = Object.assign({}, CONTEST_STATUS);
     this.CONTEST_STATUS_REVERSE = Object.assign({}, CONTEST_STATUS_REVERSE);
     this.RULE_TYPE = Object.assign({}, RULE_TYPE);
-    this.$store.dispatch('getContest').then((res) => {
+    this.loadContestDetails();
+  },
+  methods: {
+    ...mapActions(['changeDomTitle']),
+    clearContestTimers() {
+      clearInterval(this.timer);
+      clearInterval(this.announceTimer);
+      this.timer = null;
+      this.announceTimer = null;
+    },
+    loadContestDetails() {
+      this.clearContestTimers();
+      this.announcementPending = null;
+      const version = ++this.contestRequestVersion;
+      const cid = this.contestID;
+      const session = this.$store.getters && this.$store.getters.sessionVersion;
+      const current = () => !this.contestViewDestroyed && version === this.contestRequestVersion &&
+        String(this.$route.params.contestID) === String(cid) &&
+        (!this.$store.getters || this.$store.getters.sessionVersion === session);
+      return this.$store.dispatch('getContest').then((res) => {
+      if (!current()) return;
       this.changeDomTitle({ title: res.data.data.title });
       let data = res.data.data;
       let endTime = moment(data.endTime);
@@ -393,19 +400,26 @@ export default {
       if (endTime.isAfter(moment(data.now))) {
         // 实时更新时间
         this.timer = setInterval(() => {
-          this.$store.commit('nowAdd1s');
+          if (!current()) return;
+          if (!this.contest.confidential) this.$store.commit('nowAdd1s');
+          if (this.contestEnded) this.clearContestTimers();
         }, 1000);
 
         // 每分钟获取一次是否存在未阅读的公告
         this.announceTimer = setInterval(() => {
-          let key = buildContestAnnounceKey(this.userInfo.uid, this.contestID);
-          let readAnnouncementList = storage.get(key) || [];
+           if (!current() || this.announcementPending || !this.userInfo.uid || this.contestMenuDisabled) return;
+          const uid = this.userInfo.uid;
+          const key = buildContestAnnounceKey(uid, cid);
+          const saved = storage.get(key);
+          const readAnnouncementList = Array.isArray(saved) ? saved : [];
+          this.announcementPending = version;
           let data = {
-            cid: this.contestID,
+            cid,
             readAnnouncementList: readAnnouncementList,
           };
 
           api.getContestUserNotReadAnnouncement(data).then((res) => {
+            if (!current() || this.userInfo.uid !== uid) return;
             let newAnnounceList = res.data.data;
             for (let i = 0; i < newAnnounceList.length; i++) {
               readAnnouncementList.push(newAnnounceList[i].id);
@@ -422,17 +436,17 @@ export default {
               });
             }
             storage.set(key, readAnnouncementList);
+          }).catch(() => {}).finally(() => {
+            if (this.announcementPending === version) this.announcementPending = null;
           });
         }, 60 * 1000);
       }
 
       this.$nextTick((_) => {
-        addCodeBtn();
+        if (current()) addCodeBtn();
       });
-    });
-  },
-  methods: {
-    ...mapActions(['changeDomTitle']),
+      }).catch(() => {});
+    },
     formatTooltip(val) {
       if (this.contest.status == -1) {
         // 还未开始
@@ -444,21 +458,34 @@ export default {
       }
     },
     checkPassword() {
+      if (this.btnLoading) return;
       if (this.contestPassword === '') {
         myMessage.warning(this.$i18n.t('m.Enter_the_contest_password'));
         return;
       }
       this.btnLoading = true;
-      api.registerContest(this.contestID + '', this.contestPassword).then(
+      const cid = this.contestID;
+      const version = this.contestRequestVersion;
+      const uid = this.userInfo.uid;
+      const session = this.$store.getters && this.$store.getters.sessionVersion;
+      const current = () => !this.contestViewDestroyed && version === this.contestRequestVersion &&
+        String(this.$route.params.contestID) === String(cid) && this.userInfo.uid === uid &&
+        (!this.$store.getters || this.$store.getters.sessionVersion === session);
+      return api.registerContest(cid + '', this.contestPassword).then(
         (res) => {
+          if (!current()) return;
           myMessage.success(this.$i18n.t('m.Register_contest_successfully'));
-          this.$store.commit('contestIntoAccess', { intoAccess: true });
+           this.$store.commit('contestIntoAccess', { intoAccess: true });
+           if (this.contest && this.contest.confidential) this.$store.dispatch('getContestAccess').catch(() => {});
           this.btnLoading = false;
         },
         (res) => {
-          this.btnLoading = false;
+          if (current()) this.btnLoading = false;
         }
-      );
+      ).finally(() => {
+        if (!this.contestViewDestroyed && version === this.contestRequestVersion &&
+            String(this.$route.params.contestID) === String(cid)) this.btnLoading = false;
+      });
     },
     tabClick(tab) {
       let name = tab.name;
@@ -482,6 +509,10 @@ export default {
     }),
     ...mapGetters([
       'contestMenuDisabled',
+      'isAuthenticated',
+      'isContestReleased',
+      'isContestSealed',
+      'contestAccessReason',
       'contestRuleType',
       'contestStatus',
       'countdown',
@@ -518,6 +549,12 @@ export default {
     contestEnded() {
       return this.contestStatus === CONTEST_STATUS.ENDED;
     },
+    confidentialStatusText() {
+      if (this.isContestReleased) return 'Contest_Released_Public_Tips';
+      if (this.isContestSealed) return 'Contest_Sealed_Tips';
+      if (this.contestAccessReason === 'SCHEDULED') return 'Contest_Not_Started_Tips';
+      return 'Confidential_Contest_Password_Tips';
+    },
     isContainsAfterContestJudge:{
       get () {
         return this.$store.state.contest.isContainsAfterContestJudge;
@@ -535,13 +572,23 @@ export default {
       } else if (this.route_name == 'ContestSubmissionDetails') {
         this.route_name = 'ContestSubmissionList';
       }
-      this.contestID = newVal.params.contestID;
+      const cid = newVal.params.contestID;
+      if (String(cid) !== String(this.contestID)) {
+        this.contestRequestVersion += 1;
+        this.clearContestTimers();
+        this.$store.commit('clearContest');
+        this.contestID = cid;
+        this.contestPassword = '';
+        this.btnLoading = false;
+        if (cid != null) this.loadContestDetails();
+      }
       this.changeDomTitle({ title: this.contest.title });
     },
   },
   beforeDestroy() {
-    clearInterval(this.timer);
-    clearInterval(this.announceTimer);
+    this.contestViewDestroyed = true;
+    this.contestRequestVersion += 1;
+    this.clearContestTimers();
     this.$store.commit('clearContest');
   },
 };

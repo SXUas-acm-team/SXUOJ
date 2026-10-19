@@ -329,7 +329,7 @@
               :label="$t('m.Contest_Auth')"
               required
             >
-              <el-select v-model="contest.auth">
+              <el-select v-model="contest.auth" :disabled="!!contest.confidential">
                 <el-option
                   :label="$t('m.Public')"
                   :value="0"
@@ -366,14 +366,16 @@
           >
             <el-form-item
               :label="$t('m.Account_Limit')"
-              v-show="contest.auth != 0"
-              :required="contest.auth != 0"
+              v-show="contest.auth != 0 && !contest.confidential"
+              :required="contest.auth != 0 && !contest.confidential"
             >
               <el-switch v-model="contest.openAccountLimit"> </el-switch>
             </el-form-item>
           </el-col>
 
-          <template v-if="contest.openAccountLimit">
+          <ContestConfidentialSettings :contest="contest" @save="saveContest" />
+
+          <template v-if="contest.openAccountLimit && !contest.confidential">
             <el-form :model="formRule">
               <el-col
                 :md="6"
@@ -632,11 +634,14 @@ import time from "@/common/time";
 import moment from "moment";
 import { mapGetters } from "vuex";
 import myMessage from "@/common/message";
+import ContestConfidentialSettings from '@/components/admin/ContestConfidentialSettings.vue';
+import { confidentialFormError } from '@/common/contestConfidentialForm';
 const Editor = () => import("@/components/admin/Editor.vue");
 const RankBox = () => import("@/components/oj/common/RankBox");
 export default {
   name: "CreateContest",
   components: {
+    ContestConfidentialSettings,
     Editor,
     RankBox,
   },
@@ -658,6 +663,8 @@ export default {
         sealRankTime: "", //封榜时间
         autoRealRank: true,
         auth: 0,
+        confidential: false,
+        releaseAt: null,
         openPrint: false,
         rankShowName: "username",
         openAccountLimit: false,
@@ -782,6 +789,8 @@ export default {
     },
 
     saveContest() {
+      const policyError = confidentialFormError(this.contest);
+      if (policyError) { myMessage.error(this.$i18n.t('m.' + policyError)); return; }
       if (!this.contest.title) {
         myMessage.error(
           this.$i18n.t("m.Contest_Title") + " " + this.$i18n.t("m.is_required")

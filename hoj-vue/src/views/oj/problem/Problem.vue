@@ -1,6 +1,8 @@
 <template>
   <div :class="bodyClass">
-    <div id="problem-main">
+    <el-alert v-if="contestID && contestMenuDisabled" :title="$t('m.Contest_Content_Unavailable')" type="warning" :closable="false" show-icon />
+    <router-link v-if="contestID && contestMenuDisabled" :to="{ name: 'ContestDetails', params: { contestID } }">{{ $t('m.Overview') }}</router-link>
+    <div id="problem-main" v-show="!contestID || !contestMenuDisabled">
       <!--problem main-->
       <el-row class="problem-box" 
         :id="'problem-box' + '-' + $route.name">
@@ -854,11 +856,13 @@ import CodeMirror from "@/components/oj/common/CodeMirror.vue";
 import Pagination from "@/components/oj/common/Pagination";
 import ProblemHorizontalMenu from "@/components/oj/common/ProblemHorizontalMenu";
 import Markdown from "@/components/oj/common/Markdown";
+import contestAccessPolling from '@/common/contestAccessPolling';
 // 只显示这些状态的图形占用
 const filtedStatus = ["wa", "ce", "ac", "pa", "tle", "mle", "re", "pe"];
 
 export default {
   name: "ProblemDetails",
+  mixins: [contestAccessPolling],
   components: {
     CodeMirror,
     Pagination,
@@ -887,6 +891,8 @@ export default {
       height: 550,
       submissionId: "",
       submissionRequestId: 0,
+      problemRequestId: 0,
+      problemViewDestroyed: false,
       refreshStatus: null,
       submitted: false,
       submitDisabled: false,
@@ -1259,10 +1265,38 @@ export default {
       } catch (e) {
       }
     },
-    init() {
-      if(this.$route.name === "ContestFullProblemDetails"){
-        this.$store.dispatch('getContest');
+    clearProblemContent() {
+      this.problemData = { problem: { difficulty: 0 }, problemCount: {}, tags: [], languages: [], codeTemplate: {} };
+      this.userExtraFile = null;
+      this.fileContent = '';
+      this.fileName = '';
+      this.mySubmissions = [];
+      this.mySubmission_total = 0;
+      this.openTestCaseDrawer = false;
+      this.graphVisible = false;
+    },
+    revokeProblemAccess() {
+      this.problemRequestId += 1;
+      this.stopSubmissionPolling();
+      this.clearProblemContent();
+      this.submitDisabled = true;
+      this.loading = false;
+      this.submitPwdVisible = false;
+      this.changeDomTitle({ title: this.$i18n.t('m.Contest_Content_Unavailable') });
+    },
+    async init() {
+      const requestId = ++this.problemRequestId;
+      const routeKey = this.$route.fullPath;
+      const session = this.$store.getters.sessionVersion;
+      const current = () => !this.problemViewDestroyed && requestId === this.problemRequestId &&
+        routeKey === this.$route.fullPath && session === this.$store.getters.sessionVersion;
+      this.clearProblemContent();
+      this.contestID = this.$route.params.contestID || 0;
+      if (this.contestID && String(this.$store.state.contest.contest.id) !== String(this.contestID)) {
+        try { await this.$store.dispatch('getContest'); } catch (_) { if (current()) this.revokeProblemAccess(); return; }
       }
+      if (!current()) return;
+      if (this.contestID && this.$store.getters.contestMenuDisabled) { this.revokeProblemAccess(); return; }
       this.openFocusMode = utils.isFocusModePage(this.$route.name);
       if (this.$route.params.contestID) {
         this.contestID = this.$route.params.contestID;
@@ -1282,6 +1316,7 @@ export default {
       this.loading = true;
       api[func](this.problemID, this.contestID, this.groupID, true).then(
         (res) => {
+          if (!current() || (this.contestID && this.$store.getters.contestMenuDisabled)) return;
           let result = res.data.data;
           this.changeDomTitle({ title: result.problem.title });
           result["myStatus"] = -10; // 设置默认值
@@ -1309,6 +1344,7 @@ export default {
                 true
               )
               .then((res) => {
+                if (!current()) return;
                 let statusMap = res.data.data;
                 if (statusMap[result.problem.id].status != -10) {
                   this.submissionExists = true;
@@ -1345,8 +1381,14 @@ export default {
           });
         },
         (err) => {
+          if (!current()) return;
+          this.clearProblemContent();
           this.submitDisabled = true;
           this.loading = false;
+          if (this.contestID && this.contest.confidential) {
+            this.$store.commit('denyContestAccess');
+            this.$store.dispatch('refreshContestAccess').catch(() => {});
+          }
         }
       );
       
@@ -1579,6 +1621,11 @@ export default {
 
     submitCode() {
       if (this.submitting) return;
+      if (this.isAuthenticated === false) {
+        this.$store.commit('changeModalStatus', { mode: 'Login', visible: true });
+        return;
+      }
+      if (this.contestID && (this.contestMenuDisabled || (this.contest.confidential && !this.canSubmit))) return;
       if (this.code.trim() === "") {
         myMessage.error(this.$i18n.t("m.Code_can_not_be_empty"));
         return;
@@ -1633,7 +1680,7 @@ export default {
             }
             // 更新store的可提交权限
             if (!this.canSubmit) {
-              this.$store.commit("contestIntoAccess", { access: true });
+              this.$store.commit("contestIntoAccess", { intoAccess: true });
             }
             this.submitted = true;
             this.checkSubmissionStatus();
@@ -1781,6 +1828,7 @@ export default {
       "contestStatus",
       "isAuthenticated",
       "canSubmit",
+      "contestMenuDisabled",
       "websiteConfig"
     ]),
     contest() {
@@ -1853,6 +1901,8 @@ export default {
     },
   },
   beforeDestroy() {
+    this.problemViewDestroyed = true;
+    this.problemRequestId += 1;
     this.stopSubmissionPolling();
   },
   beforeRouteLeave(to, from, next) {
@@ -1867,6 +1917,11 @@ export default {
     next();
   },
   watch: {
+    contestMenuDisabled(disabled) {
+      if (!this.contestID) return;
+      if (disabled) this.revokeProblemAccess();
+      else this.init();
+    },
     $route() {
       this.initProblemCodeAndSetting();
       this.submitted = false;
@@ -1883,6 +1938,8 @@ export default {
         this.submitting = false;
         this.statusVisible = false;
         this.init();
+      } else if (this.contestID && !this.$store.getters.isContestReleased) {
+        this.revokeProblemAccess();
       }
     },
     activeName() {

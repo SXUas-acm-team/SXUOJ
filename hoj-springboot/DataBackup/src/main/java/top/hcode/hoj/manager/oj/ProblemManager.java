@@ -28,6 +28,7 @@ import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.validator.AccessValidator;
 import top.hcode.hoj.validator.ContestValidator;
 import top.hcode.hoj.validator.GroupValidator;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -78,6 +79,9 @@ public class ProblemManager {
     @Autowired
     private ContestManager contestManager;
 
+    @Autowired
+    private ProblemContentAccessValidator problemContentAccessValidator;
+
     /**
      * @MethodName getProblemList
      * @Params * @param null
@@ -98,8 +102,10 @@ public class ProblemManager {
         if (oj != null && !Constants.RemoteOJ.isRemoteOJ(oj)) {
             oj = "Mine";
         }
-        return problemEntityService.getProblemList(limit, currentPage, null, keyword,
+        Page<ProblemVO> result = problemEntityService.getProblemList(limit, currentPage, null, keyword,
                 difficulty, tagId, oj);
+        result.getRecords().removeIf(problem -> !problemContentAccessValidator.canAccessProblem(problem.getPid(), null));
+        return result;
     }
 
     /**
@@ -110,9 +116,10 @@ public class ProblemManager {
     public RandomProblemVO getRandomProblem() throws StatusFailException {
         QueryWrapper<Problem> queryWrapper = new QueryWrapper<>();
         // 必须是公开题目
-        queryWrapper.select("problem_id").eq("auth", 1)
+        queryWrapper.select("id", "problem_id").eq("auth", 1)
                 .eq("is_group", false);
         List<Problem> list = problemEntityService.list(queryWrapper);
+        list.removeIf(problem -> !problemContentAccessValidator.canAccessProblem(problem.getId(), null));
         if (list.size() == 0) {
             throw new StatusFailException("获取随机题目失败，题库暂无公开题目！");
         }
@@ -257,6 +264,7 @@ public class ProblemManager {
         if (problem == null) {
             throw new StatusNotFoundException("该题号对应的题目不存在");
         }
+        problemContentAccessValidator.validateProblemAccess(problem.getId(), null);
         if (problem.getAuth() != 1) {
             throw new StatusForbiddenException("该题号对应题目并非公开题目，不支持访问！");
         }
@@ -326,13 +334,19 @@ public class ProblemManager {
         return new ProblemInfoVO(problem, tags, languagesStr, problemCount, LangNameAndCode);
     }
 
-    public LastAcceptedCodeVO getUserLastAcceptedCode(Long pid, Long cid) {
+    public LastAcceptedCodeVO getUserLastAcceptedCode(Long pid, Long cid) throws StatusForbiddenException {
+        problemContentAccessValidator.validateProblemAccess(pid, cid);
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         if (cid == null) {
             cid = 0L;
         }
         if (cid != 0) {
             Contest contest = contestEntityService.getById(cid);
+            try {
+                contestValidator.validateContestAuth(contest, userRolesVo, SecurityUtils.getSubject().hasRole("root"));
+            } catch (StatusFailException e) {
+                throw new StatusForbiddenException("该比赛不可访问！");
+            }
             if (contest == null || contestValidator.isSealRank(userRolesVo.getUid(), contest, false,
                     SecurityUtils.getSubject().hasRole("root"))) {
                 LastAcceptedCodeVO hidden = new LastAcceptedCodeVO();

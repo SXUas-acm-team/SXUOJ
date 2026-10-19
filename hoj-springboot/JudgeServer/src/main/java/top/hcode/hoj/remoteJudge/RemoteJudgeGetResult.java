@@ -1,6 +1,5 @@
 package top.hcode.hoj.remoteJudge;
 
-import cn.hutool.core.lang.UUID;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,13 +19,11 @@ import javax.annotation.Resource;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
-
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j(topic = "hoj")
 @Component
 public class RemoteJudgeGetResult {
-
     @Autowired
     private JudgeEntityService judgeEntityService;
 
@@ -39,163 +36,162 @@ public class RemoteJudgeGetResult {
     @Resource
     private JudgeCaseEntityService judgeCaseEntityService;
 
-    private final static ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+    private static final ScheduledExecutorService DEFAULT_SCHEDULER =
+            Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+    private final ScheduledExecutorService scheduler;
+    private final Map<String, PollTask> activeTasks = new ConcurrentHashMap<>();
 
-    private final static Map<String, Future> futureTaskMap = new ConcurrentHashMap<>(Runtime.getRuntime().availableProcessors() * 2);
+    public RemoteJudgeGetResult() { this(DEFAULT_SCHEDULER); }
 
-    private final static java.util.Set<String> activeTasks = ConcurrentHashMap.newKeySet();
+    RemoteJudgeGetResult(ScheduledExecutorService scheduler) { this.scheduler = scheduler; }
 
-    public void process(RemoteJudgeStrategy remoteJudgeStrategy) {
-
-        RemoteJudgeDTO remoteJudgeDTO = remoteJudgeStrategy.getRemoteJudgeDTO();
-        String key = remoteJudgeDTO.getOj() + ":" + remoteJudgeDTO.getJudgeId();
-        if (!activeTasks.add(key)) return;
-        AtomicInteger count = new AtomicInteger(0);
-        Runnable getResultTask = new Runnable() {
-            @Override
-            public void run() {
-
-                if (count.get() >= 60) { // 超过60次失败则判为提交失败
-                    // 更新此次提交状态为提交失败！
-                    UpdateWrapper<Judge> judgeUpdateWrapper = new UpdateWrapper<>();
-                    judgeUpdateWrapper.set("status", Constants.Judge.STATUS_SUBMITTED_FAILED.getStatus())
-                            .set("error_message", "Waiting for remote judge result exceeds the maximum number of times, please try submitting again!")
-                            .eq("submit_id", remoteJudgeDTO.getJudgeId());
-                    judgeEntityService.update(judgeUpdateWrapper);
-
-                    log.error("[{}] Get Result Failed!", remoteJudgeDTO.getOj());
-                    changeRemoteJudgeLock(remoteJudgeDTO.getOj(),
-                            remoteJudgeDTO.getUsername(),
-                            remoteJudgeDTO.getServerIp(),
-                            remoteJudgeDTO.getServerPort(),
-                            remoteJudgeDTO.getSubmitId(), remoteJudgeDTO.getAccountVersion());
-                    activeTasks.remove(key);
-
-                    Future future = futureTaskMap.get(key);
-                    if (future != null) {
-                        boolean isCanceled = future.cancel(true);
-                        if (isCanceled) {
-                            futureTaskMap.remove(key);
-                        }
-                    }
-                    return;
-                }
-
-                count.getAndIncrement();
-
-                RemoteJudgeRes remoteJudgeRes;
-                try {
-                    remoteJudgeRes = remoteJudgeStrategy.result();
-                } catch (Exception e) {
-                    if (count.get() == 60) {
-                        log.error("The Error of getting the `remote judge` result:", e);
-                    }
-                    return;
-                }
-
-                // 保留各个测试点的结果数据
-                if (!CollectionUtils.isEmpty(remoteJudgeRes.getJudgeCaseList())) {
-                    judgeCaseEntityService.saveBatch(remoteJudgeRes.getJudgeCaseList());
-                }
-
-                Integer status = remoteJudgeRes.getStatus();
-                if (status.intValue() != Constants.Judge.STATUS_PENDING.getStatus() &&
-                        status.intValue() != Constants.Judge.STATUS_JUDGING.getStatus() &&
-                        status.intValue() != Constants.Judge.STATUS_COMPILING.getStatus()) {
-                    log.info("[{}] Get Result Successfully! Status:[{}]", remoteJudgeDTO.getOj(), status);
-
-                    changeRemoteJudgeLock(remoteJudgeDTO.getOj(),
-                            remoteJudgeDTO.getUsername(),
-                            remoteJudgeDTO.getServerIp(),
-                            remoteJudgeDTO.getServerPort(),
-                            remoteJudgeDTO.getSubmitId(), remoteJudgeDTO.getAccountVersion());
-                    activeTasks.remove(key);
-
-                    Integer time = remoteJudgeRes.getTime();
-                    Integer memory = remoteJudgeRes.getMemory();
-                    String errorInfo = remoteJudgeRes.getErrorInfo();
-                    Judge finalJudgeRes = new Judge();
-
-                    finalJudgeRes.setSubmitId(remoteJudgeDTO.getJudgeId())
-                            .setStatus(status)
-                            .setTime(time)
-                            .setMemory(memory);
-
-                    if (status.intValue() == Constants.Judge.STATUS_COMPILE_ERROR.getStatus()) {
-                        finalJudgeRes.setErrorMessage(errorInfo);
-                    } else if (status.intValue() == Constants.Judge.STATUS_SYSTEM_ERROR.getStatus()) {
-                        finalJudgeRes.setErrorMessage("There is something wrong with the " + remoteJudgeDTO.getOj() + ", please try again later");
-                    }
-
-                    // 如果是比赛题目，需要特别适配OI比赛的得分 除AC给100 其它结果给0分
-                    if (remoteJudgeDTO.getCid() != 0) {
-                        int score = 0;
-
-                        if (Objects.equals(finalJudgeRes.getStatus(), Constants.Judge.STATUS_ACCEPTED.getStatus())) {
-                            score = 100;
-                        }
-
-                        finalJudgeRes.setScore(score);
-                        // 写回数据库
-                        judgeEntityService.updateById(finalJudgeRes);
-                        // 同步其它表
-                        judgeContext.updateOtherTable(remoteJudgeDTO.getJudgeId(),
-                                status,
-                                remoteJudgeDTO.getCid(),
-                                remoteJudgeDTO.getUid(),
-                                remoteJudgeDTO.getPid(),
-                                remoteJudgeDTO.getGid(),
-                                score,
-                                finalJudgeRes.getTime());
-
-                    } else {
-                        judgeEntityService.updateById(finalJudgeRes);
-                        // 同步其它表
-                        judgeContext.updateOtherTable(remoteJudgeDTO.getJudgeId(),
-                                status,
-                                remoteJudgeDTO.getCid(),
-                                remoteJudgeDTO.getUid(),
-                                remoteJudgeDTO.getPid(),
-                                remoteJudgeDTO.getGid(),
-                                null,
-                                null);
-                    }
-
-                    Future future = futureTaskMap.get(key);
-                    if (future != null) {
-                        future.cancel(true);
-                        futureTaskMap.remove(key);
-                    }
-                } else {
-
-                    Judge judge = new Judge();
-                    judge.setSubmitId(remoteJudgeDTO.getJudgeId())
-                            .setStatus(status);
-                    // 写回数据库
-                    judgeEntityService.updateById(judge);
-                }
-            }
-        };
-        ScheduledFuture<?> beeperHandle = scheduler.scheduleWithFixedDelay(
-                getResultTask, 2500, 2500, TimeUnit.MILLISECONDS);
-        futureTaskMap.put(key, beeperHandle);
+    public void process(RemoteJudgeStrategy strategy) {
+        RemoteJudgeDTO dto = strategy.getRemoteJudgeDTO();
+        String key = dto.getOj() + ":" + dto.getJudgeId();
+        PollTask task = new PollTask(key, strategy, dto);
+        if (activeTasks.putIfAbsent(key, task) != null) return;
+        try {
+            task.future = scheduler.scheduleWithFixedDelay(task, 2500, 2500, TimeUnit.MILLISECONDS);
+            // Completion can precede handle assignment when a scheduler runs immediately.
+            if (task.done.get()) task.future.cancel(false);
+        } catch (RuntimeException e) {
+            task.finish();
+            throw e;
+        }
     }
 
+    private final class PollTask implements Runnable {
+        private final String key;
+        private final RemoteJudgeStrategy strategy;
+        private final RemoteJudgeDTO dto;
+        private final AtomicBoolean done = new AtomicBoolean();
+        private volatile ScheduledFuture<?> future;
+        private int attempts;
+        // Remote parsers may advance a test-case cursor. Retry a failed database write with
+        // the same result rather than dropping those cases by fetching the next response.
+        private RemoteJudgeRes pendingResult;
+        private boolean casesStored;
+        private boolean terminalResultStored;
 
-    private void changeRemoteJudgeLock(String remoteJudge, String username, String ip, Integer port, Long resultSubmitId, Long version) {
-        log.info("After Get Result,remote_judge:[{}],submit_id: [{}]! Begin to return the account to other task!",
-                remoteJudge, resultSubmitId);
-        // 将账号变为可用
-        remoteJudgeService.changeAccountStatus(remoteJudge, username, version);
-        if (RemoteJudgeContext.openCodeforcesFixServer) {
-            if (remoteJudge.equals(Constants.RemoteJudge.GYM_JUDGE.getName())
-                    || remoteJudge.equals(Constants.RemoteJudge.CF_JUDGE.getName())) {
-                log.info("After Get Result,remote_judge:[{}],submit_id: [{}] !Begin to return the Server Status to other task!",
-                        remoteJudge, resultSubmitId);
-                remoteJudgeService.changeServerSubmitCFStatus(ip, port);
+        private PollTask(String key, RemoteJudgeStrategy strategy, RemoteJudgeDTO dto) {
+            this.key = key;
+            this.strategy = strategy;
+            this.dto = dto;
+        }
+
+        @Override
+        public void run() {
+            if (done.get()) return;
+            if (attempts++ >= 60) {
+                fail();
+                return;
+            }
+            try {
+                if (pendingResult == null) pendingResult = strategy.result();
+                if (pendingResult == null || pendingResult.getStatus() == null
+                        || pendingResult.getStatus() < -4 || pendingResult.getStatus() > 8) {
+                    pendingResult = null;
+                    throw new IllegalStateException("Remote OJ returned no valid judge status");
+                }
+                int status = pendingResult.getStatus();
+                if (!casesStored && !CollectionUtils.isEmpty(pendingResult.getJudgeCaseList())) {
+                    if (!judgeCaseEntityService.saveBatch(pendingResult.getJudgeCaseList())) {
+                        throw new IllegalStateException("Failed to store remote judge cases");
+                    }
+                    casesStored = true;
+                }
+                Judge judge = new Judge().setSubmitId(dto.getJudgeId()).setStatus(status);
+                boolean isPending = status == Constants.Judge.STATUS_PENDING.getStatus()
+                        || status == Constants.Judge.STATUS_COMPILING.getStatus()
+                        || status == Constants.Judge.STATUS_JUDGING.getStatus();
+                if (!isPending) {
+                    judge.setTime(pendingResult.getTime()).setMemory(pendingResult.getMemory());
+                    if (status == Constants.Judge.STATUS_COMPILE_ERROR.getStatus()) {
+                        judge.setErrorMessage(pendingResult.getErrorInfo());
+                    } else if (status == Constants.Judge.STATUS_SYSTEM_ERROR.getStatus()) {
+                        judge.setErrorMessage("There is something wrong with the " + dto.getOj() + ", please try again later");
+                    }
+                    boolean inContest = dto.getCid() != null && dto.getCid() != 0;
+                    Integer score = inContest
+                            ? (Objects.equals(status, Constants.Judge.STATUS_ACCEPTED.getStatus()) ? 100 : 0) : null;
+                    judge.setScore(score);
+                    if (!terminalResultStored) {
+                        if (!judgeEntityService.updateById(judge)) {
+                            throw new IllegalStateException("Failed to store remote judge result");
+                        }
+                        terminalResultStored = true;
+                    }
+                    judgeContext.updateOtherTable(dto.getJudgeId(), status, dto.getCid(), dto.getUid(),
+                            dto.getPid(), dto.getGid(), score, inContest ? judge.getTime() : null);
+                    log.info("[{}] Get Result Successfully! Status:[{}]", dto.getOj(), status);
+                    finish();
+                } else {
+                    if (!judgeEntityService.updateById(judge)) {
+                        throw new IllegalStateException("Failed to store remote judge status");
+                    }
+                    pendingResult = null;
+                    casesStored = false;
+                }
+            } catch (Exception e) {
+                // Any uncaught exception cancels subsequent scheduled executions. Keep
+                // invalid responses and transient persistence failures inside the retry limit.
+                if (attempts == 60) log.error("Failed to obtain or save remote judge result", e);
+            }
+        }
+
+        private void fail() {
+            if (terminalResultStored) {
+                // The OJ verdict is already durable. A failed derived-table update must
+                // not turn a valid accepted/wrong-answer verdict into a submission failure.
+                log.error("Remote judge result is saved but derived-table synchronization exhausted retries, judgeId={}",
+                        dto.getJudgeId());
+                finish();
+                return;
+            }
+            try {
+                UpdateWrapper<Judge> update = new UpdateWrapper<>();
+                update.set("status", Constants.Judge.STATUS_SUBMITTED_FAILED.getStatus())
+                        .set("error_message", "Waiting for remote judge result exceeds the maximum number of times, please try submitting again!")
+                        .eq("submit_id", dto.getJudgeId());
+                judgeEntityService.update(update);
+            } catch (Exception e) {
+                log.error("Failed to store remote judge timeout", e);
+            }
+            try {
+                judgeContext.updateOtherTable(dto.getJudgeId(), Constants.Judge.STATUS_SYSTEM_ERROR.getStatus(),
+                        dto.getCid(), dto.getUid(), dto.getPid(), dto.getGid(), null, null);
+            } catch (Exception e) {
+                log.error("Failed to synchronize remote judge timeout", e);
+            } finally {
+                finish();
+            }
+        }
+
+        private void finish() {
+            if (!done.compareAndSet(false, true)) return;
+            try {
+                changeRemoteJudgeLock(dto.getOj(), dto.getUsername(), dto.getServerIp(), dto.getServerPort(),
+                        dto.getSubmitId(), dto.getAccountVersion());
+            } catch (Exception e) {
+                log.error("Failed to release remote judge account", e);
+            } finally {
+                ScheduledFuture<?> handle = future;
+                if (handle != null) handle.cancel(false);
+                // An old task must never remove a newly scheduled task with the same key.
+                activeTasks.remove(key, this);
             }
         }
     }
 
-
+    private void changeRemoteJudgeLock(String remoteJudge, String username, String ip, Integer port,
+                                       Long resultSubmitId, Long version) {
+        log.info("After Get Result,remote_judge:[{}],submit_id: [{}]! Begin to return the account to other task!",
+                remoteJudge, resultSubmitId);
+        remoteJudgeService.changeAccountStatus(remoteJudge, username, version);
+        if (RemoteJudgeContext.openCodeforcesFixServer
+                && (Constants.RemoteJudge.GYM_JUDGE.getName().equals(remoteJudge)
+                || Constants.RemoteJudge.CF_JUDGE.getName().equals(remoteJudge))) {
+            remoteJudgeService.changeServerSubmitCFStatus(ip, port);
+        }
+    }
 }

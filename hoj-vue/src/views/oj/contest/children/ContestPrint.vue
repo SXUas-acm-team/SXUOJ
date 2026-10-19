@@ -61,12 +61,6 @@ export default {
         mMessage.error(this.$i18n.t('m.Content_cannot_be_empty'));
         return;
       }
-      if (this.ruleForm.content.length < 50) {
-        mMessage.error(
-          this.$i18n.t('m.The_number_of_content_cannot_be_less_than_50')
-        );
-        return;
-      }
       let data = {
         cid: this.contestID,
         content: this.ruleForm.content,

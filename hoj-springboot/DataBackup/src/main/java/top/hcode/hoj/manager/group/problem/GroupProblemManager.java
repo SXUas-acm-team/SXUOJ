@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
@@ -32,6 +33,7 @@ import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.validator.GroupValidator;
 import top.hcode.hoj.validator.ProblemValidator;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
 
 import java.io.File;
 import java.util.LinkedList;
@@ -73,6 +75,9 @@ public class GroupProblemManager {
     @Autowired
     private ProblemValidator problemValidator;
 
+    @Autowired
+    private ProblemContentAccessValidator problemContentAccessValidator;
+
     @Value("${hoj.judge.token:no_judge_token}")
     private String judgeToken;
 
@@ -94,7 +99,9 @@ public class GroupProblemManager {
         currentPage = top.hcode.hoj.utils.RequestLimits.pageNumber(currentPage);
         limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 10);
 
-        return groupProblemEntityService.getProblemList(limit, currentPage, gid);
+        IPage<ProblemVO> result = groupProblemEntityService.getProblemList(limit, currentPage, gid);
+        result.getRecords().removeIf(problem -> !problemContentAccessValidator.canAccessProblem(problem.getPid(), null));
+        return result;
     }
 
     public IPage<Problem> getAdminProblemList(Integer limit, Integer currentPage, Long gid) throws StatusNotFoundException, StatusForbiddenException {
@@ -182,6 +189,7 @@ public class GroupProblemManager {
         }
 
         problemDto.getProblem().setIsGroup(true);
+        problemDto.getProblem().setAuthor(userRolesVo.getUsername()).setModifiedUser(userRolesVo.getUsername());
 
         problemDto.getProblem().setApplyPublicProgress(null);
 
@@ -206,6 +214,7 @@ public class GroupProblemManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateProblem(ProblemDTO problemDto) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
 
         problemValidator.validateGroupProblemUpdate(problemDto.getProblem());
@@ -255,6 +264,7 @@ public class GroupProblemManager {
 
         problemDto.getProblem().setIsGroup(problem.getIsGroup());
         problemDto.getProblem().setGid(problem.getGid());
+        problemDto.getProblem().setAuthor(problem.getAuthor());
 
         List<Tag> tagList = new LinkedList<>();
         for (Tag tag : problemDto.getTags()) {

@@ -79,6 +79,7 @@ class BusinessOwnershipTest {
         inject(manager, "accessValidator", access); inject(manager, "trainingManager", mock(TrainingManager.class));
         when(problems.getOne(any(), eq(false))).thenReturn(new Problem().setId(2L).setProblemId("P2").setAuth(1).setIsGroup(false));
         Judge judge = new Judge().setGid(99L).setUid("member");
+        inject(manager, "problemContentAccessValidator", mock(top.hcode.hoj.validator.ProblemContentAccessValidator.class));
         manager.initCommonSubmission("P2", 99L, judge);
         assertNull(judge.getGid()); verify(access).validateAccess(HOJAccessEnum.PUBLIC_JUDGE);
     }
@@ -128,6 +129,8 @@ class BusinessOwnershipTest {
         inject(manager, "languageEntityService", languages); inject(manager, "codeTemplateEntityService", templates);
         inject(manager, "userInfoEntityService", users); inject(manager, "judgeEntityService", mock(JudgeEntityService.class));
         inject(manager, "contestValidator", mock(ContestValidator.class));
+        inject(manager, "problemContentAccessValidator", mock(top.hcode.hoj.validator.ProblemContentAccessValidator.class));
+        inject(manager, "protectedProblemResourceManager", mock(top.hcode.hoj.manager.file.ProtectedProblemResourceManager.class));
         when(contests.getById(1L)).thenReturn(new Contest().setId(1L).setUid("owner").setIsGroup(false)
                 .setStatus(Constants.Contest.STATUS_ENDED.getCode()).setAllowEndSubmit(false));
         when(assignments.getOne(any())).thenReturn(new ContestProblem().setId(3L).setPid(2L).setCid(1L).setDisplayTitle("title"));

@@ -55,17 +55,19 @@ public class GYMProblemStrategy extends CFProblemStrategy {
 
     @Override
     public RemoteProblemInfo getProblemInfo(String problemId, String author) {
+        String[] identifier = RemoteProblemId.codeforces(problemId);
         try {
             return super.getProblemInfo(problemId, author);
+        } catch (IllegalArgumentException invalidInput) {
+            throw invalidInput;
         } catch (Exception ignored) {
-            String contestNum = ReUtil.get("([0-9]+)[A-Z]{1}[0-9]{0,1}", problemId, 1);
-            String problemNum = ReUtil.get("[0-9]+([A-Z]{1}[0-9]{0,1})", problemId, 1);
-            return getPDFHtml(problemId, contestNum, problemNum, author);
+            return getPDFHtml(problemId, identifier[0], identifier[1], author);
         }
     }
 
     @Override
     public RemoteProblemInfo getProblemInfoByLogin(String problemId, String author, String username, String password) throws Exception {
+        RemoteProblemId.codeforces(problemId);
         login(username, password);
         if (!CollectionUtils.isEmpty(cookies)) {
             return this.getProblemInfo(problemId, author);

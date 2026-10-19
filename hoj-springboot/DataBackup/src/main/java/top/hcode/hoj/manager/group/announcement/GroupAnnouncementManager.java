@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
 import top.hcode.hoj.common.exception.StatusNotFoundException;
@@ -117,6 +118,7 @@ public class GroupAnnouncementManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateAnnouncement(Announcement announcement) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
 
         commonValidator.validateNotEmpty(announcement.getId(), "公告ID");

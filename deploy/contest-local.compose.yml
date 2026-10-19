@@ -1,0 +1,76 @@
+# Isolated copy of the production database. Never point this project at production.
+services:
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.0}
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TEST_MYSQL_PASSWORD:?Set a test-only MySQL password}
+      MYSQL_DATABASE: hoj
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks: [isolated]
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -uroot --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --requirepass, "${TEST_REDIS_PASSWORD:?Set a test-only Redis password}"]
+    networks: [isolated]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="${TEST_REDIS_PASSWORD}" redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  hoj-backend:
+    image: ${SXUOJ_BACKEND_IMAGE:?Set the backend image to test}
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,local
+      NACOS_ENABLED: "false"
+      NACOS_PASSWORD: ${TEST_NACOS_PASSWORD:?Set a test-only Nacos placeholder}
+      MYSQL_HOST: mysql
+      MYSQL_PUBLIC_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_PUBLIC_PORT: "3306"
+      MYSQL_DB: hoj
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${TEST_MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${TEST_REDIS_PASSWORD}
+      JWT_TOKEN_SECRET: ${TEST_JWT_SECRET:?Set a test-only JWT secret}
+      HOJ_JWT_SECRET: ${TEST_JWT_SECRET}
+      JUDGE_TOKEN: ${TEST_JUDGE_TOKEN:?Set a test-only judge token}
+      JAVA_OPTS: -Xms128m -Xmx768m
+      OPEN_REMOTE_JUDGE: "false"
+      TZ: Asia/Shanghai
+    command: ["--open-remote-judge=false", "--hoj.startup.update-languages=false", "--hoj.schedule.enabled=false"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    volumes:
+      - backend-files:/hoj/file
+      - backend-tests:/hoj/testcase
+      - backend-logs:/hoj/log/backend
+    networks: [isolated]
+  hoj-frontend:
+    image: ${SXUOJ_FRONTEND_IMAGE:?Set the frontend image to test}
+    environment:
+      BACKEND_UPSTREAM: hoj-backend:6688
+    ports:
+      - "127.0.0.1:${TEST_FRONTEND_PORT:-18066}:80"
+      - "127.0.0.1:${TEST_BACKEND_PORT:-16688}:80"
+    depends_on:
+      hoj-backend: {condition: service_healthy}
+    networks: [isolated, ingress]
+
+networks:
+  isolated:
+    internal: true
+  ingress: {}
+volumes:
+  mysql-data:
+  backend-files:
+  backend-tests:
+  backend-logs:

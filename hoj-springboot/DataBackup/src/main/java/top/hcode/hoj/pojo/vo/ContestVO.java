@@ -42,6 +42,10 @@ public class ContestVO implements Serializable {
     @ApiModelProperty(value = "0为公开赛，1为私有赛（有密码），2为保护赛")
     private Integer auth;
 
+    private Boolean confidential;
+    private Date releaseAt;
+    private Boolean released;
+
     @ApiModelProperty("当前服务器系统时间，为了前端统一时间")
     private Date now;
 

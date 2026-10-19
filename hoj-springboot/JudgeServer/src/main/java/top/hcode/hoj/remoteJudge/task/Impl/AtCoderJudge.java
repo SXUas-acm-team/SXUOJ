@@ -64,6 +64,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
             throw new RuntimeException("[AtCoder] Failed to Login, the response status:" + remoteJudgeDTO.getLoginStatus());
         }
 
+        Long previousId = getMaxRunId(remoteJudgeDTO.getUsername(), remoteJudgeDTO.getContestId(), remoteJudgeDTO.getCompleteProblemId());
         HttpResponse response = trySubmit();
 
         if (response.getStatus() == 200) { // 说明被限制提交频率了，
@@ -73,12 +74,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
                 try { time = Integer.parseInt(timeStr); }
                 catch (NumberFormatException e) { throw new IllegalStateException("Invalid AtCoder retry delay"); }
                 if (time < 0 || time > 10) throw new IllegalStateException("AtCoder retry delay exceeds limit");
-                try {
-                    TimeUnit.SECONDS.sleep(time + 1);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException("AtCoder submission interrupted", e);
-                }
+                pauseBeforeRetry(time + 1);
                 response = trySubmit();
             }
         }
@@ -89,16 +85,12 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         }
 
         // 停留3秒钟后再获取id，之后归还账号，避免提交频率过快
-        try {
-            TimeUnit.SECONDS.sleep(3);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        pauseBeforeRetry(3);
 
         Long maxRunId = getMaxRunId(remoteJudgeDTO.getUsername(), remoteJudgeDTO.getContestId(), remoteJudgeDTO.getCompleteProblemId());
 
         remoteJudgeDTO.setCookies(remoteJudgeDTO.getCookies())
-                .setSubmitId(maxRunId);
+                .setSubmitId(maxRunId > previousId ? maxRunId : -1L);
 
     }
 
@@ -108,7 +100,7 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         String csrfToken = remoteJudgeDTO.getCsrfToken();
 
         String submitUrl = HOST + String.format(SUBMIT_URL, remoteJudgeDTO.getContestId());
-        HttpRequest request = SecureHttp.post(submitUrl);
+        HttpRequest request = postRequest(submitUrl);
         HttpRequest httpRequest = request.form(MapUtil.builder(new HashMap<String, Object>())
                 .put("data.TaskScreenName", remoteJudgeDTO.getCompleteProblemId())
                 .put("data.LanguageId", getLanguage(remoteJudgeDTO.getLanguage()))
@@ -179,11 +171,13 @@ public class AtCoderJudge extends RemoteJudgeStrategy {
         // 清除当前线程的cookies缓存
         HttpRequest.getCookieManager().getCookieStore().removeAll();
         RemoteJudgeDTO remoteJudgeDTO = getRemoteJudgeDTO();
-        String url = HOST + String.format("/contests/%s/submissions?f.Task=%s&f.User=%s", contestId, problemId, username);
-        HttpRequest httpRequest = SecureHttp.get(url);
+        String url = HOST + String.format("/contests/%s/submissions?f.Task=%s&f.User=%s", contestId, queryValue(problemId), queryValue(username));
+        HttpRequest httpRequest = getRequest(url);
         httpRequest.cookie(remoteJudgeDTO.getCookies());
         httpRequest.addHeaders(headers);
-        String body = httpRequest.execute().body();
+        HttpResponse response = httpRequest.execute();
+        if (response.getStatus() != 200) throw new IllegalStateException("AtCoder submission list is unavailable");
+        String body = response.body();
         String maxRunId = ReUtil.get("<a href=\"/contests/" + contestId + "/submissions/(\\d+)\".*?>Detail</a>", body, 1);
         return maxRunId != null ? Long.parseLong(maxRunId) : -1L;
     }

@@ -105,13 +105,10 @@
         <vxe-table-column
           :title="$t('m.Signature')"
           min-width="300"
-          show-overflow="ellipsis"
           align="left"
         >
           <template v-slot="{ row }">
-            <span v-katex class="rank-signature-body" v-if="row.signature">{{
-              row.signature
-            }}</span>
+            <RankSignature v-if="row.signature" :content="row.signature" />
           </template>
         </vxe-table-column>
       </vxe-table>
@@ -134,12 +131,14 @@ import utils from '@/common/utils';
 import { RULE_TYPE } from '@/common/constants';
 import { mapGetters } from 'vuex';
 import Avatar from 'vue-avatar';
+import RankSignature from '@/components/oj/common/RankSignature';
 const Pagination = () => import('@/components/oj/common/Pagination');
 export default {
   name: 'acm-rank',
   components: {
     Pagination,
     Avatar,
+    RankSignature,
   },
   data() {
     return {

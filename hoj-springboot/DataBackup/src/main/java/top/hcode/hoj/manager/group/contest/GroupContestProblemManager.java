@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * @Author: LengYun
@@ -95,6 +96,7 @@ public class GroupContestProblemManager {
         return adminContestProblemManager.getProblemList(limit, currentPage, keyword, cid, problemType, oj);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Map<Object, Object> addProblem(ProblemDTO problemDto) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
 
         problemValidator.validateGroupProblem(problemDto.getProblem());
@@ -131,6 +133,7 @@ public class GroupContestProblemManager {
 
         problemDto.getProblem().setAuth(3);
         problemDto.getProblem().setIsGroup(true);
+        problemDto.getProblem().setAuthor(userRolesVo.getUsername()).setModifiedUser(userRolesVo.getUsername());
 
         List<Tag> tagList = new LinkedList<>();
         for (Tag tag : problemDto.getTags()) {
@@ -192,7 +195,19 @@ public class GroupContestProblemManager {
         return contestProblem;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateContestProblem(ContestProblem contestProblem) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
+        if (contestProblem == null || contestProblem.getId() == null || contestProblem.getCid() == null) {
+            throw new StatusFailException("更新失败，比赛题目信息不完整！");
+        }
+        ContestProblem storedProblem = contestProblemEntityService.getById(contestProblem.getId());
+        if (storedProblem == null) {
+            throw new StatusNotFoundException("更新失败，该比赛题目不存在！");
+        }
+        if (!Objects.equals(storedProblem.getCid(), contestProblem.getCid())
+                || (contestProblem.getPid() != null && !Objects.equals(storedProblem.getPid(), contestProblem.getPid()))) {
+            throw new StatusForbiddenException("更新失败，不可更改比赛题目的所属关系！");
+        }
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
@@ -222,14 +237,19 @@ public class GroupContestProblemManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
-        boolean isOk = contestProblemEntityService.saveOrUpdate(contestProblem);
+        ContestProblem update = new ContestProblem().setId(storedProblem.getId())
+                .setDisplayId(contestProblem.getDisplayId()).setDisplayTitle(contestProblem.getDisplayTitle())
+                .setColor(contestProblem.getColor());
+        boolean isOk = contestProblemEntityService.updateById(update);
         if (isOk) {
-            contestProblemEntityService.syncContestRecord(contestProblem.getPid(), contestProblem.getCid(), contestProblem.getDisplayId());
+            contestProblemEntityService.syncContestRecord(storedProblem.getPid(), storedProblem.getCid(),
+                    contestProblem.getDisplayId() == null ? storedProblem.getDisplayId() : contestProblem.getDisplayId());
         } else {
             throw new StatusFailException("更新失败！");
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void deleteContestProblem(Long pid, Long cid) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
@@ -269,6 +289,7 @@ public class GroupContestProblemManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void addProblemFromPublic(ContestProblemDTO contestProblemDto) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 

@@ -17,6 +17,8 @@ import java.util.List;
  */
 public interface ContestEntityService extends IService<Contest> {
 
+    Contest getByIdForUpdate(Long cid);
+
     List<ContestVO> getWithinNext14DaysContests();
 
     IPage<ContestVO> getContestList(Integer limit, Integer currentPage, Integer type, Integer status, String keyword);

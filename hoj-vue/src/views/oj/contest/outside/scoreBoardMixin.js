@@ -4,18 +4,35 @@ import { CONTEST_STATUS,CONTEST_STATUS_REVERSE,CONTEST_TYPE_REVERSE,RULE_TYPE, b
 import { mapState, mapGetters, mapActions } from 'vuex';
 import moment from 'moment';
 import storage from '@/common/storage';
+import contestAccessPolling from '@/common/contestAccessPolling';
 export default {
+  mixins: [contestAccessPolling],
+  data() {
+    return { scoreboardRequestVersion: 0, scoreboardInfoVersion: 0, scoreboardViewDestroyed: false,
+      scoreboardRefreshPending: null, refreshFunc: null, timer: null }
+  },
   methods: {
     init(){
+    if (this.scoreboardViewDestroyed) return Promise.resolve();
+    clearInterval(this.timer);
+    clearInterval(this.refreshFunc);
+    this.scoreboardRequestVersion += 1;
+    this.scoreboardRefreshPending = null;
+    const version = ++this.scoreboardInfoVersion;
     this.contestID = this.$route.params.contestID;
+    const cid = this.contestID;
+    const current = () => !this.scoreboardViewDestroyed && version === this.scoreboardInfoVersion &&
+      String(this.$route.params.contestID) === String(cid);
     this.CONTEST_TYPE_REVERSE = Object.assign({}, CONTEST_TYPE_REVERSE);
     this.CONTEST_STATUS = Object.assign({}, CONTEST_STATUS);
     this.CONTEST_STATUS_REVERSE = Object.assign({}, CONTEST_STATUS_REVERSE);
     this.RULE_TYPE = Object.assign({}, RULE_TYPE);
     let key = buildContestRankConcernedKey(this.contestID);
-    this.concernedList = storage.get(key) || [];
+    const saved = storage.get(key);
+    this.concernedList = Array.isArray(saved) ? saved : [];
     this.loading.info = true;
-    this.$store.dispatch('getScoreBoardContestInfo').then((res) => {
+    return this.$store.dispatch('getScoreBoardContestInfo').then((res) => {
+        if (!current()) return;
         this.getContestOutsideScoreboard();
         if (!this.contestEnded) {
           this.autoRefresh = true;
@@ -29,17 +46,29 @@ export default {
         if (endTime.isAfter(moment(data.now))) {
           // 实时更新时间
           this.timer = setInterval(() => {
-            this.$store.commit('nowAdd1s');
+            if (current() && !this.contest.confidential) this.$store.commit('nowAdd1s');
           }, 1000);
         }
       },(err)=>{
-        this.loading.info = false;
+        if (current()) this.loading.info = false;
       });
     },
-    getContestOutsideScoreboard () {
-      this.$store.dispatch('getContestProblems');
+    getContestOutsideScoreboard (refresh = false) {
+      // Click/keyboard handlers pass an event; only the interval passes true.
+      refresh = refresh === true;
+      if (this.scoreboardViewDestroyed || (refresh && this.scoreboardRefreshPending)) return Promise.resolve();
+      const version = ++this.scoreboardRequestVersion;
+      const cid = this.$route.params.contestID;
+      const current = () => !this.scoreboardViewDestroyed && version === this.scoreboardRequestVersion &&
+        String(this.$route.params.contestID) === String(cid);
+      if (refresh) this.scoreboardRefreshPending = version;
+      const publicPrivateBoard = this.contest && !this.contest.confidential && this.contest.auth === 1 &&
+        !this.isContestAdmin && !(this.$store.state && this.$store.state.contest.intoAccess);
+      // The external-info endpoint already authorized and supplied these columns.
+      // A public legacy private board does not grant access to its password-gated list.
+      if (!publicPrivateBoard) this.$store.dispatch('getContestProblems').catch(() => {});
       let data = {
-        cid: this.$route.params.contestID,
+        cid,
         forceRefresh: this.forceUpdate ? true: false,
         removeStar: !this.showStarUser,
         concernedList:this.concernedList,
@@ -49,22 +78,31 @@ export default {
         containsEnd: this.isContainsAfterContestJudge
       }
       this.loading.rank = true;
-      api.getContestOutsideScoreboard(data).then(res => {
+      return api.getContestOutsideScoreboard(data).then(res => {
+        if (!current()) return;
+        if (this.contest && this.contest.confidential && this.contestMenuDisabled) return;
         this.applyToTable(res.data.data.records);
         this.total = res.data.data.total
         this.loading.rank = false;
       },(err)=>{
+        if (!current()) return;
         this.loading.rank = false;
+        this.dataRank = [];
+        this.total = 0;
         if(this.refreshFunc){
           this.autoRefresh = false;
           clearInterval(this.refreshFunc)
         }
+      }).finally(() => {
+        if (refresh && this.scoreboardRefreshPending === version) this.scoreboardRefreshPending = null;
       })
     },
     handleAutoRefresh (status) {
+      clearInterval(this.refreshFunc);
+      this.refreshFunc = null;
       if (status == true) {
         this.refreshFunc = setInterval(() => {
-          this.getContestOutsideScoreboard()
+          this.getContestOutsideScoreboard(true)
         }, 30000)
       } else {
         clearInterval(this.refreshFunc)
@@ -111,6 +149,12 @@ export default {
     }
   },
   computed: {
+    scoreboardMenuDisabled() {
+      if (!this.contest || this.contest.id == null) return true;
+      // Legacy external boards have their own openRank policy. A private contest
+      // may deliberately publish its board without granting password entry.
+      return this.contest.confidential ? this.contestMenuDisabled : false;
+    },
     ...mapState({
       contest: (state) => state.contest.contest,
       now: (state) => state.contest.now,
@@ -121,7 +165,8 @@ export default {
       'BeginToNowDuration',
       'isContestAdmin',
       'userInfo',
-      'isShowContestSetting'
+      'isShowContestSetting',
+      'contestMenuDisabled'
     ]),
     forceUpdate: {
       get () {
@@ -174,7 +219,27 @@ export default {
       }
     },
   },
+  watch: {
+    scoreboardMenuDisabled(disabled) {
+      if (disabled) {
+        this.scoreboardRequestVersion += 1;
+        this.dataRank = [];
+        this.total = 0;
+      } else if (this.contest && this.contest.confidential && !this.loading.info) {
+        this.getContestOutsideScoreboard();
+      }
+    },
+    '$route.params.contestID'(cid, previous) {
+      if (String(cid) !== String(previous)) {
+        this.$store.commit('clearContest');
+        if (cid != null) this.init();
+      }
+    },
+  },
   beforeDestroy () {
+    this.scoreboardViewDestroyed = true;
+    this.scoreboardRequestVersion += 1;
+    this.scoreboardInfoVersion += 1;
     clearInterval(this.refreshFunc)
     clearInterval(this.timer);
     this.$store.commit('clearContest');

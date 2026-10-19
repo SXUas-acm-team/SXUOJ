@@ -8,6 +8,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+import top.hcode.hoj.manager.oj.ContestAccessPolicyManager;
 import org.springframework.util.StringUtils;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
@@ -39,6 +41,9 @@ import java.util.Objects;
  */
 @Component
 public class GroupContestManager {
+
+    @Autowired
+    private ContestAccessPolicyManager contestAccessPolicyManager;
     @Autowired
     private GroupEntityService groupEntityService;
 
@@ -152,9 +157,11 @@ public class GroupContestManager {
             adminContestVo.setAwardConfigList(new ArrayList<>());
         }
 
+        contestAccessPolicyManager.decorate(adminContestVo);
         return adminContestVo;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void addContest(AdminContestVO adminContestVo) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
 
         contestValidator.validateContest(adminContestVo);
@@ -178,6 +185,7 @@ public class GroupContestManager {
         }
 
         Contest contest = BeanUtil.copyProperties(adminContestVo, Contest.class, "starAccount");
+        contestAccessPolicyManager.prepare(contest, adminContestVo, null);
         JSONObject accountJson = new JSONObject();
         if (adminContestVo.getStarAccount() == null) {
             accountJson.set("star_account", new ArrayList<>());
@@ -201,8 +209,10 @@ public class GroupContestManager {
         if (!isOk) {
             throw new StatusFailException("添加失败");
         }
+        contestAccessPolicyManager.savePolicy(contest, adminContestVo, null);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateContest(AdminContestVO adminContestVo) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
 
         contestValidator.validateContest(adminContestVo);
@@ -217,7 +227,7 @@ public class GroupContestManager {
             throw new StatusNotFoundException("更新失败，比赛ID不可为空！");
         }
 
-        Contest oldContest = contestEntityService.getById(cid);
+        Contest oldContest = contestEntityService.getByIdForUpdate(cid);
 
         if (oldContest == null) {
             throw new StatusNotFoundException("更新失败，该比赛不存在！");
@@ -241,6 +251,8 @@ public class GroupContestManager {
         }
 
         Contest contest = BeanUtil.copyProperties(adminContestVo, Contest.class, "starAccount");
+        boolean previouslyConfidential = contestAccessPolicyManager.isConfidential(oldContest);
+        contestAccessPolicyManager.prepare(contest, adminContestVo, oldContest);
         contest.setGid(oldContest.getGid())
                 .setUid(oldContest.getUid()).setAuthor(oldContest.getAuthor()).setGmtCreate(oldContest.getGmtCreate());
         JSONObject accountJson = new JSONObject();
@@ -258,7 +270,10 @@ public class GroupContestManager {
         boolean isOk = contestEntityService.saveOrUpdate(contest);
         if (isOk) {
             if (!contest.getAuth().equals(Constants.Contest.AUTH_PUBLIC.getCode())) {
-                if (!Objects.equals(oldContest.getPwd(), contest.getPwd())) {
+                if (!Objects.equals(oldContest.getPwd(), contest.getPwd())
+                        || (Boolean.TRUE.equals(adminContestVo.getConfidential()) && !previouslyConfidential)
+                        || (previouslyConfidential && (!Objects.equals(oldContest.getStartTime(), contest.getStartTime())
+                        || !Objects.equals(oldContest.getEndTime(), contest.getEndTime())))) {
                     UpdateWrapper<ContestRegister> updateWrapper = new UpdateWrapper<>();
                     updateWrapper.eq("cid", contest.getId());
                     contestRegisterEntityService.remove(updateWrapper);
@@ -267,14 +282,16 @@ public class GroupContestManager {
         } else {
             throw new StatusFailException("修改失败");
         }
+        contestAccessPolicyManager.savePolicy(contest, adminContestVo, oldContest);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void deleteContest(Long cid) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
 
-        Contest contest = contestEntityService.getById(cid);
+        Contest contest = contestEntityService.getByIdForUpdate(cid);
 
         if (contest == null) {
             throw new StatusNotFoundException("删除失败，该比赛不存在！");
@@ -297,6 +314,7 @@ public class GroupContestManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
+        contestAccessPolicyManager.deletePolicy(cid);
         boolean isOk = contestEntityService.removeById(cid);
         if (!isOk) {
             throw new StatusFailException("删除失败");

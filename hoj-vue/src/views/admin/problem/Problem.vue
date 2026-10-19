@@ -928,6 +928,7 @@
 
 <script>
 import utils from "@/common/utils";
+import extraFilesMixin from "@/components/admin/extraFilesMixin";
 import { mapGetters } from "vuex";
 import api from "@/common/api";
 import myMessage from "@/common/message";
@@ -938,6 +939,7 @@ const AddExtraFile = () => import("@/components/admin/AddExtraFile.vue");
 const CodeMirror = () => import("@/components/admin/CodeMirror.vue");
 export default {
   name: "Problem",
+  mixins: [extraFilesMixin],
   components: {
     Accordion,
     AddExtraFile,
@@ -1001,7 +1003,7 @@ export default {
         hint: "",
         source: "",
         cid: null,
-        isRemoveEndBlank:false,
+        isRemoveEndBlank:true,
         openCaseResult: true,
         judgeMode: "default",
         judgeCaseMode: "default",
@@ -1108,7 +1110,7 @@ export default {
         hint: "",
         source: "",
         cid: null,
-        isRemoveEndBlank:false,
+        isRemoveEndBlank:true,
         openCaseResult: true,
         judgeMode: "default",
         judgeCaseMode: "default",
@@ -1230,14 +1232,7 @@ export default {
             this.problem["examples"][0]["isOpen"] = true;
           }
           this.testCaseUploaded = true;
-          if (this.problem.userExtraFile) {
-            this.addUserExtraFile = true;
-            this.userExtraFile = JSON.parse(this.problem.userExtraFile);
-          }
-          if (this.problem.judgeExtraFile) {
-            this.addJudgeExtraFile = true;
-            this.judgeExtraFile = JSON.parse(this.problem.judgeExtraFile);
-          }
+          this.loadExtraFiles();
           api
             .admin_getProblemCases(this.pid, this.problem.isUploadCase)
             .then((res) => {
@@ -1388,33 +1383,6 @@ export default {
       );
     },
 
-    deleteFile(type, name) {
-      if (type == "user") {
-        this.$delete(this.userExtraFile, name);
-      } else {
-        this.$delete(this.judgeExtraFile, name);
-      }
-    },
-
-    upsertFile(type, name, oldname, content) {
-      if (type == "user") {
-        if (oldname && oldname != name) {
-          this.$delete(this.userExtraFile, oldname);
-        }
-        if (!this.userExtraFile) {
-          this.userExtraFile = {};
-        }
-        this.userExtraFile[name] = content;
-      } else {
-        if (oldname && oldname != name) {
-          this.$delete(this.judgeExtraFile, name);
-        }
-        if (!this.judgeExtraFile) {
-          this.judgeExtraFile = {};
-        }
-        this.judgeExtraFile[name] = content;
-      }
-    },
 
     problemTypeChange(type) {
       if (type == 1) {
@@ -1577,6 +1545,7 @@ export default {
       });
     },
     submit() {
+      if (!this.validateExtraFiles()) return;
       if (!this.problem.problemId) {
         myMessage.error(
           this.$i18n.t("m.Problem_Display_ID") +

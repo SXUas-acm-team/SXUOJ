@@ -37,7 +37,8 @@ public class RemoteJudgeContext {
     public static final boolean openCodeforcesFixServer = false;
 
     public void judge(ToJudgeDTO toJudgeDTO) {
-        String[] source = toJudgeDTO.getRemoteJudgeProblem().split("-");
+        // AtCoder contest names can contain hyphens (for example code-festival).
+        String[] source = toJudgeDTO.getRemoteJudgeProblem().split("-", 2);
         String remoteOj = source[0];
         String remoteProblemId = source[1];
         RemoteJudgeDTO remoteJudgeDTO = RemoteJudgeDTO.builder()
@@ -85,8 +86,8 @@ public class RemoteJudgeContext {
                     remoteJudgeDTO.setContestId(ReUtil.get("([0-9]+)[0-9]{2}", remoteJudgeDTO.getCompleteProblemId(), 1));
                     remoteJudgeDTO.setProblemNum(ReUtil.get("[0-9]+([0-9]{2})", remoteJudgeDTO.getCompleteProblemId(), 1));
                 } else {
-                    remoteJudgeDTO.setContestId(ReUtil.get("([0-9]+)[A-Z]{1}[0-9]{0,1}", remoteJudgeDTO.getCompleteProblemId(), 1));
-                    remoteJudgeDTO.setProblemNum(ReUtil.get("[0-9]+([A-Z]{1}[0-9]{0,1})", remoteJudgeDTO.getCompleteProblemId(), 1));
+                    remoteJudgeDTO.setContestId(ReUtil.get("^([0-9]+)[A-Z]+[0-9]*$", remoteJudgeDTO.getCompleteProblemId(), 1));
+                    remoteJudgeDTO.setProblemNum(ReUtil.get("^[0-9]+([A-Z]+[0-9]*)$", remoteJudgeDTO.getCompleteProblemId(), 1));
                 }
                 break;
             case "AC":

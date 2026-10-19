@@ -20,11 +20,14 @@ import top.hcode.hoj.common.exception.StatusSystemErrorException;
 import top.hcode.hoj.common.result.ResultStatus;
 import top.hcode.hoj.dao.problem.ProblemCaseEntityService;
 import top.hcode.hoj.dao.problem.ProblemEntityService;
+import top.hcode.hoj.dao.group.GroupEntityService;
+import top.hcode.hoj.pojo.entity.group.Group;
 import top.hcode.hoj.pojo.entity.problem.Problem;
 import top.hcode.hoj.pojo.entity.problem.ProblemCase;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.utils.SafeFiles;
+import top.hcode.hoj.utils.UploadFileUtils;
 import top.hcode.hoj.validator.GroupValidator;
 
 import javax.servlet.http.HttpServletResponse;
@@ -51,6 +54,9 @@ public class TestCaseManager {
     @Autowired
     private GroupValidator groupValidator;
 
+    @Autowired
+    private GroupEntityService groupEntityService;
+
     public Map<Object, Object> uploadTestcaseZip(MultipartFile file, Long gid, String mode) throws StatusFailException, StatusSystemErrorException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
@@ -64,9 +70,11 @@ public class TestCaseManager {
         }
 
         //获取文件后缀
-        String suffix = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf(".") + 1);
-        if (!"zip".toUpperCase().contains(suffix.toUpperCase())) {
-            throw new StatusFailException("请上传zip格式的测试数据压缩包！");
+        UploadFileUtils.requireExtension(file, "zip");
+        try {
+            SafeFiles.basename(file.getOriginalFilename());
+        } catch (IllegalArgumentException invalid) {
+            throw new StatusFailException("上传的测试数据文件名不合法！");
         }
         String fileDirId = IdUtil.simpleUUID();
         String fileDir = Constants.File.TESTCASE_TMP_FOLDER.getPath() + File.separator + fileDirId;
@@ -186,15 +194,21 @@ public class TestCaseManager {
 
         Problem problem = problemEntityService.getById(pid);
 
+        if (problem == null) throw new StatusFailException("该题目不存在！");
+
         Long gid = problem.getGid();
 
         if (gid != null) {
-            if (!isRoot && !problem.getAuthor().equals(userRolesVo.getUsername())
-                    && !groupValidator.isGroupMember(userRolesVo.getUid(), gid)) {
+            Group group = groupEntityService.getById(gid);
+            if (group == null || (!isRoot && Objects.equals(group.getStatus(), 1))) {
+                throw new StatusFailException("该团队不存在或已被封禁！");
+            }
+            if (!isRoot && !Objects.equals(problem.getAuthor(), userRolesVo.getUsername())
+                    && !groupValidator.isGroupRoot(userRolesVo.getUid(), gid)) {
                 throw new StatusForbiddenException("对不起，您无权限操作！");
             }
         } else {
-            if (!isRoot && !isProblemAdmin && !problem.getAuthor().equals(userRolesVo.getUsername())) {
+            if (!isRoot && !isProblemAdmin && !Objects.equals(problem.getAuthor(), userRolesVo.getUsername())) {
                 throw new StatusForbiddenException("对不起，您无权限操作！");
             }
         }

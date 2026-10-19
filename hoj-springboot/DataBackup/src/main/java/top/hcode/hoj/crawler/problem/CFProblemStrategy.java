@@ -50,19 +50,9 @@ public class CFProblemStrategy extends ProblemStrategy {
     @Override
     public RemoteProblemInfo getProblemInfo(String problemId, String author) throws Exception {
 
-        String contestId;
-        String problemNum;
-        if (NumberUtil.isInteger(problemId)) {
-            contestId = ReUtil.get("([0-9]+)[0-9]{2}", problemId, 1);
-            problemNum = ReUtil.get("[0-9]+([0-9]{2})", problemId, 1);
-        } else {
-            contestId = ReUtil.get("([0-9]+)[A-Z]{1}[0-9]{0,1}", problemId, 1);
-            problemNum = ReUtil.get("[0-9]+([A-Z]{1}[0-9]{0,1})", problemId, 1);
-        }
-
-        if (contestId == null || problemNum == null) {
-            throw new IllegalArgumentException("Codeforces: Incorrect problem id format!");
-        }
+        String[] identifier = RemoteProblemId.codeforces(problemId);
+        String contestId = identifier[0];
+        String problemNum = identifier[1];
 
         HttpRequest request = SecureHttp.get(getProblemUrl(contestId, problemNum))
                 .header("cookie", "RCPC=" + CodeForcesUtils.getRCPC())

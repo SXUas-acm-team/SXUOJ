@@ -39,12 +39,7 @@ public class AtCoderProblemStrategy extends ProblemStrategy {
     @Override
     public RemoteProblemInfo getProblemInfo(String problemId, String author) throws Exception {
 
-        problemId = problemId.toLowerCase();
-//        boolean isMatch = ReUtil.isMatch("[a-z]+[0-9]+_[a-z]*[0-9]*", problemId);
-        boolean isMatch = false;
-        if (!isMatch && !problemId.contains("_")){
-            throw new IllegalArgumentException("AtCoder: Incorrect problem id format! Must be like `abc110_a`");
-        }
+        problemId = RemoteProblemId.atCoder(problemId);
 
         String contestId = problemId.split("_")[0];
 

@@ -3,6 +3,7 @@ package top.hcode.hoj.mapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.springframework.stereotype.Repository;
 import top.hcode.hoj.pojo.vo.ContestRegisterCountVO;
 import top.hcode.hoj.pojo.vo.ContestVO;
@@ -22,6 +23,9 @@ import java.util.List;
 @Mapper
 @Repository
 public interface ContestMapper extends BaseMapper<Contest> {
+
+    @Select("SELECT * FROM contest WHERE id = #{cid} FOR UPDATE")
+    Contest getByIdForUpdate(@Param("cid") Long cid);
 
     List<ContestVO> getContestList(IPage page,
                                    @Param("type") Integer type,

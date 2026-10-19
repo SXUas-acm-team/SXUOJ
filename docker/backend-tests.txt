@@ -1,0 +1,32 @@
+# Isolated regressions only. RemoteJudge integration tests require live accounts
+# and must not run while building an image. One Surefire class name per line.
+DotenvEnvironmentPostProcessorTest
+SecurityEnvironmentPostProcessorTest
+HttpTransportSecurityTest
+NacosSwitchConfigTest
+AccountAndQueryLimitsTest
+AuthenticationRegressionTest
+BackendAuthorizationTest
+BatchUserTransactionTest
+BusinessOwnershipTest
+IngressAndLogRegressionTest
+LegacyQueueTest
+MailAndLoginNoticeRegressionTest
+MapperQuerySecurityTest
+UntrustedFilesTest
+RemoteAccountLeaseTest
+JudgeBoundariesTest
+BusinessRegressionTest
+PasswordSessionRegressionTest
+JudgeRegressionTest
+TestCaseNormalizationTest
+TestJudgeFailureClassificationTest
+FileBoundarySecondTest
+CorsRegressionTest
+SecondBackendRegressionTest
+ProblemAssociationsRegressionTest
+NetworkJudgeRegressionTest
+CrawlerNetworkRegressionTest
+ConfidentialContestAccessTest
+ConfidentialProblemContentTest
+ProtectedProblemResourceTest

@@ -49,6 +49,7 @@
 <script>
 import CodeMirror from '@/components/admin/CodeMirror.vue';
 import myMessage from '@/common/message';
+import { isSafeExtraFileName } from '@/common/extraFiles';
 export default {
   name: 'Accordion',
   components: {
@@ -56,7 +57,7 @@ export default {
   },
   props: {
     files: {
-      type: Array,
+      type: Object,
       required: true,
     },
     type: {
@@ -100,6 +101,10 @@ export default {
       this.upsertFileDialogVisible = true;
     },
     upsertFile() {
+      if (this.fileName && !isSafeExtraFileName(this.fileName)) {
+        myMessage.error(this.$i18n.t('m.Invalid_Extra_File_Config'));
+        return;
+      }
       if (!this.fileName) {
         myMessage.error(
           this.$i18n.t('m.File_Name') + ' ' + this.$i18n.t('m.is_required')

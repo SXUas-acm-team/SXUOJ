@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
@@ -24,6 +25,7 @@ import top.hcode.hoj.pojo.vo.ContestAwardConfigVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.validator.ContestValidator;
+import top.hcode.hoj.manager.oj.ContestAccessPolicyManager;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -47,6 +49,9 @@ public class AdminContestManager {
 
     @Autowired
     private ContestValidator contestValidator;
+
+    @Autowired
+    private ContestAccessPolicyManager contestAccessPolicyManager;
 
     public IPage<Contest> getContestList(Integer limit, Integer currentPage, String keyword) {
 
@@ -106,10 +111,14 @@ public class AdminContestManager {
             adminContestVo.setAwardConfigList(new ArrayList<>());
         }
 
+        contestAccessPolicyManager.decorate(adminContestVo);
         return adminContestVo;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void deleteContest(Long cid) throws StatusFailException {
+        contestEntityService.getByIdForUpdate(cid);
+        contestAccessPolicyManager.deletePolicy(cid);
         boolean isOk = contestEntityService.removeById(cid);
         /*
         contest的id为其他表的外键的表中的对应数据都会被一起删除！
@@ -122,10 +131,12 @@ public class AdminContestManager {
                 "Admin_Contest", "Delete", cid, userRolesVo.getUid(), userRolesVo.getUsername());
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void addContest(AdminContestVO adminContestVo) throws StatusFailException {
         contestValidator.validateContest(adminContestVo);
 
         Contest contest = BeanUtil.copyProperties(adminContestVo, Contest.class, "starAccount");
+        contestAccessPolicyManager.prepare(contest, adminContestVo, null);
         JSONObject accountJson = new JSONObject();
         if (adminContestVo.getStarAccount() == null) {
             accountJson.set("star_account", new ArrayList<>());
@@ -146,8 +157,10 @@ public class AdminContestManager {
         if (!isOk) { // 删除成功
             throw new StatusFailException("添加失败");
         }
+        contestAccessPolicyManager.savePolicy(contest, adminContestVo, null);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void cloneContest(Long cid) throws StatusSystemErrorException {
         Contest contest = contestEntityService.getById(cid);
         if (contest == null) {
@@ -159,8 +172,10 @@ public class AdminContestManager {
         if (!SecurityUtils.getSubject().hasRole("root") && !Objects.equals(contest.getUid(), userRolesVo.getUid())) {
             throw new StatusSystemErrorException("无权克隆其他用户的比赛！");
         }
-        // Cloned contests start hidden and without copying the source password.
-        contest.setPwd(null).setAuth(Constants.Contest.AUTH_PUBLIC.getCode()).setVisible(false);
+        boolean confidential = contestAccessPolicyManager.isConfidential(contest);
+        // A confidential clone remains sealed and hidden until configured with a new password.
+        contest.setPwd(null).setAuth(confidential ? Constants.Contest.AUTH_PRIVATE.getCode()
+                : Constants.Contest.AUTH_PUBLIC.getCode()).setVisible(false);
         contest.setUid(userRolesVo.getUid())
                 .setAuthor(userRolesVo.getUsername())
                 .setSource(cid.intValue())
@@ -168,9 +183,16 @@ public class AdminContestManager {
                 .setGmtCreate(null)
                 .setGmtModified(null);
         contest.setTitle(contest.getTitle() + " [Cloned]");
-        contestEntityService.save(contest);
+        if (!contestEntityService.save(contest)) throw new StatusSystemErrorException("克隆比赛失败！");
+        if (confidential) {
+            AdminContestVO policy = new AdminContestVO();
+            policy.setConfidential(true);
+            try { contestAccessPolicyManager.savePolicy(contest, policy, null); }
+            catch (StatusFailException e) { throw new StatusSystemErrorException(e.getMessage()); }
+        }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateContest(AdminContestVO adminContestVo) throws StatusForbiddenException, StatusFailException {
         contestValidator.validateContest(adminContestVo);
 
@@ -179,13 +201,15 @@ public class AdminContestManager {
         // 是否为超级管理员
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
         // 只有超级管理员和比赛拥有者才能操作
-        Contest storedContest = contestEntityService.getById(adminContestVo.getId());
+        Contest storedContest = contestEntityService.getByIdForUpdate(adminContestVo.getId());
         if (storedContest == null) throw new StatusFailException("比赛不存在！");
         if (!isRoot && !userRolesVo.getUid().equals(storedContest.getUid())) {
             throw new StatusForbiddenException("对不起，你无权限操作！");
         }
         adminContestVo.setUid(storedContest.getUid());
         Contest contest = BeanUtil.copyProperties(adminContestVo, Contest.class, "starAccount");
+        boolean previouslyConfidential = contestAccessPolicyManager.isConfidential(storedContest);
+        contestAccessPolicyManager.prepare(contest, adminContestVo, storedContest);
 
         JSONObject accountJson = new JSONObject();
         accountJson.set("star_account", adminContestVo.getStarAccount());
@@ -200,11 +224,14 @@ public class AdminContestManager {
         }
 
 
-        Contest oldContest = contestEntityService.getById(contest.getId());
+        Contest oldContest = storedContest;
         boolean isOk = contestEntityService.saveOrUpdate(contest);
         if (isOk) {
             if (!contest.getAuth().equals(Constants.Contest.AUTH_PUBLIC.getCode())) {
-                if (!Objects.equals(oldContest.getPwd(), contest.getPwd())) { // 改了比赛密码则需要删掉已有的注册比赛用户
+                if (!Objects.equals(oldContest.getPwd(), contest.getPwd())
+                        || (Boolean.TRUE.equals(adminContestVo.getConfidential()) && !previouslyConfidential)
+                        || (previouslyConfidential && (!Objects.equals(oldContest.getStartTime(), contest.getStartTime())
+                        || !Objects.equals(oldContest.getEndTime(), contest.getEndTime())))) {
                     UpdateWrapper<ContestRegister> updateWrapper = new UpdateWrapper<>();
                     updateWrapper.eq("cid", contest.getId());
                     contestRegisterEntityService.remove(updateWrapper);
@@ -213,6 +240,7 @@ public class AdminContestManager {
         } else {
             throw new StatusFailException("修改失败");
         }
+        contestAccessPolicyManager.savePolicy(contest, adminContestVo, oldContest);
     }
 
     public void changeContestVisible(Long cid, String uid, Boolean visible) throws StatusFailException, StatusForbiddenException {

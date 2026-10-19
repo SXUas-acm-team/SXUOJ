@@ -8,6 +8,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import top.hcode.hoj.interceptor.AccessInterceptor;
+import top.hcode.hoj.interceptor.ProtectedProblemResourceInterceptor;
 import top.hcode.hoj.utils.Constants;
 
 import java.io.File;
@@ -25,12 +26,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Autowired
     private AccessInterceptor accessInterceptor;
 
+    @Autowired
+    private ProtectedProblemResourceInterceptor protectedProblemResourceInterceptor;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
                 .allowedOrigins("*")
                 .allowedMethods("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowCredentials(true)
+                .allowCredentials(false)
                 .maxAge(3600)
                 .allowedHeaders("*");
     }
@@ -49,6 +53,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(protectedProblemResourceInterceptor)
+                .addPathPatterns("/api/public/img/**", "/api/public/file/**");
         registry.addInterceptor(new org.springframework.web.servlet.HandlerInterceptor() {
             @Override
             public boolean preHandle(javax.servlet.http.HttpServletRequest request,

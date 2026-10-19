@@ -9,6 +9,7 @@ import top.hcode.hoj.pojo.vo.ContestVO;
 import top.hcode.hoj.pojo.entity.contest.Contest;
 import top.hcode.hoj.mapper.ContestMapper;
 import top.hcode.hoj.dao.contest.ContestEntityService;
+import top.hcode.hoj.manager.oj.ContestAccessPolicyManager;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +30,14 @@ public class ContestEntityServiceImpl extends ServiceImpl<ContestMapper, Contest
 
     @Autowired
     private ContestMapper contestMapper;
+
+    @Autowired
+    private ContestAccessPolicyManager contestAccessPolicyManager;
+
+    @Override
+    public Contest getByIdForUpdate(Long cid) {
+        return contestMapper.getByIdForUpdate(cid);
+    }
 
     @Override
     public List<ContestVO> getWithinNext14DaysContests() {
@@ -54,6 +63,7 @@ public class ContestEntityServiceImpl extends ServiceImpl<ContestMapper, Contest
         List<Long> cidList = Collections.singletonList(cid);
         ContestVO contestVo = contestMapper.getContestInfoById(cid);
         if (contestVo != null) {
+            contestAccessPolicyManager.decorate(contestVo);
             List<ContestRegisterCountVO> contestRegisterCountVOList = contestMapper.getContestRegisterCount(cidList);
             if(!CollectionUtils.isEmpty(contestRegisterCountVOList)) {
                 ContestRegisterCountVO contestRegisterCountVo = contestRegisterCountVOList.get(0);
@@ -65,6 +75,7 @@ public class ContestEntityServiceImpl extends ServiceImpl<ContestMapper, Contest
 
 
     private void setRegisterCount(List<ContestVO> contestList){
+        contestAccessPolicyManager.decorateAll(contestList);
         List<Long> cidList = contestList.stream().map(ContestVO::getId).collect(Collectors.toList());
         if (!CollectionUtils.isEmpty(cidList)) {
             List<ContestRegisterCountVO> contestRegisterCountVOList = contestMapper.getContestRegisterCount(cidList);

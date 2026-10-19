@@ -2,6 +2,7 @@ package top.hcode.hoj.dao.group.impl;
 
 import top.hcode.hoj.dao.group.GroupContestEntityService;
 import top.hcode.hoj.mapper.GroupContestMapper;
+import top.hcode.hoj.manager.oj.ContestAccessPolicyManager;
 import top.hcode.hoj.pojo.entity.contest.Contest;
 import top.hcode.hoj.pojo.vo.ContestVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -23,11 +24,15 @@ public class GroupContestEntityServiceImpl extends ServiceImpl<GroupContestMappe
     @Autowired
     private GroupContestMapper groupContestMapper;
 
+    @Autowired
+    private ContestAccessPolicyManager contestAccessPolicyManager;
+
     @Override
     public IPage<ContestVO> getContestList(int limit, int currentPage, Long gid) {
         IPage<ContestVO> iPage = new Page<>(currentPage, limit);
 
         List<ContestVO> contestList = groupContestMapper.getContestList(iPage, gid);
+        contestAccessPolicyManager.decorateAll(contestList);
 
         return iPage.setRecords(contestList);
     }

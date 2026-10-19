@@ -33,6 +33,9 @@ public class RemoteJudgeToSubmit {
         log.info("Ready remote judge task, OJ={}, judgeId={}", remoteJudgeDTO.getOj(), remoteJudgeDTO.getJudgeId());
 
         String errLog = null;
+        // A new submission must obtain a new remote ID. A failed re-submit must
+        // not reuse the ID retained on the local record from an earlier attempt.
+        remoteJudgeDTO.setSubmitId(null);
         try {
             remoteJudgeStrategy.submit();
         } catch (Exception e) {
@@ -42,52 +45,58 @@ public class RemoteJudgeToSubmit {
 
         Long submitId = remoteJudgeDTO.getSubmitId();
         // 提交失败 前端手动按按钮再次提交 修改状态 STATUS_SUBMITTED_FAILED
-        if (submitId == null || submitId == -1L) {
-            // 将使用的账号放回对应列表
-            log.error("[{}] Submit Failed! Begin to return the account to other task!", remoteJudgeDTO.getOj());
-            remoteJudgeService.changeAccountStatus(remoteJudgeDTO.getOj(),
-                    remoteJudgeDTO.getUsername(), remoteJudgeDTO.getAccountVersion());
-
-            if (RemoteJudgeContext.openCodeforcesFixServer) {
-                if (remoteJudgeDTO.getOj().equals(Constants.RemoteJudge.GYM_JUDGE.getName())
-                        || remoteJudgeDTO.getOj().equals(Constants.RemoteJudge.CF_JUDGE.getName())) {
-                    // 对CF特殊，归还判题机权限
-                    log.error("[{}] Submit Failed! Begin to return the Server Status to other task!", remoteJudgeDTO.getOj());
-                    remoteJudgeService.changeServerSubmitCFStatus(remoteJudgeDTO.getServerIp(), remoteJudgeDTO.getServerPort());
-                }
-            }
-
+        if (submitId == null || submitId <= 0L) {
             errLog = "[" + remoteJudgeDTO.getOj() + "] Submitted Failed! Failed to obtain the ID submitted by the platform!";
-
-            // 更新此次提交状态为提交失败！
-            UpdateWrapper<Judge> judgeUpdateWrapper = new UpdateWrapper<>();
-            judgeUpdateWrapper.set("status", Constants.Judge.STATUS_SUBMITTED_FAILED.getStatus())
-                    .set("error_message", errLog)
-                    .eq("submit_id", remoteJudgeDTO.getJudgeId());
-            judgeEntityService.update(judgeUpdateWrapper);
-            // 更新其它表
-            judgeContext.updateOtherTable(remoteJudgeDTO.getSubmitId(),
-                    Constants.Judge.STATUS_SYSTEM_ERROR.getStatus(),
-                    remoteJudgeDTO.getCid(),
-                    remoteJudgeDTO.getUid(),
-                    remoteJudgeDTO.getPid(),
-                    remoteJudgeDTO.getGid(),
-                    null,
-                    null);
+            submissionFailed(remoteJudgeDTO, errLog);
             return false;
         }
 
         // 提交成功顺便更新状态为-->STATUS_PENDING 等待判题中...
-        judgeEntityService.updateById(new Judge()
-                .setSubmitId(remoteJudgeDTO.getJudgeId())
-                .setStatus(Constants.Judge.STATUS_PENDING.getStatus())
-                .setVjudgeSubmitId(submitId)
-                .setVjudgeUsername(remoteJudgeDTO.getUsername())
-                .setVjudgePassword(remoteJudgeDTO.getPassword())
-        );
+        try {
+            if (!judgeEntityService.updateById(new Judge()
+                    .setSubmitId(remoteJudgeDTO.getJudgeId())
+                    .setStatus(Constants.Judge.STATUS_PENDING.getStatus())
+                    .setVjudgeSubmitId(submitId)
+                    .setVjudgeUsername(remoteJudgeDTO.getUsername())
+                    .setVjudgePassword(remoteJudgeDTO.getPassword()))) {
+                throw new IllegalStateException("Failed to store remote submission ID");
+            }
+        } catch (Exception e) {
+            log.error("Failed to store remote submission ID", e);
+            submissionFailed(remoteJudgeDTO, "Failed to store the remote submission ID, please try again later");
+            return false;
+        }
 
         log.info("[{}] Submit Successfully! The submit_id of remote judge is [{}]. Waiting the result of the task!",
                 submitId, remoteJudgeDTO.getOj());
         return true;
+    }
+
+    private void submissionFailed(RemoteJudgeDTO dto, String error) {
+        try {
+            UpdateWrapper<Judge> update = new UpdateWrapper<>();
+            update.set("status", Constants.Judge.STATUS_SUBMITTED_FAILED.getStatus())
+                    .set("error_message", error).eq("submit_id", dto.getJudgeId());
+            judgeEntityService.update(update);
+        } catch (Exception e) {
+            log.error("Failed to store remote submission failure", e);
+        }
+        try {
+            judgeContext.updateOtherTable(dto.getJudgeId(), Constants.Judge.STATUS_SYSTEM_ERROR.getStatus(),
+                    dto.getCid(), dto.getUid(), dto.getPid(), dto.getGid(), null, null);
+        } catch (Exception e) {
+            log.error("Failed to synchronize remote submission failure", e);
+        } finally {
+            try {
+                remoteJudgeService.changeAccountStatus(dto.getOj(), dto.getUsername(), dto.getAccountVersion());
+                if (RemoteJudgeContext.openCodeforcesFixServer
+                        && (Constants.RemoteJudge.GYM_JUDGE.getName().equals(dto.getOj())
+                        || Constants.RemoteJudge.CF_JUDGE.getName().equals(dto.getOj()))) {
+                    remoteJudgeService.changeServerSubmitCFStatus(dto.getServerIp(), dto.getServerPort());
+                }
+            } catch (Exception e) {
+                log.error("Failed to release remote submission account", e);
+            }
+        }
     }
 }

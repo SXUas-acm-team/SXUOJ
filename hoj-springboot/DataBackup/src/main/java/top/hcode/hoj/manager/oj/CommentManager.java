@@ -36,6 +36,8 @@ import top.hcode.hoj.validator.AccessValidator;
 import top.hcode.hoj.validator.CommonValidator;
 import top.hcode.hoj.validator.ContestValidator;
 import top.hcode.hoj.validator.GroupValidator;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
+import top.hcode.hoj.manager.file.ProtectedProblemResourceManager;
 import top.hcode.hoj.utils.RedisUtils;
 import top.hcode.hoj.utils.RequestLimits;
 import java.util.Objects;
@@ -90,6 +92,12 @@ public class CommentManager {
     @Autowired
     private RedisUtils redisUtils;
 
+    @Autowired
+    private ProblemContentAccessValidator problemContentAccessValidator;
+
+    @Autowired
+    private ProtectedProblemResourceManager protectedProblemResourceManager;
+
     private final static Pattern pattern = Pattern.compile("(?i)\\bautoplay\\b");
 
     public CommentListVO getComments(Long cid, Integer did, Integer limit, Integer currentPage) throws StatusForbiddenException, AccessException {
@@ -104,8 +112,9 @@ public class CommentManager {
 
         if (cid == null && did != null) {
             QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
-            discussionQueryWrapper.select("id", "gid").eq("id", did);
+            discussionQueryWrapper.select("id", "gid", "pid").eq("id", did);
             Discussion discussion = discussionEntityService.getOne(discussionQueryWrapper);
+            validateDiscussionContent(discussion);
             if (discussion != null && discussion.getGid() != null) {
                 accessValidator.validateAccess(HOJAccessEnum.GROUP_DISCUSSION);
                 if (!isRoot && (userRolesVo == null || !groupValidator.isGroupMember(userRolesVo.getUid(), discussion.getGid()))) {
@@ -125,6 +134,14 @@ public class CommentManager {
 
         IPage<CommentVO> commentList = commentEntityService.getCommentList(limit, currentPage, cid, did, isRoot,
                 userRolesVo != null ? userRolesVo.getUid() : null);
+        if (cid != null) {
+            for (CommentVO comment : commentList.getRecords()) {
+                comment.setContent(protectCommentContent(comment.getContent(), cid));
+                if (comment.getReplyList() != null) {
+                    for (ReplyVO reply : comment.getReplyList()) reply.setContent(protectCommentContent(reply.getContent(), cid));
+                }
+            }
+        }
 
         HashMap<Integer, Boolean> commentLikeMap = new HashMap<>();
 
@@ -180,11 +197,12 @@ public class CommentManager {
         if (cid == null) {
 
             QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
-            discussionQueryWrapper.select("id", "gid").eq("id", comment.getDid());
+            discussionQueryWrapper.select("id", "gid", "pid").eq("id", comment.getDid());
             Discussion discussion = discussionEntityService.getOne(discussionQueryWrapper);
             if (discussion == null) {
                 throw new StatusFailException("评论失败，该讨论已不存在！");
             }
+            validateDiscussionContent(discussion);
             Long gid = discussion.getGid();
             if (gid != null) {
                 accessValidator.validateAccess(HOJAccessEnum.GROUP_DISCUSSION);
@@ -355,6 +373,11 @@ public class CommentManager {
                     && !groupValidator.isGroupMember(userRolesVo.getUid(), discussion.getGid()))) {
                 throw new StatusFailException("无权操作该讨论评论！");
             }
+            try {
+                validateDiscussionContent(discussion);
+            } catch (StatusForbiddenException e) {
+                throw new StatusFailException("该讨论关联的保密赛题尚未解封！");
+            }
         }
         sourceId = target.getDid() != null ? target.getDid() : target.getCid().intValue();
         sourceType = target.getDid() != null ? "Discussion" : "Contest";
@@ -419,9 +442,10 @@ public class CommentManager {
         if (cid == null) {
             Comment comment = commentEntityService.getById(commentId);
             QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
-            discussionQueryWrapper.select("id", "gid").eq("id", comment.getDid());
+            discussionQueryWrapper.select("id", "gid", "pid").eq("id", comment.getDid());
             Discussion discussion = discussionEntityService.getOne(discussionQueryWrapper);
             if (discussion == null) throw new StatusFailException("讨论不存在！");
+            validateDiscussionContent(discussion);
             Long gid = discussion.getGid();
             if (gid != null) {
                 accessValidator.validateAccess(HOJAccessEnum.GROUP_DISCUSSION);
@@ -437,13 +461,16 @@ public class CommentManager {
             contestValidator.validateContestAuth(contest, userRolesVo, isRoot);
         }
 
-        return replyEntityService.getAllReplyByCommentId(cid,
+        List<ReplyVO> replies = replyEntityService.getAllReplyByCommentId(cid,
                 userRolesVo != null ? userRolesVo.getUid() : null,
                 isRoot,
                 commentId);
+        if (cid != null) for (ReplyVO reply : replies) reply.setContent(protectCommentContent(reply.getContent(), cid));
+        return replies;
     }
 
 
+    @Transactional(rollbackFor = Exception.class)
     public ReplyVO addReply(ReplyDTO replyDto) throws StatusFailException, StatusForbiddenException, AccessException {
         if (replyDto == null || replyDto.getReply() == null) throw new StatusFailException("回复参数错误！");
         commonValidator.validateContent(replyDto.getReply().getContent(), "回复", 10000);
@@ -483,9 +510,9 @@ public class CommentManager {
         if (cid == null) {
 
             QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
-            discussionQueryWrapper.select("id", "gid").eq("id", comment.getDid());
+            discussionQueryWrapper.select("id", "gid", "pid").eq("id", comment.getDid());
             Discussion discussion = discussionEntityService.getOne(discussionQueryWrapper);
-
+            validateDiscussionContent(discussion);
             Long gid = discussion.getGid();
             if (gid != null) {
                 accessValidator.validateAccess(HOJAccessEnum.GROUP_DISCUSSION);
@@ -633,6 +660,17 @@ public class CommentManager {
 
     private String formatContentRemoveAutoPlay(String content) {
         return pattern.matcher(content).replaceAll("controls");
+    }
+
+    private void validateDiscussionContent(Discussion discussion) throws StatusForbiddenException {
+        if (discussion != null && discussion.getPid() != null) {
+            problemContentAccessValidator.validateProblemIdAccess(discussion.getPid());
+        }
+    }
+
+    private String protectCommentContent(String content, Long cid) {
+        return content != null && content.contains("/api/public/")
+                ? protectedProblemResourceManager.protectContent(content, cid) : content;
     }
 
 }

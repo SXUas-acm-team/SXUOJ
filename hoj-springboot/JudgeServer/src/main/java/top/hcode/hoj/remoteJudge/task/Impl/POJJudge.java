@@ -53,7 +53,10 @@ public class POJJudge extends RemoteJudgeStrategy {
 
         List<HttpCookie> cookies = remoteJudgeDTO.getCookies();
 
-        HttpRequest request = SecureHttp.post(HOST + SUBMIT_URL)
+        HttpRequest statusRequest = getRequest(HOST + "/status").addHeaders(headers).cookie(cookies);
+        Long previousId = getMaxRunId(statusRequest, remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
+
+        HttpRequest request = postRequest(HOST + SUBMIT_URL)
                 .addHeaders(headers)
                 .cookie(cookies);
 
@@ -69,22 +72,17 @@ public class POJJudge extends RemoteJudgeStrategy {
             String log = String.format("[POJ] [%s]: Failed to submit code, the http response status is [%s].", remoteJudgeDTO.getCompleteProblemId(), response.getStatus());
             throw new RuntimeException(log);
         }
-        // 下面的请求都是GET
-        request.setMethod(Method.GET);
-        // 获取提交的题目id
-        Long maxRunId = getMaxRunId(request, remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
+        // Never turn the submission request into a GET: Hutool retains the source form
+        // and appends it to the query string, exposing student source in URL logs.
+        Long maxRunId = getMaxRunId(statusRequest, remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
 
-        if (maxRunId == -1L) { // 等待2s再次查询，如果还是失败，则表明提交失败了
-            try {
-                TimeUnit.SECONDS.sleep(2);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            maxRunId = getMaxRunId(request, remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
+        if (maxRunId <= previousId) {
+            pauseBeforeRetry(2);
+            maxRunId = getMaxRunId(statusRequest, remoteJudgeDTO.getUsername(), remoteJudgeDTO.getCompleteProblemId());
         }
 
         remoteJudgeDTO.setCookies(cookies)
-                .setSubmitId(maxRunId);
+                .setSubmitId(maxRunId > previousId ? maxRunId : -1L);
     }
 
     @Override
@@ -195,9 +193,11 @@ public class POJJudge extends RemoteJudgeStrategy {
 
 
     public Long getMaxRunId(HttpRequest request, String userName, String problemId) {
-        String url = String.format(STATUS_URL, userName, problemId);
+        String url = String.format(STATUS_URL, queryValue(userName), queryValue(problemId));
         request.setUrl(HOST + url);
-        String html = request.execute().body();
+        HttpResponse response = request.execute();
+        if (response.getStatus() != 200) throw new IllegalStateException("POJ submission list is unavailable");
+        String html = response.body();
         Matcher matcher = Pattern.compile("<tr align=center><td>(\\d+)").matcher(html);
         return matcher.find() ? Long.parseLong(matcher.group(1)) : -1L;
     }

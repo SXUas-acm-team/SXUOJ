@@ -20,6 +20,7 @@ import top.hcode.hoj.utils.RedisUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import top.hcode.hoj.validator.ContestValidator;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
 
 import javax.annotation.Resource;
 import java.util.Date;
@@ -49,6 +50,29 @@ public class ContestScoreboardManager {
     @Resource
     private RedisUtils redisUtils;
 
+    @Resource
+    private ContestAccessPolicyManager contestAccessPolicyManager;
+
+    @Resource
+    private ProblemContentAccessValidator problemContentAccessValidator;
+
+    private void validateOutsideAccess(Contest contest) throws StatusForbiddenException {
+        AccountProfile viewer = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        boolean root = SecurityUtils.getSubject().hasRole("root");
+        boolean confidential = contestValidator.isConfidential(contest);
+        if (confidential) {
+            try { contestValidator.validateContestAuth(contest, viewer, root); }
+            catch (StatusFailException e) { throw new StatusForbiddenException(e.getMessage()); }
+            if (contestValidator.isReleased(contest) || contestValidator.isContestAdmin(contest, viewer, root)) return;
+        }
+        if (!Boolean.TRUE.equals(contest.getOpenRank())) {
+            throw new StatusForbiddenException("本场比赛未开启外榜，禁止访问外榜！");
+        }
+        if (Objects.equals(contest.getStatus(), Constants.Contest.STATUS_SCHEDULED.getCode())) {
+            throw new StatusForbiddenException("本场比赛正在筹备中，禁止访问外榜！");
+        }
+    }
+
     public ContestOutsideInfoVO getContestOutsideInfo(Long cid) throws StatusNotFoundException, StatusForbiddenException {
 
         ContestVO contestInfo = contestEntityService.getContestInfoById(cid);
@@ -58,14 +82,7 @@ public class ContestScoreboardManager {
             throw new StatusNotFoundException("访问错误：该比赛不存在！");
         }
 
-        if (!contestInfo.getOpenRank()) {
-            throw new StatusForbiddenException("本场比赛未开启外榜，禁止访问外榜！");
-        }
-
-        // 获取本场比赛的状态
-        if (contestInfo.getStatus().equals(Constants.Contest.STATUS_SCHEDULED.getCode())) {
-            throw new StatusForbiddenException("本场比赛正在筹备中，禁止访问外榜！");
-        }
+        validateOutsideAccess(definition);
 
         contestInfo.setNow(new Date());
         ContestOutsideInfoVO contestOutsideInfoVO = new ContestOutsideInfoVO();
@@ -73,7 +90,9 @@ public class ContestScoreboardManager {
 
         QueryWrapper<ContestProblem> contestProblemQueryWrapper = new QueryWrapper<>();
         contestProblemQueryWrapper.eq("cid", cid).orderByAsc("display_id");
-        List<ContestProblem> contestProblemList = contestProblemEntityService.list(contestProblemQueryWrapper);
+        List<ContestProblem> contestProblemList = contestProblemEntityService.list(contestProblemQueryWrapper)
+                .stream().filter(p -> problemContentAccessValidator.canAccessProblem(p.getPid(), cid))
+                .collect(java.util.stream.Collectors.toList());
         contestOutsideInfoVO.setProblemList(contestProblemList);
 
         return contestOutsideInfoVO;
@@ -111,13 +130,7 @@ public class ContestScoreboardManager {
             throw new StatusFailException("访问错误：该比赛不存在！");
         }
 
-        if (!contest.getOpenRank()) {
-            throw new StatusForbiddenException("本场比赛未开启外榜，禁止访问外榜！");
-        }
-
-        if (contest.getStatus().equals(Constants.Contest.STATUS_SCHEDULED.getCode())) {
-            throw new StatusForbiddenException("本场比赛正在筹备中，禁止访问外榜！");
-        }
+        validateOutsideAccess(contest);
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -144,7 +157,7 @@ public class ContestScoreboardManager {
 
         // 校验该比赛是否开启了封榜模式，超级管理员和比赛创建者可以直接看到实际榜单
         boolean isOpenSealRank = contestValidator.isSealRank(currentUid, contest, forceRefresh, isRoot);
-        boolean isContainsAfterContestJudge = Objects.equals(contest.getAllowEndSubmit(), true)
+        boolean isContainsAfterContestJudge = (contestValidator.isReleased(contest) || Objects.equals(contest.getAllowEndSubmit(), true))
                 && Objects.equals(contestRankDto.getContainsEnd(), true);
 
         if (contest.getType().intValue() == Constants.Contest.TYPE_ACM.getCode()) {

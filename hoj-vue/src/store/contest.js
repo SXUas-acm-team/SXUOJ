@@ -3,9 +3,12 @@ import api from '@/common/api'
 import { CONTEST_STATUS, CONTEST_TYPE } from '@/common/constants'
 import time from '@/common/time'
 const state = {
+  requestEpoch: 0,
+  requestVersions: { info: 0, problems: 0, access: 0, groupAuth: 0 },
   now: moment(),
   intoAccess: false, // 比赛进入权限
   submitAccess:false, // 保护比赛的提交权限
+  access: null,
   forceUpdate: false, // 强制实时榜单
   removeStar: false, // 榜单去除打星队伍
   concernedList:[], // 关注队伍
@@ -34,25 +37,34 @@ const getters = {
   },
   isContestAdmin: (state, getters, _, rootGetters) => {
     return rootGetters.isAuthenticated &&
-      (state.contest.author === rootGetters.userInfo.username || rootGetters.isSuperAdmin || state.groupContestAuth == 5)
+      (state.contest.author === rootGetters.userInfo.username || rootGetters.isSuperAdmin || state.groupContestAuth == 5 ||
+        !!(state.access && state.access.accessReason === 'ADMIN'))
   },
   isContainsAfterContestJudge: (state, getters) => {
     return state.isContainsAfterContestJudge;
   },
-  canSubmit:(state, getters)=>{
+  isContestReleased: state => state.contest.released === true,
+  isContestSealed: (state, getters) => state.contest.confidential === true && !getters.isContestReleased &&
+    (getters.contestStatus === CONTEST_STATUS.ENDED ||
+      (state.contest.endTime && !state.now.isBefore(moment(state.contest.endTime)))),
+  canViewContest: (state, getters) => {
+    if (state.contest.id == null) return false
+    if (getters.isContestAdmin || getters.isContestReleased) return true
+    if (getters.isContestSealed || getters.contestStatus === CONTEST_STATUS.SCHEDULED) return false
+    if (state.contest.confidential) return !!(state.access && state.access.canViewProblems)
+    return state.contest.auth !== CONTEST_TYPE.PRIVATE || state.intoAccess
+  },
+  contestAccessReason: (state, getters) => getters.isContestSealed ? 'SEALED' :
+    (state.access && state.access.accessReason) || (getters.contestStatus === CONTEST_STATUS.SCHEDULED ? 'SCHEDULED' : 'PASSWORD_REQUIRED'),
+  canSubmit:(state, getters, _, rootGetters)=>{
+     if (getters.isContestAdmin) return true
+     if (getters.isContestReleased) return rootGetters.isAuthenticated
+     if (getters.isContestSealed) return false
+     if (state.contest.confidential) return !!(state.access && state.access.canSubmit) && rootGetters.isAuthenticated
      return state.intoAccess||state.submitAccess || state.contest.auth === CONTEST_TYPE.PUBLIC ||getters.isContestAdmin
   },
   contestMenuDisabled: (state, getters) => {
-    // 比赛创建者或者超级管理员可以直接查看
-    if (getters.isContestAdmin) return false
-     // 未开始不可查看
-    if(getters.contestStatus === CONTEST_STATUS.SCHEDULED) return true
-
-    if (state.contest.auth === CONTEST_TYPE.PRIVATE) {
-     // 私有赛需要通过验证密码方可查看比赛
-      return !state.intoAccess
-    }
-    
+    return !getters.canViewContest
   },
 
   // 榜单是否实时刷新
@@ -74,6 +86,8 @@ const getters = {
     }
   },
   problemSubmitDisabled: (state, getters, _, rootGetters) => {
+    if (!rootGetters.isAuthenticated) return true
+    if (state.contest.confidential) return !getters.canSubmit
     // 比赛结束不可交题, 除非开启了允许
     if (getters.contestStatus === CONTEST_STATUS.ENDED) {
       return !state.contest.allowEndSubmit
@@ -87,7 +101,8 @@ const getters = {
   // 是否需要显示密码验证框
   passwordFormVisible: (state, getters) => {
     // 如果是公开赛，保护赛，或已注册过，管理员都不用再显示
-    return state.contest.auth !== CONTEST_TYPE.PUBLIC &&state.contest.auth !== CONTEST_TYPE.PROTECTED &&!state.intoAccess && !getters.isContestAdmin 
+    return !getters.isContestReleased && !getters.isContestSealed &&
+      state.contest.auth !== CONTEST_TYPE.PUBLIC &&state.contest.auth !== CONTEST_TYPE.PROTECTED &&!state.intoAccess && !getters.isContestAdmin
   },
   contestStartTime: (state) => {
     return moment(state.contest.startTime)
@@ -156,6 +171,9 @@ const getters = {
 }
 
 const mutations = {
+  beginContestRequest(state, payload) {
+    state.requestVersions[payload.type] += 1
+  },
   changeContest (state, payload) {
     state.contest = payload.contest
   },
@@ -194,11 +212,40 @@ const mutations = {
   contestSubmitAccess(state, payload) {
     state.submitAccess = payload.submitAccess
   },
+  changeContestAccess(state, payload) {
+    state.access = payload
+    if (payload.released != null) state.contest = { ...state.contest, released: payload.released }
+    if (payload.canViewProblems === false) {
+      state.contestProblems = []
+      state.disPlayIdMapColor = {}
+      state.requestVersions.problems += 1
+    }
+  },
+  denyContestAccess(state) {
+    if (state.contest.confidential) state.contest = { ...state.contest, released: false }
+    state.access = { canViewProblems: false, canSubmit: false, accessReason: 'SEALED' }
+    state.contestProblems = []
+    state.disPlayIdMapColor = {}
+    state.requestVersions.problems += 1
+  },
+  resetContestAuthentication(state) {
+    state.intoAccess = false
+    state.submitAccess = false
+    state.access = null
+    state.requestVersions.access += 1
+    state.requestVersions.problems += 1
+    if (!state.contest.released) {
+      state.contestProblems = []
+      state.disPlayIdMapColor = {}
+    }
+  },
   clearContest (state) {
+    state.requestEpoch += 1
     state.contest = {}
     state.contestProblems = []
     state.intoAccess = false
     state.submitAccess = false
+    state.access = null
     state.itemVisible = {
       table: true,
       chart: true,
@@ -208,6 +255,8 @@ const mutations = {
     state.removeStar = false
     state.groupContestAuth = 0
     state.isContainsAfterContestJudge = false
+    state.concernedList = []
+    state.disPlayIdMapColor = {}
   },
   now(state, payload) {
     state.now = payload.now
@@ -217,71 +266,109 @@ const mutations = {
   },
 }
 
-const actions = {
-  getContest ({commit, rootState, dispatch}) {
-    return new Promise((resolve, reject) => {
-      api.getContest(rootState.route.params.contestID).then((res) => {
-        resolve(res)
-        let contest = res.data.data
-        commit('changeContest', {contest: contest})
-        if (contest.gid) {
-          dispatch('getGroupContestAuth', {gid: contest.gid})
-        }
-        commit('now', {now: moment(contest.now)})
-        if (contest.auth == CONTEST_TYPE.PRIVATE) {
-          dispatch('getContestAccess',{auth:CONTEST_TYPE.PRIVATE})
-        }else if(contest.auth == CONTEST_TYPE.PROTECTED){
-          dispatch('getContestAccess',{auth:CONTEST_TYPE.PROTECTED})
-        }
-      }, err => {
-        reject(err)
-      })
-    })
-  },
-  getScoreBoardContestInfo ({commit, rootState, dispatch}) {
-    return new Promise((resolve, reject) => {
-      api.getScoreBoardContestInfo(rootState.route.params.contestID).then((res) => {
-        resolve(res)
-        let contest = res.data.data.contest;
-        commit('changeContest', {contest: contest})
-        commit('now', {now: moment(contest.now)})
-      }, err => {
-        reject(err)
-      })
-    })
-  },
-
-  getContestProblems ({commit, rootState}) {
-    return new Promise((resolve, reject) => {
-      api.getContestProblemList(rootState.route.params.contestID, rootState.contest.isContainsAfterContestJudge).then(res => {
-        resolve(res)
-        commit('changeContestProblems', {contestProblems: res.data.data})
-      }, (err) => {
-        commit('changeContestProblems', {contestProblems: []})
-        reject(err)
-      })
-    })
-  },
-  getContestAccess ({commit, rootState},contestType) {
-    return new Promise((resolve, reject) => {
-      api.getContestAccess(rootState.route.params.contestID).then(res => {
-        if(contestType.auth == CONTEST_TYPE.PRIVATE){
-          commit('contestIntoAccess', {intoAccess: res.data.data.access})
-        }else{
-          commit('contestSubmitAccess', {submitAccess: res.data.data.access})
-        }
-        resolve(res)
-      }).catch()
-    })
-  },
-  getGroupContestAuth ({commit, rootState}, gid) {
-    return new Promise((resolve, reject) => {
-      api.getGroupAuth(gid.gid).then(res => {
-        commit('changeGroupContestAuth', {groupContestAuth: res.data.data})
-        resolve(res)
-      }).catch()
-    })
+// The different request types may run together. A navigation, cleared store,
+// account change, or newer request of the same type invalidates old responses.
+function contestRequest(context, type) {
+  const { commit, state, rootState } = context
+  commit('beginContestRequest', { type })
+  const cid = rootState.route.params.contestID
+  const epoch = state.requestEpoch
+  const version = state.requestVersions[type]
+  const session = rootState.user && rootState.user.sessionVersion
+  return {
+    cid,
+    current: () => String(rootState.route.params.contestID) === String(cid) &&
+      state.requestEpoch === epoch && state.requestVersions[type] === version &&
+      (!rootState.user || rootState.user.sessionVersion === session),
   }
+}
+
+const actions = {
+  getContest (context) {
+    const { commit, dispatch } = context
+    const request = contestRequest(context, 'info')
+    commit('contestIntoAccess', { intoAccess: false })
+    commit('contestSubmitAccess', { submitAccess: false })
+    commit('changeContestAccess', {})
+    commit('changeGroupContestAuth', { groupContestAuth: 0 })
+    return api.getContest(request.cid).then(res => {
+      if (!request.current()) return res
+      const contest = res.data.data
+      commit('changeContest', { contest })
+      commit('now', { now: moment(contest.now) })
+      if (contest.gid && context.rootGetters.isAuthenticated) {
+        dispatch('getGroupContestAuth', { gid: contest.gid }).catch(() => {})
+      }
+      if (contest.confidential || contest.auth === CONTEST_TYPE.PRIVATE || contest.auth === CONTEST_TYPE.PROTECTED) {
+        const access = dispatch('getContestAccess', { auth: contest.auth })
+        if (contest.confidential) return access.then(() => res).catch(() => res)
+        access.catch(() => {})
+      }
+      return res
+    })
+  },
+  getScoreBoardContestInfo (context) {
+    const request = contestRequest(context, 'info')
+    return api.getScoreBoardContestInfo(request.cid).then(res => {
+      if (request.current()) {
+        const contest = res.data.data.contest
+        context.commit('changeContest', { contest })
+        context.commit('now', { now: moment(contest.now) })
+        if (Array.isArray(res.data.data.problemList)) {
+          context.commit('changeContestProblems', { contestProblems: res.data.data.problemList })
+        }
+        if (contest.confidential) return context.dispatch('getContestAccess').then(() => res)
+      }
+      return res
+    })
+  },
+  getContestProblems (context) {
+    const request = contestRequest(context, 'problems')
+    const containsEnd = context.state.isContainsAfterContestJudge
+    const current = () => request.current() && context.state.isContainsAfterContestJudge === containsEnd
+    return api.getContestProblemList(request.cid, containsEnd).then(res => {
+      if (current()) context.commit('changeContestProblems', { contestProblems: res.data.data })
+      return res
+    }, err => {
+      if (current()) context.commit('changeContestProblems', { contestProblems: [] })
+      throw err
+    })
+  },
+  getContestAccess (context, contestType = {}) {
+    const request = contestRequest(context, 'access')
+    return api.getContestAccess(request.cid).then(res => {
+      if (request.current()) {
+        const data = res.data.data
+        context.commit('changeContestAccess', data)
+        const privateContest = (contestType.auth == null ? context.state.contest.auth : contestType.auth) === CONTEST_TYPE.PRIVATE
+        context.commit(privateContest ? 'contestIntoAccess' : 'contestSubmitAccess',
+          privateContest ? { intoAccess: res.data.data.access } : { submitAccess: res.data.data.access })
+      }
+      return res
+    }, err => {
+      if (request.current() && context.state.contest.confidential) context.commit('denyContestAccess')
+      throw err
+    })
+  },
+  refreshContestAccess (context) {
+    const request = contestRequest(context, 'info')
+    return api.getContest(request.cid).then(res => {
+      if (!request.current()) return res
+      context.commit('changeContest', { contest: res.data.data })
+      context.commit('now', { now: moment(res.data.data.now) })
+      return context.dispatch('getContestAccess').then(() => res)
+    }).catch(err => {
+      if (request.current() && context.state.contest.confidential) context.commit('denyContestAccess')
+      throw err
+    })
+  },
+  getGroupContestAuth (context, gid) {
+    const request = contestRequest(context, 'groupAuth')
+    return api.getGroupAuth(gid.gid).then(res => {
+      if (request.current()) context.commit('changeGroupContestAuth', { groupContestAuth: res.data.data })
+      return res
+    })
+  },
 }
 
 export default {

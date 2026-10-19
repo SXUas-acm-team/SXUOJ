@@ -132,6 +132,7 @@ public class GroupContestAnnouncementManager {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateContestAnnouncement(AnnouncementDTO announcementDto) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
 
         commonValidator.validateContent(announcementDto.getAnnouncement().getTitle(), "公告标题", 255);

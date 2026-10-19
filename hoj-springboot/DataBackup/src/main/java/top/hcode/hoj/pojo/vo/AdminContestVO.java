@@ -43,6 +43,12 @@ public class AdminContestVO {
     @ApiModelProperty(value = "比赛密码")
     private String pwd;
 
+    @ApiModelProperty(value = "是否启用保密赛；更新时缺失表示保留原设置")
+    private Boolean confidential;
+
+    @ApiModelProperty(value = "赛后公开解封时间；保密赛中为空表示持续封存")
+    private Date releaseAt;
+
     @ApiModelProperty(value = "开始时间")
     private Date startTime;
 

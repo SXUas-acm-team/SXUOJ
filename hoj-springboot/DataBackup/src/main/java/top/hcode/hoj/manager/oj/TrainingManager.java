@@ -29,6 +29,7 @@ import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.utils.RedisUtils;
 import top.hcode.hoj.validator.GroupValidator;
 import top.hcode.hoj.validator.TrainingValidator;
+import top.hcode.hoj.validator.ProblemContentAccessValidator;
 
 import javax.annotation.Resource;
 import java.util.*;
@@ -41,6 +42,8 @@ import java.util.stream.Collectors;
  */
 @Component
 public class TrainingManager {
+    @Autowired
+    private ProblemContentAccessValidator problemContentAccessValidator;
 
     @Resource
     private TrainingEntityService trainingEntityService;
@@ -138,8 +141,10 @@ public class TrainingManager {
 
         TrainingVO trainingVo = BeanUtil.copyProperties(training, TrainingVO.class);
         TrainingCategory trainingCategory = trainingCategoryEntityService.getTrainingCategoryByTrainingId(training.getId());
-        trainingVo.setCategoryName(trainingCategory.getName());
-        trainingVo.setCategoryColor(trainingCategory.getColor());
+        if (trainingCategory != null) {
+            trainingVo.setCategoryName(trainingCategory.getName());
+            trainingVo.setCategoryColor(trainingCategory.getColor());
+        }
         List<Long> trainingProblemIdList = trainingProblemEntityService.getTrainingProblemIdList(training.getId());
         trainingVo.setProblemCount(trainingProblemIdList.size());
 
@@ -168,7 +173,9 @@ public class TrainingManager {
         }
         trainingValidator.validateTrainingAuth(training);
 
-        return trainingProblemEntityService.getTrainingProblemList(tid);
+        List<ProblemVO> problems = new ArrayList<>(trainingProblemEntityService.getTrainingProblemList(tid));
+        problems.removeIf(problem -> !problemContentAccessValidator.canAccessProblem(problem.getPid(), null));
+        return problems;
     }
 
     /**
@@ -180,6 +187,9 @@ public class TrainingManager {
      */
     public void toRegisterTraining(RegisterTrainingDTO registerTrainingDto) throws StatusFailException, StatusForbiddenException {
 
+        if (registerTrainingDto == null) {
+            throw new StatusFailException("请求参数不能为空！");
+        }
         Long tid = registerTrainingDto.getTid();
         String password = registerTrainingDto.getPassword();
 
@@ -193,10 +203,6 @@ public class TrainingManager {
             throw new StatusFailException("对不起，该训练不存在或不允许显示!");
         }
 
-        if (!training.getPrivatePwd().equals(password)) { // 密码不对
-            throw new StatusFailException("训练密码错误，请重新输入！");
-        }
-
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
@@ -206,6 +212,13 @@ public class TrainingManager {
         }
         if (!redisUtils.isWithinRateLimit("training:register:" + userRolesVo.getUid(), 60)) {
             throw new StatusForbiddenException("注册过于频繁，请一分钟后重试！");
+        }
+        if (!Constants.Training.AUTH_PRIVATE.getValue().equals(training.getAuth())
+                || StringUtils.isEmpty(training.getPrivatePwd())) {
+            throw new StatusFailException("该训练不支持密码注册！");
+        }
+        if (!training.getPrivatePwd().equals(password)) {
+            throw new StatusFailException("训练密码错误，请重新输入！");
         }
         if (trainingProblemEntityService.count(new QueryWrapper<TrainingProblem>().eq("tid", tid)) > 1000) {
             throw new StatusFailException("该训练题目过多，请联系管理员拆分题单后注册！");
@@ -245,7 +258,7 @@ public class TrainingManager {
         queryWrapper.eq("tid", tid).eq("uid", userRolesVo.getUid());
         TrainingRegister trainingRegister = trainingRegisterEntityService.getOne(queryWrapper, false);
         boolean access = false;
-        if (trainingRegister != null) {
+        if (trainingRegister != null && Boolean.TRUE.equals(trainingRegister.getStatus())) {
             access = true;
             Training training = trainingEntityService.getById(tid);
             if (training == null || !training.getStatus()) {
@@ -439,7 +452,11 @@ public class TrainingManager {
             throw new StatusFailException("该训练不存在或不允许显示！");
         }
         trainingValidator.validateTrainingAuth(training);
-        List<ProblemFullScreenListVO> problemList = trainingProblemEntityService.getTrainingFullScreenProblemList(tid);
+        List<ProblemFullScreenListVO> problemList = new ArrayList<>(trainingProblemEntityService.getTrainingFullScreenProblemList(tid));
+        problemList.removeIf(problem -> !problemContentAccessValidator.canAccessProblem(problem.getPid(), null));
+        if (problemList.isEmpty()) {
+            return problemList;
+        }
 
         List<Long> pidList = problemList.stream().map(ProblemFullScreenListVO::getPid).collect(Collectors.toList());
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();

@@ -68,7 +68,11 @@ public class ProblemServiceImpl implements ProblemService {
 
     @Override
     public CommonResult<LastAcceptedCodeVO> getUserLastAcceptedCode(Long pid, Long cid) {
-        return CommonResult.successResponse(problemManager.getUserLastAcceptedCode(pid, cid));
+        try {
+            return CommonResult.successResponse(problemManager.getUserLastAcceptedCode(pid, cid));
+        } catch (StatusForbiddenException e) {
+            return CommonResult.errorResponse(e.getMessage(), ResultStatus.FORBIDDEN);
+        }
     }
 
     @Override

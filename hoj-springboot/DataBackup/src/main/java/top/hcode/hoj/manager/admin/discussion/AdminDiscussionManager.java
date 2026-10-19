@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.dao.discussion.DiscussionEntityService;
 import top.hcode.hoj.dao.discussion.DiscussionReportEntityService;
@@ -30,6 +31,7 @@ public class AdminDiscussionManager {
     @Autowired
     private DiscussionReportEntityService discussionReportEntityService;
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateDiscussion(Discussion discussion) throws StatusFailException {
         boolean isOk = discussionEntityService.updateById(discussion);
         if (!isOk) {
