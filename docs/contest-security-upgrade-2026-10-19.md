@@ -1,12 +1,12 @@
-# 比赛保密权限生产升级手册（2026-10-19，初稿）
+# 比赛保密权限生产升级手册（2026-10-19）
 
-本文用于现有 SXUOJ/HOJ 生产部署的增量更新。**镜像发布、生产迁移和生产验收结果尚待发布负责人补充；本文中的命令是操作步骤，不表示这些操作已经完成。**
+本文用于现有 SXUOJ/HOJ 生产部署的增量更新。本地镜像构建、备份恢复和验收已完成；生产环境尚未执行迁移或替换服务。镜像发布状态与不可变标识见发布清单。
 
-暂定镜像标签：
+发布版本标签（使用你的 Docker Hub 命名空间）：
 
 ```text
-ghcr.io/sxuas-acm-team/sxuoj-backend:contest-security-20261019
-ghcr.io/sxuas-acm-team/sxuoj-frontend:contest-security-20261019
+YOUR_DOCKERHUB_USERNAME/sxuoj-backend:contest-security-20261019
+YOUR_DOCKERHUB_USERNAME/sxuoj-frontend:contest-security-20261019
 ```
 
 上线前将实际提交号、构建结果和两个镜像的不可变 digest 填入文末记录。生产优先固定 digest，避免标签之后变化。
@@ -181,7 +181,7 @@ WHERE p.release_at IS NOT NULL AND p.release_at < c.end_time;
 先确认镜像已经发布，并将下面的标签替换为本次确认的 digest。未发布时不要将拉取失败描述为升级成功。
 
 ```bash
-BACKEND_IMAGE=ghcr.io/sxuas-acm-team/sxuoj-backend:contest-security-20261019
+BACKEND_IMAGE=YOUR_DOCKERHUB_USERNAME/sxuoj-backend:contest-security-20261019
 
 python3 "$SOURCE_DIR/deploy/backend.py" update \
   -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" \
@@ -206,7 +206,7 @@ python3 "$SOURCE_DIR/deploy/backend.py" status \
 从新前端镜像提取静态产物，不启动临时容器：
 
 ```bash
-FRONTEND_IMAGE=ghcr.io/sxuas-acm-team/sxuoj-frontend:contest-security-20261019
+FRONTEND_IMAGE=YOUR_DOCKERHUB_USERNAME/sxuoj-frontend:contest-security-20261019
 docker pull "$FRONTEND_IMAGE"
 mkdir -p "$RELEASE_DIR/dist"
 extract_container=$(docker create "$FRONTEND_IMAGE")
@@ -326,18 +326,31 @@ python3 "$SOURCE_DIR/deploy/backend.py" rollback \
 
 这些目录以及 `.env`、证书、物理数据库和用户数据均不属于 Docker 源码构建上下文或公开发布产物。隔离恢复只能使用这些备份的独立副本/独立卷，不能把新测试容器挂到生产实际数据卷，也不能对原备份执行数据库升级或就地恢复。隔离环境不得连接生产 Nacos、Redis、邮件或远程判题账号。
 
-恢复环境和实际验证结果由发布负责人补充；在补齐前，不宣称生产备份恢复或线上升级已经成功。
+已从原始物理备份的独立副本恢复 MySQL 8.0.43，并逻辑导入全新测试卷。以下结果仅针对隔离环境；未连接生产数据库执行写入，也未更新生产容器。
 
 | 记录项 | 结果 |
 | --- | --- |
-| 实际 Git 提交号 | 待补 |
-| 后端镜像 digest / 构建结果 | 待补 |
-| 前端镜像 digest / 构建结果 | 待补 |
+| 源码 | 已推送独立分支 `codex/contest-security-20261019`；当前工作分支与原暂存区保留。最终提交号见发布清单。 |
+| 后端构建 | 255 项 Java 回归全部通过（api 10、主后端 208、JudgeServer 37）；镜像标识见发布清单。 |
+| 前端构建 | 88 项测试全部通过，生产构建完成；镜像标识见发布清单。 |
 | 镜像实际发布位置及时间 | 待补 |
-| 隔离恢复所用 MySQL 镜像、容器、独立副本/卷 | 待补 |
-| 隔离恢复的数据校验和业务验收结果 | 待补 |
-| 生产备份位置、校验值和可恢复验证 | 待补，敏感位置仅限受控记录 |
+| 隔离恢复 | `mysql:8.0.43`；无网络恢复容器 `sxuoj-contest-backup-reader`，副本卷 `sxuoj-contest-source-mysql`；业务测试库使用全新 `sxuoj-contest-test8_mysql-data` 卷。 |
+| 数据与业务验收 | 4 张关键表 CHECK TABLE QUICK 为 OK；镜像更新前后 18 场比赛、4483 道题、10572 条提交计数相同，MySQL/Redis 容器保留；105 项真实 HTTP 断言全部通过。 |
+| 备份来源 | 用户提供的 `main.zip` 与 `main/` 原样保留，未打包进源码或镜像；可恢复性已在独立卷验证。 |
 | 生产迁移只读检查 / apply / 复检 | 待执行或待补 |
 | 后端 / 前端上线时间 | 待执行或待补 |
-| 验收矩阵执行人、结果与问题单 | 待执行或待补 |
+| 本地验收 | `deploy/tests/contest_integration.py` 105/105；单字符提交及 contest_record 落库已验证，测试环境没有真实判题服务，未宣称得到 AC。生产矩阵仍须上线后执行。 |
 | 首次启用保密策略时间及安全回退目标 | 待执行或待补 |
+
+
+### 本地测试复现与验证范围
+
+测试栈使用 `deploy/contest-local.compose.yml`，测试密钥只放在忽略的 `.tools/contest-test/test8.env`。MySQL、Redis、后端只连接内部网络；前端网关同时连接入口网络，并仅向本机发布 `18066`（页面）和 `16688`（同一网关的 API 入口）。后端无法连接生产 Nacos、邮件或远程判题服务。不要将此测试配置直接用于生产。
+
+```bash
+python deploy/tests/contest_integration.py --base-url http://127.0.0.1:16688 --container-prefix sxuoj-contest-test8
+```
+
+脚本校验回环地址、测试容器前缀、Compose 项目归属和入口端口，随后只追加 `ctest_` 合成账号、题目与比赛。真实接口覆盖密码验证、改密撤权、自然时间结束、附件裸链与短期访问凭证、匿名公开、定时公开、重封、多场复用及移题后的历史保密。不会修改原有用户记录。
+
+迁移还在单独 MySQL 5.7.44 历史结构库中演练并复检通过。生产副本验证的实际 `contest.id` 为 `bigint unsigned`；迁移脚本按现场类型生成两张新表，保留原业务表结构与数据。

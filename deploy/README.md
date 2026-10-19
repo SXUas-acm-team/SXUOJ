@@ -13,12 +13,12 @@
 5. 发布 `linux/amd64` 和 `linux/arm64` 主后端镜像：
 
 ```text
-ghcr.io/sxuas-acm-team/sxuoj-backend:sha-<完整40位commit>
-ghcr.io/sxuas-acm-team/sxuoj-backend:latest
-ghcr.io/sxuas-acm-team/sxuoj-backend:v<版本号>
+YOUR_DOCKERHUB_USERNAME/sxuoj-backend:sha-<完整40位commit>
+YOUR_DOCKERHUB_USERNAME/sxuoj-backend:latest
+YOUR_DOCKERHUB_USERNAME/sxuoj-backend:v<版本号>
 ```
 
-`latest` 只跟随仓库默认分支；版本标签只在推送对应 Git 标签时产生。建议生产使用 commit 标签或镜像 digest。PR 只运行验证，不登录仓库、不发布镜像；发布 job 使用 GitHub 自动提供的 `GITHUB_TOKEN`，不需要把服务器密码或生产 `.env` 放进 Actions。首次发布前确认组织允许该工作流写入 Packages；新 GHCR 包若是私有的，服务器需先登录有 `read:packages` 权限的账号。
+`latest` 只跟随仓库默认分支；版本标签只在推送对应 Git 标签时产生。建议生产使用 commit 标签或镜像 digest。PR 只运行验证，不登录仓库、不发布镜像。自动发布需要仓库变量 `DOCKERHUB_USERNAME` 和仓库 Secret `DOCKERHUB_TOKEN`；未配置用户名时只运行构建验证。不要把服务器密码或生产 `.env` 放进 Actions。私有镜像的生产拉取使用单独只读凭据。
 
 工作流文件：[`backend-image.yml`](../.github/workflows/backend-image.yml)。所有构建只读取源码白名单；实际 `.env`、密钥文件、日志、历史数据和本机工具不会进入 Docker 构建上下文。
 
@@ -69,7 +69,7 @@ chmod 600 /opt/hoj/.env /opt/hoj/backend.env
 ```bash
 python3 deploy/backend.py update \
   -f /opt/hoj/docker-compose.yml --env-file /opt/hoj/.env \
-  --image ghcr.io/sxuas-acm-team/sxuoj-backend:latest --dry-run
+  --image YOUR_DOCKERHUB_USERNAME/sxuoj-backend:latest --dry-run
 ```
 
 确认路径后，一条命令升级；需要导入新变量时附加 `--runtime-env /opt/hoj/backend.env`：
@@ -77,7 +77,7 @@ python3 deploy/backend.py update \
 ```bash
 python3 deploy/backend.py update \
   -f /opt/hoj/docker-compose.yml --env-file /opt/hoj/.env \
-  --image ghcr.io/sxuas-acm-team/sxuoj-backend:latest
+  --image YOUR_DOCKERHUB_USERNAME/sxuoj-backend:latest
 ```
 
 脚本会拉取镜像、核验镜像标识、记录当前容器的**实际镜像 ID**和环境，然后执行仅针对后端的 `up -d --no-deps --no-build --pull never`。新容器必须通过匿名 `/api/get-website-config` 探针；启动失败、探针失败或超时会自动恢复旧镜像与旧环境。可用 `--timeout 360` 调整等待时间。单个后端容器重建会有短暂中断，不是零停机滚动升级。

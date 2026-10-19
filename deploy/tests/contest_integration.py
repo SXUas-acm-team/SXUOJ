@@ -402,7 +402,7 @@ class Suite:
         status, _ = self.request(capability_url, binary=True)
         self.check("end_time_immediately_revokes_resource_capability", status == 403)
         self.success("administrator_can_still_read_sealed_statement", detail(), "root")
-        self.root_update(cid, confidential=True, releaseAt=now() - 1000)
+        self.root_update(cid, confidential=True, releaseAt=now())
         self.success("manual_publication_allows_anonymous_statement", detail())
         self.success("manual_publication_allows_anonymous_problem_list", "/api/get-contest-problem?cid=" + str(cid))
         self.success("manual_publication_allows_anonymous_rank", "/api/get-contest-rank", payload=rank())
