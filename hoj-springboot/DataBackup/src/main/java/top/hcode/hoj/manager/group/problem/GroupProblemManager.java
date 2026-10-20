@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +28,7 @@ import top.hcode.hoj.pojo.entity.problem.Problem;
 import top.hcode.hoj.pojo.entity.problem.ProblemCase;
 import top.hcode.hoj.pojo.entity.problem.Tag;
 import top.hcode.hoj.pojo.vo.ProblemVO;
+import top.hcode.hoj.pojo.vo.ConfigVO;
 import top.hcode.hoj.shiro.AccountProfile;
 import top.hcode.hoj.utils.Constants;
 import top.hcode.hoj.validator.GroupValidator;
@@ -78,8 +78,8 @@ public class GroupProblemManager {
     @Autowired
     private ProblemContentAccessValidator problemContentAccessValidator;
 
-    @Value("${hoj.judge.token:no_judge_token}")
-    private String judgeToken;
+    @Autowired
+    private ConfigVO configVo;
 
     public IPage<ProblemVO> getProblemList(Integer limit, Integer currentPage, Long gid) throws StatusNotFoundException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
@@ -412,7 +412,7 @@ public class GroupProblemManager {
             throw new StatusFailException("参数不能为空！");
         }
 
-        compileDTO.setToken(judgeToken);
+        compileDTO.setToken(configVo.getJudgeToken());
         dispatcher.dispatch(Constants.TaskType.COMPILE_SPJ, compileDTO);
     }
 
@@ -436,7 +436,7 @@ public class GroupProblemManager {
             throw new StatusFailException("参数不能为空！");
         }
 
-        compileDTO.setToken(judgeToken);
+        compileDTO.setToken(configVo.getJudgeToken());
         dispatcher.dispatch(Constants.TaskType.COMPILE_INTERACTIVE, compileDTO);
     }
 

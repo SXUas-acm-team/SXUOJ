@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.core.env.Environment;
+import top.hcode.hoj.security.BackendRuntimeSecrets;
 import top.hcode.hoj.shiro.ShiroConstant;
 import top.hcode.hoj.security.SecretPolicy;
 import cn.hutool.crypto.SecureUtil;
@@ -36,11 +38,16 @@ public class JwtUtils {
     @Autowired
     private RedisUtils redisUtils;
 
+    @Autowired
+    @lombok.Getter(lombok.AccessLevel.NONE)
+    @lombok.Setter(lombok.AccessLevel.NONE)
+    private Environment environment;
+
     public void setSecret(String value) {
-        if (!SecretPolicy.isStrongJwt(value)) {
+        if (environment == null && !SecretPolicy.isStrongJwt(value)) {
             throw new IllegalArgumentException("JWT signing key must contain at least 64 random bytes in Base64.");
         }
-        this.secret = value;
+        this.secret = BackendRuntimeSecrets.resolveJwt(environment, value);
     }
 
     /**

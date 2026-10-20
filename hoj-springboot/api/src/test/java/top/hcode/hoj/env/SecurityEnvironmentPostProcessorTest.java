@@ -23,15 +23,37 @@ public class SecurityEnvironmentPostProcessorTest {
         env.getPropertySources().addFirst(new MapPropertySource("test", values));
         return env;
     }
-    @Test public void localSeedCannotBecomeSigningKey() {
+    @Test public void backendDefersPlaceholdersUntilRemoteConfigurationIsAvailable() {
         StandardEnvironment env = environment("local", "default", "no_judge_token");
         new SecurityEnvironmentPostProcessor().postProcessEnvironment(env, new SpringApplication());
-        assertTrue(SecretPolicy.isStrongJwt(env.getProperty("hoj.jwt.secret")));
-        assertEquals(env.getProperty("hoj.jwt.secret"), env.getProperty("jwt-token-secret"));
-        assertTrue(SecretPolicy.isStrongServiceToken(env.getProperty("hoj.judge.token")));
+        assertFalse(SecretPolicy.isStrongJwt(env.getProperty("hoj.jwt.secret")));
+        assertNull(env.getProperty("hoj.judge.token"));
+        assertEquals("no_judge_token", env.getProperty("judge-token"));
     }
-    @Test(expected = IllegalStateException.class) public void productionRejectsPublicSeed() {
-        new SecurityEnvironmentPostProcessor().postProcessEnvironment(environment("prod", "default", "default"), new SpringApplication());
+    @Test public void productionBackendAcceptsExistingNacosPasswordAndDefersDefaultJudgeToken() {
+        StandardEnvironment env = environment("prod", "default", "default");
+        Map<String, Object> values = new HashMap<>();
+        values.put("spring.cloud.nacos.config.enabled", true);
+        values.put("NACOS_PASSWORD", "nacos");
+        env.getPropertySources().addFirst(new MapPropertySource("legacyInstallation", values));
+        new SecurityEnvironmentPostProcessor().postProcessEnvironment(env, new SpringApplication());
+        assertEquals("nacos", env.getProperty("NACOS_PASSWORD"));
+        assertNull(env.getProperty("hoj.judge.token"));
+    }
+    @Test(expected = IllegalStateException.class) public void emptyNacosPasswordStillFailsClearly() {
+        StandardEnvironment env = environment("prod", "default", "default");
+        Map<String, Object> values = new HashMap<>();
+        values.put("spring.cloud.nacos.config.enabled", true);
+        values.put("NACOS_PASSWORD", "  ");
+        env.getPropertySources().addFirst(new MapPropertySource("missingCredential", values));
+        new SecurityEnvironmentPostProcessor().postProcessEnvironment(env, new SpringApplication());
+    }
+    @Test(expected = IllegalStateException.class) public void judgeServerStillRejectsWeakServiceTokens() {
+        StandardEnvironment env = environment("prod", "default", "short-existing-token");
+        Map<String, Object> values = new HashMap<>();
+        values.put("spring.application.name", "hoj-judgeserver");
+        env.getPropertySources().addFirst(new MapPropertySource("judge", values));
+        new SecurityEnvironmentPostProcessor().postProcessEnvironment(env, new SpringApplication());
     }
     @Test public void explicitSecretIsUsedByBothConsumers() {
         String key = SecretPolicy.randomSecret();

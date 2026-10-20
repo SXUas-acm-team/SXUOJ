@@ -3,6 +3,7 @@
 # Compile once on the builder's architecture: the resulting Java 8 bytecode is
 # shared by both runtime architectures. No production environment is needed.
 FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-8 AS build
+ARG RUN_BACKEND_TESTS=true
 WORKDIR /workspace
 COPY .mvn/settings.xml .mvn/settings.xml
 COPY hoj-springboot/pom.xml hoj-springboot/pom.xml
@@ -18,8 +19,9 @@ RUN --mount=type=cache,id=sxuoj-maven,target=/root/.m2,sharing=locked \
     set -eu; \
     tests="$(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' backend-tests.txt | tr -d '\r' | paste -sd, -)"; \
     test -n "$tests"; \
+    case "$RUN_BACKEND_TESTS" in true) skip_backend_tests=false ;; false) skip_backend_tests=true ;; *) echo 'RUN_BACKEND_TESTS must be true or false' >&2; exit 64 ;; esac; \
     mvn -B -ntp -s .mvn/settings.xml -f hoj-springboot/pom.xml package \
-        -DskipTests=false -Dmaven.test.skip=false -Dmaven.test.failure.ignore=false \
+        "-DskipTests=$skip_backend_tests" -Dmaven.test.skip=false -Dmaven.test.failure.ignore=false \
         "-Dtest=$tests" -Dsurefire.failIfNoSpecifiedTests=false; \
     mkdir -p /out/tools; \
     hutool_jar="$(find /root/.m2/repository/cn/hutool/hutool-all -name 'hutool-all-*.jar' ! -name '*sources*' ! -name '*javadoc*' | sort | tail -n 1)"; \

@@ -7,8 +7,8 @@ import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import top.hcode.hoj.security.SecretPolicy;
+import top.hcode.hoj.security.BackendRuntimeSecrets;
 
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -23,36 +23,33 @@ public class SecurityEnvironmentPostProcessor implements EnvironmentPostProcesso
         boolean backend = "hoj-data-backup".equals(name) && env.containsProperty("jwt-token-secret");
         boolean judge = "hoj-judgeserver".equals(name);
         if (!backend && !judge) return;
-        boolean local = Arrays.stream(env.getActiveProfiles()).anyMatch(p -> p.equals("dev") || p.equals("local"));
         boolean nacosEnabled = env.getProperty("spring.cloud.nacos.config.enabled", Boolean.class, true)
                 || env.getProperty("spring.cloud.nacos.discovery.enabled", Boolean.class, true);
         if (nacosEnabled) {
             String password = first(env, "NACOS_PASSWORD", "nacos-password", "spring.cloud.nacos.config.password");
-            if (SecretPolicy.isPlaceholder(password) || "nacos".equals(password) || password.length() < 12) {
-                throw new IllegalStateException("Nacos requires an explicitly configured strong NACOS_PASSWORD.");
+            if (backend ? password == null || password.trim().isEmpty()
+                    : SecretPolicy.isPlaceholder(password) || "nacos".equals(password) || password.length() < 12) {
+                throw new IllegalStateException(backend ? "Nacos requires a configured nonempty NACOS_PASSWORD."
+                        : "Nacos requires an explicitly configured strong NACOS_PASSWORD.");
             }
         }
         Map<String, Object> values = new LinkedHashMap<>();
         if (backend) {
             String jwt = first(env, "HOJ_JWT_SECRET", "JWT_TOKEN_SECRET", "hoj.jwt.secret", "jwt-token-secret");
-            if (!SecretPolicy.isStrongJwt(jwt)) {
-                if (!local || !SecretPolicy.isPlaceholder(jwt)) {
-                    throw new IllegalStateException("JWT signing key must be Base64 containing at least 64 random bytes; configure JWT_TOKEN_SECRET.");
-                }
-                jwt = SecretPolicy.randomSecret();
-            }
-            values.put("hoj.jwt.secret", jwt);
-            values.put("jwt-token-secret", jwt);
+            // Nacos arrives after this phase. Final consumers resolve a weak remote/local
+            // value to the same persistent key, while preserving explicit strong env keys.
+            values.put("hoj.jwt.secret", jwt == null ? "default" : jwt);
+            if (SecretPolicy.isStrongJwt(jwt)) values.put("jwt-token-secret", jwt);
         }
         String token = first(env, "HOJ_JUDGE_TOKEN", "JUDGE_TOKEN", "hoj.judge.token", "judge-token");
-        if (!SecretPolicy.isStrongServiceToken(token)) {
-            if (!backend || !local || !SecretPolicy.isPlaceholder(token)) {
-                throw new IllegalStateException("Judge service token is missing or weak; configure the same strong JUDGE_TOKEN for backend and JudgeServer.");
-            }
-            token = SecretPolicy.randomSecret();
+        if (!backend && !SecretPolicy.isStrongServiceToken(token)) {
+            throw new IllegalStateException("Judge service token is missing or weak; configure the same strong JUDGE_TOKEN for backend and JudgeServer.");
         }
-        values.put("hoj.judge.token", token);
-        values.put("judge-token", token);
+        // A backend placeholder must not shadow the token already held by Nacos.
+        if (!backend || !BackendRuntimeSecrets.isJudgePlaceholder(token)) {
+            if (!backend) values.put("hoj.judge.token", token);
+            values.put("judge-token", token);
+        }
         env.getPropertySources().addFirst(new MapPropertySource("validatedServiceSecrets", values));
     }
 

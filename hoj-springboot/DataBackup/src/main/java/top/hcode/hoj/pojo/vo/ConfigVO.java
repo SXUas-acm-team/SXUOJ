@@ -2,6 +2,9 @@ package top.hcode.hoj.pojo.vo;
 
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import top.hcode.hoj.security.BackendRuntimeSecrets;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
@@ -53,8 +56,12 @@ public class ConfigVO {
     private String redisPassword;
 
     // jwt配置
-    @Value("${hoj.jwt.secret}")
     private String tokenSecret;
+
+    @Autowired
+    public void bindTokenSecret(@Value("${hoj.jwt.secret:default}") String value, Environment environment) {
+        this.tokenSecret = BackendRuntimeSecrets.resolveJwt(environment, value);
+    }
 
     @Value("${hoj.jwt.expire}")
     private String tokenExpire;

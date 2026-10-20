@@ -1,7 +1,6 @@
 package top.hcode.hoj.config;
 
 import cn.hutool.core.collection.CollectionUtil;
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
@@ -23,6 +22,9 @@ import top.hcode.hoj.pojo.entity.problem.Problem;
 import top.hcode.hoj.pojo.entity.problem.ProblemLanguage;
 import top.hcode.hoj.pojo.vo.ConfigVO;
 import top.hcode.hoj.utils.Constants;
+import top.hcode.hoj.utils.JwtUtils;
+import top.hcode.hoj.security.BackendRuntimeSecrets;
+import org.springframework.core.env.Environment;
 
 import javax.annotation.Resource;
 import java.util.*;
@@ -43,6 +45,12 @@ public class StartupRunner implements CommandLineRunner {
     @Autowired
     private ConfigManager configManager;
 
+    @Autowired
+    private JwtUtils jwtUtils;
+
+    @Autowired
+    private Environment environment;
+
     @Autowired(required = false)
     private NacosSwitchConfig nacosSwitchConfig;
 
@@ -62,9 +70,6 @@ public class StartupRunner implements CommandLineRunner {
     private String openRemoteJudge;
 
     // jwt配置
-    @Value("${jwt-token-secret}")
-    private String tokenSecret;
-
     @Value("${jwt-token-expire}")
     private String tokenExpire;
 
@@ -192,19 +197,10 @@ public class StartupRunner implements CommandLineRunner {
      * 更新修改基础的配置
      */
     private void initDefaultConfig() {
-        if (judgeToken.equals("default")) {
-            configVo.setJudgeToken(IdUtil.fastSimpleUUID());
-        } else {
-            configVo.setJudgeToken(judgeToken);
-        }
-
-        if (tokenSecret.equals("default")) {
-            if (StrUtil.isBlank(configVo.getTokenSecret())) {
-                configVo.setTokenSecret(IdUtil.fastSimpleUUID());
-            }
-        } else {
-            configVo.setTokenSecret(tokenSecret);
-        }
+        String explicitJudgeToken = BackendRuntimeSecrets.configuredJudgeToken(environment, judgeToken);
+        configVo.setJudgeToken(BackendRuntimeSecrets.resolveJudgeToken(explicitJudgeToken, configVo.getJudgeToken()));
+        // Publish the exact final key used to sign requests, including a persisted fallback.
+        configVo.setTokenSecret(jwtUtils.getSecret());
         configVo.setTokenExpire(tokenExpire);
         configVo.setCheckRefreshExpire(checkRefreshExpire);
 

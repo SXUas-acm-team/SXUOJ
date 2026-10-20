@@ -8,7 +8,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +22,7 @@ import top.hcode.hoj.dao.problem.ProblemEntityService;
 import top.hcode.hoj.judge.Dispatcher;
 import top.hcode.hoj.pojo.dto.CompileDTO;
 import top.hcode.hoj.pojo.dto.ProblemDTO;
+import top.hcode.hoj.pojo.vo.ConfigVO;
 import top.hcode.hoj.pojo.entity.judge.Judge;
 import top.hcode.hoj.pojo.entity.problem.Problem;
 import top.hcode.hoj.pojo.entity.problem.ProblemCase;
@@ -53,8 +53,8 @@ public class AdminProblemManager {
     @Autowired
     private Dispatcher dispatcher;
 
-    @Value("${hoj.judge.token:no_judge_token}")
-    private String judgeToken;
+    @Autowired
+    private ConfigVO configVo;
 
     @Resource
     private JudgeEntityService judgeEntityService;
@@ -209,7 +209,7 @@ public class AdminProblemManager {
             return CommonResult.errorResponse("参数不能为空！");
         }
 
-        compileDTO.setToken(judgeToken);
+        compileDTO.setToken(configVo.getJudgeToken());
         return dispatcher.dispatch(Constants.TaskType.COMPILE_SPJ, compileDTO);
     }
 
@@ -219,7 +219,7 @@ public class AdminProblemManager {
             return CommonResult.errorResponse("参数不能为空！");
         }
 
-        compileDTO.setToken(judgeToken);
+        compileDTO.setToken(configVo.getJudgeToken());
         return dispatcher.dispatch(Constants.TaskType.COMPILE_INTERACTIVE, compileDTO);
     }
 

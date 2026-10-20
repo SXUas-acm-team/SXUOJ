@@ -33,3 +33,5 @@ ProtectedProblemResourceTest
 AuthenticationStateBoundaryTest
 ContestRankAccountStateTest
 ContestDeletionPasswordTest
+BackendRuntimeSecretsTest
+BackendStartupSecretsCompatibilityTest
