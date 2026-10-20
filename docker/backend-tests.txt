@@ -30,3 +30,6 @@ CrawlerNetworkRegressionTest
 ConfidentialContestAccessTest
 ConfidentialProblemContentTest
 ProtectedProblemResourceTest
+AuthenticationStateBoundaryTest
+ContestRankAccountStateTest
+ContestDeletionPasswordTest

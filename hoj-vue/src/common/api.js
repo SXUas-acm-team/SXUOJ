@@ -1158,9 +1158,9 @@ const ojApi = {
     })
   },
 
-  deleteGroupContest(cid) {
+  deleteGroupContest(cid, gid, password) {
     return ajax("/api/group/contest", 'delete', {
-      params: { cid }
+      data: { cid, gid, password }
     })
   },
 
@@ -1882,11 +1882,9 @@ const adminApi = {
       data
     })
   },
-  admin_deleteContest(cid) {
+  admin_deleteContest(cid, password) {
     return ajax('/api/admin/contest', 'delete', {
-      params: {
-        cid
-      }
+      data: { cid, password }
     })
   },
   admin_changeContestVisible(cid, visible, uid) {

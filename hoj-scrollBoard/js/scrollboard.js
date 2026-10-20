@@ -519,7 +519,7 @@ function int64add5(dst, a, b, c, d, e)
  */
 
 /**
- * 本地调试请提供后端api的域名
+ * 滚榜数据请求仅允许当前页面的同源后端
  */
 const TEST_BACKEND_API = '';
 
@@ -556,64 +556,105 @@ const statusMap = {
     '10': 8
 }
 
-/**
- * 从服务器获取比赛的信息
- * @return json
- */
-function getContestInfo(cid){
-    var contestInfo = null;
-    $.ajax({
-        type: "GET",
-        content: "application/json",
-        url: TEST_BACKEND_API + "/api/get-contest-scroll-board-info?cid="+cid,
-        dataType: "json",
-        data: {},
-        async: false,
-        success: function(result) {
-            if(result.status == 200){
-                let info = result.data;
-                contestInfo = new ContestInfo(info.id, info.rankShowName, info.problemCount,
-                    info.startTime, info.sealRankTime, info.starUserList, info.balloonColor);
-            }else{
-                closeLoading();
-                showErrorMessage("[Failed to get contest information]", result.msg);
-            }
-        },
-        error: function(error) {
-            closeLoading();
-            showErrorMessage('[Failed to get contest information]', error.responseJSON.msg);
-        }
-    });
-    return contestInfo;
+/** Read the raw JWT stored by the Vue login flow; never send damaged/expired data. */
+var scrollBoardRejectedToken = null;
+function scrollBoardStoredToken() {
+    try { return window.localStorage.getItem('token'); }
+    catch (_) { return null; }
+}
+function scrollBoardToken() {
+    var token = scrollBoardStoredToken();
+    if (typeof token !== 'string' || token === scrollBoardRejectedToken
+            || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) return null;
+    try {
+        var payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (payload.length % 4) payload += '=';
+        var claims = JSON.parse(window.atob(payload));
+        if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)
+                || claims.exp * 1000 <= Date.now()) return null;
+        return token;
+    } catch (_) { return null; }
 }
 
-/**
- * 从服务器获取提交列表信息
- * @return json数组
- */
-function getSubmissionList(cid, removeStar){
-    var submissions = [];
-    $.ajax({
-        type: "GET",
-        content: "application/json",
-        url: TEST_BACKEND_API + "/api/get-contest-scroll-board-submission?cid="+cid+"&removeStar="+removeStar,
-        dataType: "json",
-        data: {},
-        async: false,
-        success: function(result) {
-            if(result.status == 200){
-                submissions = result.data;
-            }else{
-                closeLoading();
-                showErrorMessage('[Failed to get contest submission record list]', result.msg);
-            }
-        },
-        error: function(error) {
-            closeLoading();
-            showErrorMessage('[Failed to get contest submission record list]', error.responseJSON.msg);
+/** Fetch owns redirect handling: authentication must never follow a redirected API URL. */
+async function requestScrollBoardData(path) {
+    var url = new URL(path, window.location.href);
+    if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)
+            || url.username || url.password || url.hash
+            || ['/api/get-contest-scroll-board-info', '/api/get-contest-scroll-board-submission'].indexOf(url.pathname) < 0) {
+        throw new Error('Scroll board requests must use the original same-origin API.');
+    }
+    var session = scrollBoardStoredToken();
+    var token = scrollBoardToken();
+    async function send(credential) {
+        var headers = { Accept: 'application/json' };
+        if (credential) headers.Authorization = credential;
+        var response = await window.fetch(url.href, {
+            method: 'GET', headers: headers, mode: 'same-origin', credentials: 'same-origin',
+            redirect: 'error', cache: 'no-store'
+        });
+        if (response.redirected || (response.url && new URL(response.url).origin !== window.location.origin)) {
+            throw new Error('Redirected scroll board responses are not accepted.');
         }
-    });
+        var result;
+        try { result = await response.json(); } catch (_) { result = null; }
+        if (scrollBoardStoredToken() !== session) {
+            throw new Error('登录状态已变化，请刷新滚榜页面。');
+        }
+        if (!response.ok || !result || Number(result.status) !== 200) {
+            var error = new Error(result && typeof result.msg === 'string' ? result.msg : 'Failed to load scroll board data.');
+            error.status = response.ok && result ? Number(result.status) : response.status;
+            throw error;
+        }
+        return result.data;
+    }
+    try { return await send(token); }
+    catch (error) {
+        // Only an authentication failure may retry anonymously. A permission denial
+        // remains a denial; a successful public result must come from the server.
+        if (token && error.status === 401 && scrollBoardStoredToken() === session) {
+            scrollBoardRejectedToken = token;
+            return send(null);
+        }
+        throw error;
+    }
+}
+
+async function getContestInfo(cid) {
+    var info = await requestScrollBoardData(TEST_BACKEND_API + '/api/get-contest-scroll-board-info?cid=' + encodeURIComponent(cid));
+    if (!info || typeof info !== 'object') throw new Error('Invalid contest information.');
+    return new ContestInfo(info.id, info.rankShowName, info.problemCount,
+        info.startTime, info.sealRankTime, info.starUserList, info.balloonColor);
+}
+
+async function getSubmissionList(cid, removeStar) {
+    var submissions = await requestScrollBoardData(TEST_BACKEND_API + '/api/get-contest-scroll-board-submission?cid=' +
+        encodeURIComponent(cid) + '&removeStar=' + encodeURIComponent(removeStar));
+    if (!Array.isArray(submissions)) throw new Error('Invalid scroll board submission data.');
     return submissions;
+}
+
+/** Load both authorized responses before constructing or displaying any board. */
+async function initializeScrollBoard() {
+    try {
+        var session = scrollBoardStoredToken();
+        var params = getRequestParams();
+        if (params.cid == null || params.cid === '') throw new Error('请求路径的参数cid不能为空 (The cid cannot be empty)');
+        var contestInfo = await getContestInfo(params.cid);
+        var medals = params.medals instanceof Array ? params.medals : [0, 0, 0];
+        var removeStar = params.removeStar == null ? false : params.removeStar;
+        var submissions = await getSubmissionList(contestInfo.id, removeStar);
+        if (scrollBoardStoredToken() !== session) throw new Error('登录状态已变化，请刷新滚榜页面。');
+        var board = new Board(contestInfo, medals, removeStar, submissions);
+        closeLoading();
+        board.showInitBoard();
+        $('html').keydown(function(e) { if (e.keyCode == 13) board.keydown(); });
+        return board;
+    } catch (error) {
+        closeLoading();
+        showErrorMessage('[Failed to load scroll board]', error.message || 'Failed to load scroll board data.');
+        return null;
+    }
 }
 
 
@@ -958,7 +999,7 @@ function TeamCompare(a, b) {
  * @param {ContestInfo}      contestInfo     比赛信息
  * @param {Array<int>}       medalCounts     奖牌数,无特等奖则为3个数,有特等奖则为4个数,第一个为特等奖
  */
-function Board(contestInfo, medalCounts, removeStar) {
+function Board(contestInfo, medalCounts, removeStar, submissions) {
     this.contestInfo = contestInfo; // 比赛信息
     this.problemCount = contestInfo.problemCount; //题目数量
     this.balloonColor = contestInfo.balloonColor; // 气球对应颜色
@@ -992,9 +1033,8 @@ function Board(contestInfo, medalCounts, removeStar) {
 
     //从服务器得到submitList和teamList
 
-    var submssions = getSubmissionList(this.contestInfo.id, removeStar);
-    this.submitList = getSubmitList(submssions);
-    this.teamList = getTeamList(submssions, this.contestInfo.rankShowName, this.contestInfo.starUserList);
+    this.submitList = getSubmitList(submissions);
+    this.teamList = getTeamList(submissions, this.contestInfo.rankShowName, this.contestInfo.starUserList);
 
     //将submit存到对应的Team对象里
     for (var key in this.submitList) {

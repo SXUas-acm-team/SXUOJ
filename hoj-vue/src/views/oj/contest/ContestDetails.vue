@@ -136,7 +136,7 @@
         <el-button type="primary" @click="$store.commit('changeModalStatus', { mode: 'Login', visible: true })">{{ $t('m.Please_login_first') }}</el-button>
       </el-card>
       <el-card v-if="passwordFormVisible && isAuthenticated" class="password-form-card" style="text-align:center;margin-bottom:15px">
-        <p>{{ $t('m.To_Enter_Need_Password') }}</p>
+        <p v-if="!contest.confidential">{{ $t('m.To_Enter_Need_Password') }}</p>
         <el-form @submit.native.prevent="checkPassword">
           <el-input v-model="contestPassword" type="password" :placeholder="$t('m.Enter_the_contest_password')" style="width:70%" />
           <el-button type="primary" :loading="btnLoading" @click="checkPassword">{{ $t('m.Enter') }}</el-button>
@@ -144,7 +144,7 @@
       </el-card>
       <!-- 判断是否需要密码验证 -->
 
-      <el-tabs @tab-click="tabClick" v-model="route_name">
+      <el-tabs v-if="!contestMenuDisabled" @tab-click="tabClick" v-model="route_name">
         <el-tab-pane name="ContestDetails" lazy>
           <span slot="label"
             ><i class="el-icon-s-home"></i>&nbsp;{{ $t('m.Overview') }}</span
@@ -419,7 +419,7 @@ export default {
           };
 
           api.getContestUserNotReadAnnouncement(data).then((res) => {
-            if (!current() || this.userInfo.uid !== uid) return;
+            if (!current() || this.userInfo.uid !== uid || this.contestMenuDisabled) return;
             let newAnnounceList = res.data.data;
             for (let i = 0; i < newAnnounceList.length; i++) {
               readAnnouncementList.push(newAnnounceList[i].id);

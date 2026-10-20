@@ -1,6 +1,7 @@
 package top.hcode.hoj.service.group.contest;
 
 import top.hcode.hoj.common.result.CommonResult;
+import top.hcode.hoj.pojo.dto.DeleteContestDTO;
 import top.hcode.hoj.pojo.entity.contest.Contest;
 import top.hcode.hoj.pojo.vo.AdminContestVO;
 import top.hcode.hoj.pojo.vo.ContestVO;
@@ -23,7 +24,7 @@ public interface GroupContestService {
 
     public CommonResult<Void> updateContest(AdminContestVO adminContestVo);
 
-    public CommonResult<Void> deleteContest(Long cid);
+    public CommonResult<Void> deleteContest(DeleteContestDTO request);
 
     public CommonResult<Void> changeContestVisible(Long cid, Boolean visible);
 

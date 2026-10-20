@@ -2,6 +2,7 @@ package top.hcode.hoj.controller.group;
 
 import top.hcode.hoj.common.result.CommonResult;
 import top.hcode.hoj.pojo.dto.AnnouncementDTO;
+import top.hcode.hoj.pojo.dto.DeleteContestDTO;
 import top.hcode.hoj.pojo.dto.ContestProblemDTO;
 import top.hcode.hoj.pojo.dto.ProblemDTO;
 import top.hcode.hoj.pojo.entity.contest.Contest;
@@ -17,6 +18,7 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,8 +71,11 @@ public class GroupContestController {
     }
 
     @DeleteMapping("/contest")
-    public CommonResult<Void> deleteContest(@RequestParam(value = "cid", required = true) Long cid) {
-        return groupContestService.deleteContest(cid);
+    public CommonResult<Void> deleteContest(@RequestBody(required = false) DeleteContestDTO request, HttpServletRequest httpRequest) {
+        if (httpRequest.getQueryString() != null && !httpRequest.getQueryString().isEmpty()) {
+            return CommonResult.errorResponse("删除比赛请仅使用JSON请求正文提交比赛ID和当前登录账号密码，禁止在URL中传递密码！");
+        }
+        return groupContestService.deleteContest(request);
     }
 
     @PutMapping("/change-contest-visible")

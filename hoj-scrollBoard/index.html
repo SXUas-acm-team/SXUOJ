@@ -47,33 +47,7 @@
 
 <body>
 	<script type="text/javascript">
-        var parmas = getRequestParams();
-        if(parmas.cid == undefined || parmas.cid == null){
-            closeLoading();
-            showErrorMessage('[Request Parma Error]', '请求路径的参数cid不能为空 (The cid cannot be empty)');
-        }else{
-            var contestInfo = getContestInfo(parmas.cid);
-            if(contestInfo != null){
-                var medals = new Array(0, 0, 0);
-                if(parmas.medals != undefined 
-                    && parmas.medals != null 
-                    && parmas.medals instanceof Array){
-                    medals = parmas.medals;
-                }
-                var removeStar = false;
-                if(parmas.removeStar != undefined && parmas.removeStar != null){
-                    removeStar = parmas.removeStar;
-                }
-                var board = new Board(contestInfo, medals, removeStar);
-				closeLoading();
-                board.showInitBoard();
-                $('html').keydown(function(e) {
-                    if (e.keyCode == 13) {
-                        board.keydown();
-                    }
-                });
-            }
-        }
+        initializeScrollBoard();
     </script>
 </body>
 

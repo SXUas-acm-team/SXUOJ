@@ -4,6 +4,7 @@ import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
 import top.hcode.hoj.common.exception.StatusNotFoundException;
 import top.hcode.hoj.common.result.CommonResult;
+import top.hcode.hoj.pojo.dto.DeleteContestDTO;
 import top.hcode.hoj.common.result.ResultStatus;
 import top.hcode.hoj.manager.group.contest.GroupContestManager;
 import top.hcode.hoj.pojo.entity.contest.Contest;
@@ -89,9 +90,9 @@ public class GroupContestServiceImpl implements GroupContestService {
     }
 
     @Override
-    public CommonResult<Void> deleteContest(Long tid) {
+    public CommonResult<Void> deleteContest(DeleteContestDTO request) {
         try {
-            groupContestManager.deleteContest(tid);
+            groupContestManager.deleteContest(request);
             return CommonResult.successResponse();
         } catch (StatusForbiddenException e) {
             return CommonResult.errorResponse(e.getMessage(), ResultStatus.FORBIDDEN);

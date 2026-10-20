@@ -29,6 +29,7 @@ hoj_judgeserver/
 !.env.example
 # Deployment snapshots contain resolved runtime credentials.
 .sxuoj-deploy/
+.sxuoj-upgrade/
 deploy/*.env
 /dist/
 /sxuoj-backend*.tar

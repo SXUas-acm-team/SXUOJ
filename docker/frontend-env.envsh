@@ -1,0 +1,55 @@
+#!/bin/sh
+# Sourced by the official nginx entrypoint, before its envsubst step.
+set -eu
+
+fail_frontend_config() {
+    echo "SXUOJ frontend: $1" >&2
+    exit 64
+}
+
+SERVER_NAME=${SERVER_NAME:-_}
+case "$SERVER_NAME" in
+    *[!A-Za-z0-9_.*\ -]*|'') fail_frontend_config 'SERVER_NAME contains unsupported characters.' ;;
+esac
+
+if [ -z "${BACKEND_UPSTREAM:-}" ]; then
+    BACKEND_UPSTREAM="${BACKEND_SERVER_HOST:-${BACKEND_HOST:-hoj-backend}}:${BACKEND_SERVER_PORT:-${BACKEND_PORT:-6688}}"
+fi
+printf '%s' "$BACKEND_UPSTREAM" | grep -Eq '^([A-Za-z0-9_][A-Za-z0-9_.-]*|\[[0-9a-fA-F:]+\]):[0-9]+$' \
+    || fail_frontend_config 'Use BACKEND_UPSTREAM=hostname:port or the existing BACKEND_SERVER_HOST/BACKEND_SERVER_PORT.'
+frontend_backend_port=${BACKEND_UPSTREAM##*:}
+if [ "${#frontend_backend_port}" -gt 5 ] || [ "$frontend_backend_port" -lt 1 ] || [ "$frontend_backend_port" -gt 65535 ]; then
+    fail_frontend_config 'Backend port must be between 1 and 65535.'
+fi
+export BACKEND_UPSTREAM SERVER_NAME
+
+mkdir -p /etc/nginx/snippets
+envsubst '${BACKEND_UPSTREAM}' < /opt/hoj/nginx/app.conf.template > /etc/nginx/snippets/sxuoj-app.conf
+SXUOJ_HTTP_CONTENT='include /etc/nginx/snippets/sxuoj-app.conf;'
+case "${USE_HTTPS:-false}" in
+    true|TRUE|1)
+        SSL_CERTIFICATE=${SSL_CERTIFICATE:-/etc/nginx/certs/fullchain.pem}
+        SSL_CERTIFICATE_KEY=${SSL_CERTIFICATE_KEY:-/etc/nginx/certs/privkey.pem}
+        case "$SSL_CERTIFICATE:$SSL_CERTIFICATE_KEY" in
+            *[!A-Za-z0-9_./:-]*) fail_frontend_config 'TLS paths contain unsupported characters.' ;;
+        esac
+        case "$SSL_CERTIFICATE" in /*) ;; *) fail_frontend_config 'TLS certificate path must be absolute.' ;; esac
+        case "$SSL_CERTIFICATE_KEY" in /*) ;; *) fail_frontend_config 'TLS key path must be absolute.' ;; esac
+        [ -s "$SSL_CERTIFICATE" ] && [ -s "$SSL_CERTIFICATE_KEY" ] \
+            || fail_frontend_config 'USE_HTTPS=true requires the existing certificate and key mounted read-only.'
+        frontend_https_port=${PUBLIC_HTTPS_PORT:-443}
+        case "$frontend_https_port" in ''|*[!0-9]*) fail_frontend_config 'PUBLIC_HTTPS_PORT must be numeric.' ;; esac
+        if [ "${#frontend_https_port}" -gt 5 ] || [ "$frontend_https_port" -lt 1 ] || [ "$frontend_https_port" -gt 65535 ]; then
+            fail_frontend_config 'PUBLIC_HTTPS_PORT must be between 1 and 65535.'
+        fi
+        frontend_redirect_suffix=
+        [ "$frontend_https_port" = 443 ] || frontend_redirect_suffix=":$frontend_https_port"
+        SXUOJ_HTTP_CONTENT='location / { return 301 https://$host'"$frontend_redirect_suffix"'$request_uri; }'
+        export SSL_CERTIFICATE SSL_CERTIFICATE_KEY
+        envsubst '${SERVER_NAME} ${SSL_CERTIFICATE} ${SSL_CERTIFICATE_KEY}' \
+            < /opt/hoj/nginx/tls.conf.template > /etc/nginx/conf.d/sxuoj-tls.conf
+        ;;
+    false|FALSE|0) rm -f /etc/nginx/conf.d/sxuoj-tls.conf ;;
+    *) fail_frontend_config 'USE_HTTPS must be true or false.' ;;
+esac
+export SXUOJ_HTTP_CONTENT

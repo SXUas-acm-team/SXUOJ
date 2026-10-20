@@ -10,6 +10,7 @@ import base64
 import datetime as dt
 import hashlib
 import hmac
+import io
 import ipaddress
 import json
 import os
@@ -23,6 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
 
 
 class IntegrationError(RuntimeError):
@@ -76,7 +78,8 @@ def sql_value(value):
 class Database:
     TABLES = {"user_info", "user_role", "user_record", "role", "auth", "role_auth", "problem", "problem_count",
               "problem_language", "contest", "contest_problem", "announcement", "contest_announcement", "category",
-              "discussion", "judge", "contest_record", "language", "group"}
+              "discussion", "judge", "contest_record", "language", "group", "group_member",
+              "contest_access_policy", "contest_protected_resource"}
 
     def __init__(self, container, password, database):
         self.container, self.password, self.database = container, password, database
@@ -144,6 +147,7 @@ class Suite:
         self.http = urllib.request.build_opener(NoRedirect)
         self.run_id = "ctest_" + uuid.uuid4().hex[:10]
         self.users, self.tokens, self.contests = {}, {}, {}
+        self.passwords, self.roles, self.outside_requests = {}, {}, {}
 
     def check(self, name, condition):
         self.phase = name
@@ -261,11 +265,15 @@ class Suite:
                 self.db.insert("role_auth", {"role_id": role_id, "auth_id": auth_id})
             uid = uuid.uuid4().hex
             name = self.run_id + "_" + actor
-            self.db.insert("user_info", {"uuid": uid, "username": name, "password": "synthetic JWT-only fixture",
+            password = secrets.token_urlsafe(32)
+            self.db.insert("user_info", {"uuid": uid, "username": name,
+                                         "password": hashlib.md5(password.encode()).hexdigest(),
                                          "nickname": name, "realname": name, "status": 0})
             self.db.insert("user_record", {"uid": uid})
             self.db.insert("user_role", {"uid": uid, "role_id": role_id})
             self.users[actor] = uid
+            self.roles[actor] = role_id
+            self.passwords[actor] = password
             self.tokens[actor] = self.token(uid)
         self.problem_name = self.run_id.upper() + "_P"
         self.asset_name = self.run_id + ".png"
@@ -313,6 +321,224 @@ class Suite:
         if proc.returncode:
             raise IntegrationError("cannot install synthetic attachment in isolated backend")
         self.check("synthetic_only_fixture_created", True)
+
+    def set_fixture_user_status(self, actor, status):
+        # Both keys must identify this run's inserted account before a state mutation.
+        where = "uuid=%s AND username=%s" % (sql_value(self.users[actor]), sql_value(self.run_id + "_" + actor))
+        if self.db.scalar("SELECT COUNT(*) FROM user_info WHERE " + where) != "1":
+            raise IntegrationError("synthetic account ownership check failed")
+        self.db.query("UPDATE user_info SET status=%s WHERE %s" % (sql_value(status), where))
+
+    def set_fixture_role_status(self, actor, status):
+        # The root role may predate this test; only this run's ordinary role is mutable.
+        if actor == "root":
+            raise IntegrationError("the shared root role must never be modified")
+        where = "id=%s AND role=%s AND description=%s" % (self.roles[actor],
+                    sql_value(self.run_id + "_" + actor), sql_value(self.run_id))
+        if self.db.scalar("SELECT COUNT(*) FROM role WHERE " + where) != "1":
+            raise IntegrationError("synthetic role ownership check failed")
+        self.db.query("UPDATE role SET status=%s WHERE %s" % (sql_value(status), where))
+
+    def create_extra_contest(self, name, contest_type=0, owner="root", gid=None, seal_rank=False, description=None):
+        if not name.startswith(("rank_", "delete_")):
+            raise IntegrationError("extra contest name is outside this fixture's namespace")
+        start = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2)
+        end = start + dt.timedelta(hours=1)
+        cid = self.db.insert("contest", {"uid": self.users[owner], "author": self.run_id + "_" + owner,
+            "title": self.run_id + "_" + name, "type": contest_type, "description": description or self.run_id,
+            "auth": 0, "pwd": "synthetic-contest-password", "start_time": start.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": end.strftime("%Y-%m-%d %H:%M:%S"), "duration": 3600, "status": 1, "visible": True,
+            "seal_rank": seal_rank, "seal_rank_time": (start + dt.timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S"),
+            "auto_real_rank": True, "open_print": False, "open_account_limit": False, "rank_show_name": "username",
+            "star_account": '{"star_account":[]}', "open_rank": True, "oi_rank_score_type": "Highest",
+            "is_group": gid is not None, "gid": gid, "award_type": 0, "allow_end_submit": True})
+        self.contests[name] = cid
+        cpid = self.db.insert("contest_problem", {"cid": cid, "pid": self.pid, "display_id": "A",
+                             "display_title": self.marker, "color": "#336699"})
+        return cid, cpid, start
+
+    def outside_rank(self, name, cid, actor=None):
+        # Production throttles each caller/contest for two seconds. Keep that behavior intact.
+        key = (actor, cid)
+        remaining = 2.1 - (time.monotonic() - self.outside_requests.get(key, 0))
+        if remaining > 0:
+            time.sleep(remaining)
+        self.outside_requests[key] = time.monotonic()
+        return self.success(name, "/api/get-contest-outside-scoreboard", actor,
+                            self.rank_payload(cid))
+
+    @staticmethod
+    def rank_payload(cid, **extra):
+        return dict(cid=cid, limit=10, currentPage=1, forceRefresh=False, removeStar=False,
+                    containsEnd=True, concernedList=[], **extra)
+
+    def assert_fixture_ranks(self, name, page, active):
+        rows = page.get("records", []) if isinstance(page, dict) else []
+        # Pinned copies are allowed by the internal API; compare their real, recalculated ranks.
+        ranks = {row.get("uid"): row.get("rank") for row in rows}
+        expected = {self.users[actor]: index for index, actor in enumerate(active, 1)}
+        self.check(name, ranks == expected and page.get("total") == len(rows)
+                   and set(ranks) == set(expected))
+
+    def verify_rank_account_states(self):
+        for kind, contest_type in (("acm", 0), ("oi", 1)):
+            cid, cpid, start = self.create_extra_contest("rank_" + kind, contest_type, seal_rank=kind == "acm")
+            external, _, _ = self.create_extra_contest("rank_" + kind + "_merge", contest_type)
+            for actor, seconds, score in (("student", 10, 100), ("unregistered", 20, 80)):
+                submitted = (start + dt.timedelta(seconds=seconds)).strftime("%Y-%m-%d %H:%M:%S")
+                submit_id = self.db.insert("judge", {"uid": self.users[actor], "username": self.run_id + "_" + actor,
+                    "pid": self.pid, "cid": cid, "cpid": cpid, "display_pid": "A", "status": 0,
+                    "score": score, "submit_time": submitted, "share": False, "code": "synthetic rank fixture",
+                    "language": self.language, "length": 22, "version": 0})
+                self.db.insert("contest_record", {"uid": self.users[actor], "cid": cid, "pid": self.pid,
+                    "cpid": cpid, "display_id": "A", "submit_id": submit_id, "status": 1, "score": score,
+                    "time": seconds, "use_time": 10, "submit_time": submitted, "checked": False})
+            cache_key = "contest_rank_cal_result_cache_" + ("contains_after_" if kind == "oi" else "") + str(cid)
+            for disabled in (1, -1):
+                label = kind + "_status_" + str(disabled).replace("-", "minus_")
+                self.set_fixture_user_status("student", 0)
+                self.redis("DEL", cache_key)
+                page = self.outside_rank(label + "_cache_prime_http", cid, "root")
+                self.assert_fixture_ranks(label + "_initial_ranks_are_one_and_two", page, ("student", "unregistered"))
+                raw_cache = self.redis("GET", cache_key)
+                # Extend only this synthetic cache entry. A slow Docker host must not turn this
+                # into a cache-miss test while checking exports and restoring the account.
+                extended = self.redis("EXPIRE", cache_key, 120)
+                self.check(label + "_raw_rank_cache_is_primed", self.users["student"] in raw_cache
+                           and self.users["unregistered"] in raw_cache and extended == "1")
+                try:
+                    self.set_fixture_user_status("student", disabled)
+                    page = self.success(label + "_internal_rank_http", "/api/get-contest-rank", "root", self.rank_payload(cid))
+                    self.assert_fixture_ranks(label + "_internal_rank_omits_banned_and_recomputes_first", page, ("unregistered",))
+                    page = self.outside_rank(label + "_cached_outside_rank_http", cid)
+                    self.assert_fixture_ranks(label + "_cached_outside_omits_banned_and_recomputes_first", page, ("unregistered",))
+                    self.check(label + "_outside_filter_did_not_evict_or_rewrite_raw_cache",
+                               self.redis("GET", cache_key) == raw_cache and int(self.redis("TTL", cache_key)) > 0)
+                    page = self.success(label + "_merged_rank_http", "/api/get-contest-rank", "root",
+                                        self.rank_payload(cid, externalCidList=[external]))
+                    self.assert_fixture_ranks(label + "_merged_rank_omits_banned", page, ("unregistered",))
+                    if kind == "acm":
+                        rows = self.success(label + "_scroll_submissions_http",
+                            "/api/get-contest-scroll-board-submission?cid=%s&removeStar=false" % cid)
+                        self.check(label + "_scroll_submissions_omit_banned",
+                                   {row.get("uid") for row in rows} == {self.users["unregistered"]})
+                    status, workbook = self.request("/api/file/download-contest-rank?cid=%s&forceRefresh=false&removeStar=false&containEnd=true" % cid,
+                                                     "root", binary=True)
+                    self.check(label + "_rank_export_http", status == 200 and workbook.startswith(b"PK"))
+                    try:
+                        with zipfile.ZipFile(io.BytesIO(workbook)) as archive:
+                            cells = b"\n".join(archive.read(path) for path in archive.namelist()
+                                               if path.startswith("xl/") and path.endswith(".xml"))
+                    except (ValueError, zipfile.BadZipFile):
+                        raise IntegrationError("rank export was not a readable XLSX workbook") from None
+                    self.check(label + "_rank_export_omits_banned_and_keeps_active",
+                               (self.run_id + "_student").encode() not in cells
+                               and (self.run_id + "_unregistered").encode() in cells)
+                    self.denied(label + "_existing_jwt_is_rejected_while_account_disabled",
+                                "/api/get-user-auth-info", "student")
+                finally:
+                    self.set_fixture_user_status("student", 0)
+                page = self.outside_rank(label + "_unbanned_cached_outside_rank_http", cid, "root")
+                self.assert_fixture_ranks(label + "_unban_restores_original_ranks", page, ("student", "unregistered"))
+                self.check(label + "_unban_uses_same_primed_raw_cache",
+                           self.redis("GET", cache_key) == raw_cache and int(self.redis("TTL", cache_key)) > 0)
+                self.success(label + "_same_jwt_works_after_database_unban", "/api/get-user-auth-info", "student")
+
+    def verify_live_role_state(self):
+        # A deliberately incomplete submission exercises @RequiresPermissions without
+        # creating a judge job: active permission reaches normal validation (400).
+        before = self.db.scalar("SELECT COUNT(*) FROM judge WHERE uid=" + sql_value(self.users["student"]))
+        status, body = self.request("/api/submit-problem-judge", "student", {})
+        self.check("existing_jwt_submit_permission_is_primed", status < 500 and body.get("status") == 400)
+        try:
+            for disabled in (1, -1):
+                self.set_fixture_role_status("student", disabled)
+                status, body = self.request("/api/submit-problem-judge", "student", {})
+                self.check("existing_jwt_disabled_role_%s_cannot_submit" % str(disabled).replace("-", "minus_"),
+                           status < 500 and body.get("status") in (401, 403) and body.get("data") is None)
+                self.set_fixture_role_status("student", 0)
+                status, body = self.request("/api/submit-problem-judge", "student", {})
+                self.check("same_jwt_role_%s_reenable_restores_permission" % str(disabled).replace("-", "minus_"),
+                           status < 500 and body.get("status") == 400)
+        finally:
+            self.set_fixture_role_status("student", 0)
+        self.check("permission_probes_did_not_dispatch_submissions", before == self.db.scalar(
+            "SELECT COUNT(*) FROM judge WHERE uid=" + sql_value(self.users["student"])))
+
+    def deletion_state(self, cid):
+        if cid not in (self.contests.get("delete_admin"), self.contests.get("delete_group")):
+            raise IntegrationError("deletion target is outside this run's fixture")
+        return tuple(int(self.db.scalar("SELECT COUNT(*) FROM `%s` WHERE %s=%s" % (table, key, cid)))
+                     for table, key in (("contest", "id"), ("contest_access_policy", "cid"),
+                                        ("contest_protected_resource", "cid"), ("contest_problem", "cid")))
+
+    def verify_deletion_passwords(self):
+        group_columns = self.db.columns("group")
+        def group_text(column, value):
+            kind = group_columns.get(column, {}).get("type", "").lower()
+            width = re.fullmatch(r"(?:var)?char\((\d+)\)", kind)
+            if width:
+                maximum = int(width.group(1))
+                if maximum < len("ctest_"):
+                    raise IntegrationError("isolated group field cannot hold the synthetic fixture prefix")
+                return value[:maximum]
+            return value
+        group_name = group_text("name", self.run_id + "_delete_group")
+        group_short_name = group_text("short_name", "ctest_" + self.run_id[-4:])
+        gid = self.db.insert("group", {"uid": self.users["student"], "owner": self.run_id + "_student",
+            "name": group_name, "short_name": group_short_name, "brief": self.run_id,
+            "description": self.run_id, "auth": 1, "status": 0, "visible": True})
+        self.db.insert("group_member", {"gid": gid, "uid": self.users["student"], "auth": 5, "reason": self.run_id})
+        for kind, actor, route, group_id in (("admin", "root", "/api/admin/contest", None),
+                                             ("group", "student", "/api/group/contest", gid)):
+            path = "/api/public/img/" + self.run_id + "_delete_" + kind + ".png"
+            cid, _, _ = self.create_extra_contest("delete_" + kind, owner=actor, gid=group_id,
+                                                 description="![synthetic](" + path + ")")
+            # The dedicated new tables have no legacy fields to infer or mutate.
+            self.db.query("UPDATE contest SET auth=1 WHERE id=%s AND title=%s" %
+                          (cid, sql_value(self.run_id + "_delete_" + kind)))
+            self.db.insert("contest_access_policy", {"cid": cid, "release_at": None})
+            self.db.insert("contest_protected_resource", {"cid": cid,
+                "resource_hash": hashlib.sha256(path.lower().encode()).hexdigest(), "resource_path": path})
+            before = self.deletion_state(cid)
+            untouched = tuple(self.db.scalar("SELECT COUNT(*) FROM `%s` WHERE %s<>%s" % (table, key, cid))
+                              for table, key in (("contest", "id"), ("contest_access_policy", "cid"),
+                                                 ("contest_protected_resource", "cid"), ("contest_problem", "cid")))
+            self.check(kind + "_deletion_fixture_contains_contest_policy_resource_and_problem", before == (1, 1, 1, 1))
+            base = {"cid": cid}
+            if group_id is not None:
+                base["gid"] = group_id
+            for label, payload, method, url, caller in (
+                ("missing_json_body", None, "DELETE", route, actor),
+                ("missing_password", base, "DELETE", route, actor),
+                ("wrong_operator_password", dict(base, password="synthetic-contest-password"), "DELETE", route, actor),
+                # A literal nonsecret sentinel checks the retired query contract; real passwords
+                # are sent only in JSON bodies and are never placed in URLs or the report.
+                ("retired_query_contract", None, "DELETE", route + "?" + urllib.parse.urlencode(dict(base, password="retired-query-sentinel")), actor),
+                ("ordinary_user_knowing_operator_password", dict(base, password=self.passwords[actor]), "DELETE", route, "unregistered"),
+                ("get_cannot_delete", None, "GET", route + "?" + urllib.parse.urlencode(base), "unregistered")):
+                self.denied(kind + "_delete_rejects_" + label, url, caller, payload, method)
+                self.check(kind + "_delete_" + label + "_has_no_side_effects", self.deletion_state(cid) == before)
+            if kind == "group":
+                self.denied("group_delete_rejects_forged_gid", route, actor,
+                            {"cid": cid, "gid": gid + 1000000000, "password": self.passwords[actor]}, "DELETE")
+                self.check("group_delete_forged_gid_has_no_side_effects", self.deletion_state(cid) == before)
+            self.success(kind + "_operator_account_password_deletes_fixture", route, actor,
+                         dict(base, password=self.passwords[actor]), "DELETE")
+            self.check(kind + "_successful_delete_removes_policy_resources_and_problem_links",
+                       self.deletion_state(cid) == (0, 0, 0, 0))
+            self.check(kind + "_successful_delete_preserves_all_unrelated_contest_and_policy_rows", untouched == tuple(
+                self.db.scalar("SELECT COUNT(*) FROM `%s` WHERE %s<>%s" % (table, key, cid))
+                for table, key in (("contest", "id"), ("contest_access_policy", "cid"),
+                                   ("contest_protected_resource", "cid"), ("contest_problem", "cid"))))
+            preserved = all(self.db.scalar("SELECT COUNT(*) FROM contest WHERE id=%s AND title=%s" %
+                (self.contests[name], sql_value(self.run_id + "_" + name))) == "1" for name in ("main", "old", "second"))
+            self.check(kind + "_delete_preserves_original_synthetic_sittings", preserved)
+        self.check("deleting_group_contest_keeps_its_group_and_operator", self.db.scalar(
+            "SELECT COUNT(*) FROM `group` WHERE id=%s AND uid=%s AND name=%s" %
+            (gid, sql_value(self.users["student"]), sql_value(group_name))) == "1"
+            and self.db.scalar("SELECT COUNT(*) FROM user_info WHERE uuid=%s AND username=%s" %
+                (sql_value(self.users["student"]), sql_value(self.run_id + "_student"))) == "1")
 
     def run(self):
         self.guard()
@@ -458,6 +684,9 @@ class Suite:
         self.root_update(second, confidential=True, releaseAt=now() - 1000, startTime=now() - 600000,
                          endTime=now() - 10000, status=1, duration=590)
         self.success("all_sittings_released_restores_anonymous_statement", detail())
+        self.verify_rank_account_states()
+        self.verify_live_role_state()
+        self.verify_deletion_passwords()
         return {"passed": len(self.assertions), "failed": 0, "assertions": self.assertions,
                 "synthetic_rows_inserted": self.db.inserted, "judging": "submission and contest_record persisted; no AC verdict asserted"}
 

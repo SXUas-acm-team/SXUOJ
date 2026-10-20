@@ -203,6 +203,7 @@ import {
 } from '@/common/constants';
 import { mapGetters } from 'vuex';
 import myMessage from '@/common/message';
+import { confirmContestDeletion } from '@/common/contestDeletion';
 export default {
   name: 'ContestList',
   data() {
@@ -280,16 +281,12 @@ export default {
       });
     },
     deleteContest(contestId) {
-      this.$confirm(this.$i18n.t('m.Delete_Contest_Tips'), 'Tips', {
-        confirmButtonText: this.$i18n.t('m.OK'),
-        cancelButtonText: this.$i18n.t('m.Cancel'),
-        type: 'warning',
-      }).then(() => {
-        api.admin_deleteContest(contestId).then((res) => {
+      return confirmContestDeletion(this, password =>
+        api.admin_deleteContest(contestId, password).then((res) => {
           myMessage.success(this.$i18n.t('m.Delete_successfully'));
           this.currentChange(1);
-        });
-      });
+        })
+      );
     },
     changeContestVisible(contestId, visible, uid) {
       api.admin_changeContestVisible(contestId, visible, uid).then((res) => {

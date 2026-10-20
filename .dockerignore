@@ -22,8 +22,12 @@
 !docker/backend-entrypoint.sh
 !docker/backend-healthcheck.sh
 !docker/backend-tests.txt
+!docker/NacosPasswordHash.java
 !docker/frontend.Dockerfile
 !docker/frontend.conf.template
+!docker/frontend-app.conf.template
+!docker/frontend-tls.conf.template
+!docker/frontend-env.envsh
 !hoj-vue/
 !hoj-vue/package.json
 !hoj-vue/package-lock.json
@@ -36,9 +40,7 @@
 !hoj-vue/tests/
 !hoj-vue/tests/**
 !hoj-scrollBoard/
-!hoj-scrollBoard/js/
-!hoj-scrollBoard/js/jquery.min.js
-!hoj-scrollBoard/js/scrollboard.js
+!hoj-scrollBoard/**
 
 # Re-exclude sensitive/generated files even when placed underneath source dirs.
 **/.env

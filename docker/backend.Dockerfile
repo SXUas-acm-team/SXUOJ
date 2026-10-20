@@ -13,6 +13,7 @@ COPY hoj-springboot/api/src hoj-springboot/api/src
 COPY hoj-springboot/DataBackup/src hoj-springboot/DataBackup/src
 COPY hoj-springboot/JudgeServer/src hoj-springboot/JudgeServer/src
 COPY docker/backend-tests.txt /workspace/backend-tests.txt
+COPY docker/NacosPasswordHash.java /workspace/NacosPasswordHash.java
 RUN --mount=type=cache,id=sxuoj-maven,target=/root/.m2,sharing=locked \
     set -eu; \
     tests="$(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' backend-tests.txt | tr -d '\r' | paste -sd, -)"; \
@@ -20,7 +21,11 @@ RUN --mount=type=cache,id=sxuoj-maven,target=/root/.m2,sharing=locked \
     mvn -B -ntp -s .mvn/settings.xml -f hoj-springboot/pom.xml package \
         -DskipTests=false -Dmaven.test.skip=false -Dmaven.test.failure.ignore=false \
         "-Dtest=$tests" -Dsurefire.failIfNoSpecifiedTests=false; \
-    mkdir /out; \
+    mkdir -p /out/tools; \
+    hutool_jar="$(find /root/.m2/repository/cn/hutool/hutool-all -name 'hutool-all-*.jar' ! -name '*sources*' ! -name '*javadoc*' | sort | tail -n 1)"; \
+    test -n "$hutool_jar"; \
+    javac -encoding UTF-8 -cp "$hutool_jar" -d /out/tools NacosPasswordHash.java; \
+    cp "$hutool_jar" /out/tools/hutool-all.jar; \
     cp hoj-springboot/DataBackup/target/hoj-backend-*.jar /out/backend.jar; \
     cp hoj-springboot/JudgeServer/target/hoj-judgeServer-*.jar /out/judgeserver.jar; \
     cd /out; sha256sum backend.jar judgeserver.jar > SHA256SUMS
@@ -41,6 +46,7 @@ ENV SPRING_PROFILES_ACTIVE=prod \
     TZ=Asia/Shanghai
 # Keep executables outside /hoj: legacy deployments often mount that directory.
 COPY --from=build /out/backend.jar /opt/hoj/backend.jar
+COPY --from=build /out/tools/ /opt/hoj/tools/
 COPY --chmod=755 docker/backend-entrypoint.sh /usr/local/bin/hoj-backend
 COPY --chmod=755 docker/backend-healthcheck.sh /usr/local/bin/hoj-healthcheck
 EXPOSE 6688

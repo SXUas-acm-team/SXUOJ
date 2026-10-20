@@ -7,6 +7,7 @@ import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
 import top.hcode.hoj.common.exception.StatusSystemErrorException;
 import top.hcode.hoj.common.result.CommonResult;
+import top.hcode.hoj.pojo.dto.DeleteContestDTO;
 import top.hcode.hoj.common.result.ResultStatus;
 import top.hcode.hoj.manager.admin.contest.AdminContestManager;
 import top.hcode.hoj.pojo.entity.contest.Contest;
@@ -43,10 +44,12 @@ public class AdminContestServiceImpl implements AdminContestService {
     }
 
     @Override
-    public CommonResult<Void> deleteContest(Long cid) {
+    public CommonResult<Void> deleteContest(DeleteContestDTO request) {
         try {
-            adminContestManager.deleteContest(cid);
+            adminContestManager.deleteContest(request);
             return CommonResult.successResponse();
+        } catch (StatusForbiddenException e) {
+            return CommonResult.errorResponse(e.getMessage(), ResultStatus.FORBIDDEN);
         } catch (StatusFailException e) {
             return CommonResult.errorResponse(e.getMessage());
         }

@@ -136,8 +136,9 @@ public class AdminUserManager {
                 redisUtils.del(cacheKey);
             }
         }
-        if (updateUserInfo && setNewPwd) {
-            // 需要重新登录
+        if (updateUserInfo && (setNewPwd || status != 0)) {
+            // A ban revokes the authenticated epoch as well as cached permissions. Unbanning
+            // the account later must not revive a token that existed before the ban.
             userRoleEntityService.deleteCache(uid, true);
         } else if (changeUserRole) {
             // 需要重新授权

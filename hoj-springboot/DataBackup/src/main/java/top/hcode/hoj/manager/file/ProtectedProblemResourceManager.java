@@ -176,7 +176,7 @@ public class ProtectedProblemResourceManager {
 
     private boolean isRoot(String uid) {
         return userRoleEntityService.getRolesByUid(uid).stream()
-                .anyMatch(role -> "root".equals(role.getRole()) && !Objects.equals(role.getStatus(), 1));
+                .anyMatch(role -> "root".equals(role.getRole()) && Objects.equals(role.getStatus(), 0));
     }
 
     private String issueCapability(AccountProfile viewer, boolean root, Long cid, String path) {

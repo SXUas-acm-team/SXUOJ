@@ -373,7 +373,7 @@
             </el-form-item>
           </el-col>
 
-          <ContestConfidentialSettings :contest="contest" @save="saveContest" />
+          <ContestConfidentialSettings :contest="contest" />
 
           <template v-if="contest.openAccountLimit && !contest.confidential">
             <el-form :model="formRule">

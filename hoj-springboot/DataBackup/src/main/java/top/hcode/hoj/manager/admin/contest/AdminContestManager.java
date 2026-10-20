@@ -19,6 +19,8 @@ import top.hcode.hoj.common.exception.StatusSystemErrorException;
 import top.hcode.hoj.dao.contest.ContestEntityService;
 import top.hcode.hoj.dao.contest.ContestRegisterEntityService;
 import top.hcode.hoj.pojo.entity.contest.Contest;
+import top.hcode.hoj.pojo.dto.DeleteContestDTO;
+import top.hcode.hoj.validator.ContestDeletionPasswordValidator;
 import top.hcode.hoj.pojo.entity.contest.ContestRegister;
 import top.hcode.hoj.pojo.vo.AdminContestVO;
 import top.hcode.hoj.pojo.vo.ContestAwardConfigVO;
@@ -52,6 +54,9 @@ public class AdminContestManager {
 
     @Autowired
     private ContestAccessPolicyManager contestAccessPolicyManager;
+
+    @Autowired
+    private ContestDeletionPasswordValidator contestDeletionPasswordValidator;
 
     public IPage<Contest> getContestList(Integer limit, Integer currentPage, String keyword) {
 
@@ -116,8 +121,18 @@ public class AdminContestManager {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void deleteContest(Long cid) throws StatusFailException {
-        contestEntityService.getByIdForUpdate(cid);
+    public void deleteContest(DeleteContestDTO request) throws StatusFailException, StatusForbiddenException {
+        AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        if (userRolesVo == null || !SecurityUtils.getSubject().hasRole("root")) {
+            throw new StatusForbiddenException("对不起，只有超级管理员可以删除全站比赛！");
+        }
+        if (request == null || request.getCid() == null) {
+            throw new StatusFailException("请在JSON请求正文中提供比赛ID及当前登录账号密码！");
+        }
+        Long cid = request.getCid();
+        Contest stored = contestEntityService.getByIdForUpdate(cid);
+        if (stored == null) throw new StatusFailException("删除失败，该比赛不存在！");
+        contestDeletionPasswordValidator.validate(userRolesVo, request.getPassword());
         contestAccessPolicyManager.deletePolicy(cid);
         boolean isOk = contestEntityService.removeById(cid);
         /*
@@ -126,7 +141,6 @@ public class AdminContestManager {
         if (!isOk) { // 删除成功
             throw new StatusFailException("删除失败");
         }
-        AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         log.info("[{}],[{}],cid:[{}],operatorUid:[{}],operatorUsername:[{}]",
                 "Admin_Contest", "Delete", cid, userRolesVo.getUid(), userRolesVo.getUsername());
     }

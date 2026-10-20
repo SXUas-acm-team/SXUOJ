@@ -13,9 +13,14 @@ RUN npm test && npm run build
 
 FROM nginx:1.28-alpine AS frontend
 LABEL io.sxuoj.component="frontend"
-ENV BACKEND_UPSTREAM=hoj-backend:6688
 COPY docker/frontend.conf.template /etc/nginx/templates/default.conf.template
+COPY docker/frontend-app.conf.template /opt/hoj/nginx/app.conf.template
+COPY docker/frontend-tls.conf.template /opt/hoj/nginx/tls.conf.template
+COPY --chmod=755 docker/frontend-env.envsh /docker-entrypoint.d/19-sxuoj-env.envsh
+COPY --from=build /workspace/dist /opt/hoj/frontend
+# Preserve the former extraction path; active assets stay outside legacy bind mounts.
 COPY --from=build /workspace/dist /usr/share/nginx/html
-EXPOSE 80
+COPY hoj-scrollBoard /opt/hoj/frontend/scrollBoard
+EXPOSE 80 443
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
     CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1

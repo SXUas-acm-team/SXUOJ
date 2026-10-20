@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import top.hcode.hoj.common.result.CommonResult;
 import top.hcode.hoj.pojo.dto.AnnouncementDTO;
+import top.hcode.hoj.pojo.dto.DeleteContestDTO;
 import top.hcode.hoj.pojo.dto.ContestProblemDTO;
 import top.hcode.hoj.pojo.dto.ProblemDTO;
 import top.hcode.hoj.pojo.entity.contest.Contest;
@@ -68,9 +69,12 @@ public class AdminContestController {
     @DeleteMapping("")
     @RequiresAuthentication
     @RequiresRoles(value = "root") // 只有超级管理员能删除比赛
-    public CommonResult<Void> deleteContest(@RequestParam("cid") Long cid) {
+    public CommonResult<Void> deleteContest(@RequestBody(required = false) DeleteContestDTO request, HttpServletRequest httpRequest) {
 
-        return adminContestService.deleteContest(cid);
+        if (httpRequest.getQueryString() != null && !httpRequest.getQueryString().isEmpty()) {
+            return CommonResult.errorResponse("删除比赛请仅使用JSON请求正文提交比赛ID和当前登录账号密码，禁止在URL中传递密码！");
+        }
+        return adminContestService.deleteContest(request);
     }
 
     @PostMapping("")

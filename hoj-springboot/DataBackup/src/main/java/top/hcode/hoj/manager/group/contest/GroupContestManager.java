@@ -19,6 +19,8 @@ import top.hcode.hoj.dao.contest.ContestRegisterEntityService;
 import top.hcode.hoj.dao.group.GroupContestEntityService;
 import top.hcode.hoj.dao.group.GroupEntityService;
 import top.hcode.hoj.pojo.entity.contest.Contest;
+import top.hcode.hoj.pojo.dto.DeleteContestDTO;
+import top.hcode.hoj.validator.ContestDeletionPasswordValidator;
 import top.hcode.hoj.pojo.entity.contest.ContestRegister;
 import top.hcode.hoj.pojo.entity.group.Group;
 import top.hcode.hoj.pojo.vo.AdminContestVO;
@@ -44,6 +46,9 @@ public class GroupContestManager {
 
     @Autowired
     private ContestAccessPolicyManager contestAccessPolicyManager;
+
+    @Autowired
+    private ContestDeletionPasswordValidator contestDeletionPasswordValidator;
     @Autowired
     private GroupEntityService groupEntityService;
 
@@ -286,9 +291,14 @@ public class GroupContestManager {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void deleteContest(Long cid) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
+    public void deleteContest(DeleteContestDTO request) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
+        if (userRolesVo == null) throw new StatusForbiddenException("请先登录！");
+        if (request == null || request.getCid() == null) {
+            throw new StatusFailException("请在JSON请求正文中提供比赛ID及当前登录账号密码！");
+        }
+        Long cid = request.getCid();
         boolean isRoot = SecurityUtils.getSubject().hasRole("root");
 
         Contest contest = contestEntityService.getByIdForUpdate(cid);
@@ -314,6 +324,10 @@ public class GroupContestManager {
             throw new StatusForbiddenException("对不起，您无权限操作！");
         }
 
+        if (request.getGid() != null && !Objects.equals(request.getGid(), gid)) {
+            throw new StatusForbiddenException("删除失败，比赛与团队不匹配！");
+        }
+        contestDeletionPasswordValidator.validate(userRolesVo, request.getPassword());
         contestAccessPolicyManager.deletePolicy(cid);
         boolean isOk = contestEntityService.removeById(cid);
         if (!isOk) {

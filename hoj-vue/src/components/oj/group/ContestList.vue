@@ -186,6 +186,7 @@ import Pagination from '@/components/oj/common/Pagination';
 import api from '@/common/api';
 import mMessage from '@/common/message';
 import utils from '@/common/utils';
+import { confirmContestDeletion } from '@/common/contestDeletion';
 import Contest from '@/components/oj/group/Contest';
 import {
   CONTEST_STATUS_REVERSE,
@@ -285,24 +286,13 @@ export default {
       });
     },
     deleteContest(id) {
-      this.$confirm(
-        this.$i18n.t('m.Delete_Contest_Tips'),
-        this.$i18n.t('m.Warning'),
-        {
-          type: 'warning',
-        }
-      ).then(
-        () => {
-          api
-            .deleteGroupContest(id, this.$route.params.groupID)
+      return confirmContestDeletion(this, password =>
+          api.deleteGroupContest(id, this.$route.params.groupID, password)
             .then((res) => {
               mMessage.success(this.$i18n.t('m.Delete_successfully'));
               this.$emit('currentChange', 1);
               this.currentChange(1);
             })
-            .catch(() => {});
-        },
-        () => {}
       );
     },
   },

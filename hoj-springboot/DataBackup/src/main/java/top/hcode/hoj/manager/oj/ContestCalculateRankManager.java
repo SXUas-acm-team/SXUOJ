@@ -2,6 +2,7 @@ package top.hcode.hoj.manager.oj;
 
 import cn.hutool.core.date.DateUnit;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -44,6 +45,9 @@ public class ContestCalculateRankManager {
 
     @Autowired
     private GroupMemberEntityService groupMemberEntityService;
+
+    @Resource
+    private ActiveContestUserFilter activeContestUserFilter;
 
     public List<ACMContestRankVO> calcACMRank(boolean isOpenSealRank,
                                               boolean removeStar,
@@ -134,6 +138,10 @@ public class ContestCalculateRankManager {
             }
             orderResultList = getACMOrderRank(contest, isOpenSealRank, minSealRankTime, maxSealRankTime, externalCidList, isContainsAfterContestJudge);
         }
+
+        orderResultList = activeContestUserFilter.filterActive(orderResultList, ACMContestRankVO::getUid)
+                .stream().map(this::copyACMRank).collect(Collectors.toList());
+        refreshFirstAC(orderResultList);
 
         // 需要打星的用户名列表
         HashMap<String, Boolean> starAccountMap = starAccountToMap(contest.getStarAccount());
@@ -420,6 +428,11 @@ public class ContestCalculateRankManager {
             orderResultList = getOIOrderRank(contest, externalCidList, isOpenSealRank, isContainsAfterContestJudge);
         }
 
+        orderResultList = activeContestUserFilter.filterActive(orderResultList, OIContestRankVO::getUid)
+                .stream().map(row -> BeanUtil.copyProperties(row, OIContestRankVO.class)
+                        .setRank(null).setIsWinAward(false).setAwardName(null).setAwardBackground(null).setAwardColor(null))
+                .collect(Collectors.toList());
+
         // 需要打星的用户名列表
         HashMap<String, Boolean> starAccountMap = starAccountToMap(contest.getStarAccount());
 
@@ -644,6 +657,28 @@ public class ContestCalculateRankManager {
         return orderResultList;
     }
 
+
+    private ACMContestRankVO copyACMRank(ACMContestRankVO row) {
+        ACMContestRankVO copy = BeanUtil.copyProperties(row, ACMContestRankVO.class)
+                .setRank(null).setIsWinAward(false).setAwardName(null).setAwardBackground(null).setAwardColor(null);
+        HashMap<String, HashMap<String, Object>> problems = new HashMap<>();
+        if (row.getSubmissionInfo() != null) row.getSubmissionInfo().forEach((id, info) -> problems.put(id, new HashMap<>(info)));
+        return copy.setSubmissionInfo(problems);
+    }
+
+    private void refreshFirstAC(List<ACMContestRankVO> rows) {
+        Map<String, Long> first = new HashMap<>();
+        rows.forEach(row -> row.getSubmissionInfo().forEach((id, info) -> {
+            if (Boolean.TRUE.equals(info.get("isAC")) && info.get("ACTime") instanceof Number) {
+                first.merge(id, ((Number) info.get("ACTime")).longValue(), Math::min);
+            }
+        }));
+        rows.forEach(row -> row.getSubmissionInfo().forEach((id, info) -> {
+            if (Boolean.TRUE.equals(info.get("isAC")) && info.get("ACTime") instanceof Number) {
+                info.put("isFirstAC", Objects.equals(first.get(id), ((Number) info.get("ACTime")).longValue()));
+            }
+        }));
+    }
 
     public List<String> getSuperAdminUidList(Long gid) {
 

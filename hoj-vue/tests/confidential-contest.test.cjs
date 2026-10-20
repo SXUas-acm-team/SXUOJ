@@ -234,24 +234,18 @@ test('an in-flight problem detail response cannot restore the content after a se
   assert.equal(state.problemData.problem.description, undefined);
 });
 
-test('the shared form enforces password-only entry and supports scheduled, manual release and resealing', () => {
+test('the shared form enforces password-only entry and preserves a legacy null release time', () => {
   const component = load('components/admin/ContestConfidentialSettings.vue');
-  const events = [];
   const state = createState(component, { contest: { id: 1, auth: 2, openAccountLimit: true, endTime: '2026-01-01T00:00:00Z' },
-    $set: (target, key, value) => { target[key] = value; }, $emit: name => events.push(name) });
+    $set: (target, key, value) => { target[key] = value; } });
   state.setConfidential(true);
   assert.equal(state.contest.auth, 1);
   assert.equal(state.contest.openAccountLimit, false);
   assert.equal(state.contest.releaseAt, null);
-  state.changeReleaseMode('scheduled');
-  assert.ok(new Date(state.contest.releaseAt) >= new Date(state.contest.endTime));
-  state.changeReleaseMode('manual');
+  state.setConfidential(true);
   assert.equal(state.contest.releaseAt, null);
-  state.releaseNow();
-  assert.ok(Number.isFinite(Date.parse(state.contest.releaseAt)));
-  state.sealAgain();
-  assert.equal(state.contest.releaseAt, null);
-  assert.deepEqual(events, ['save', 'save']);
+  assert.equal(component.methods.releaseNow, undefined);
+  assert.equal(component.methods.sealAgain, undefined);
   const { confidentialFormError } = load('common/contestConfidentialForm.js');
   assert.equal(confidentialFormError(state.contest), null);
   assert.equal(confidentialFormError({ ...state.contest, releaseAt: '2025-01-01T00:00:00Z' }), 'Contest_Release_After_End');

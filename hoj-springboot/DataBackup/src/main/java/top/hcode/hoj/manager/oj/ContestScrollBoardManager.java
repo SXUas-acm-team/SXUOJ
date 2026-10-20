@@ -66,6 +66,9 @@ public class ContestScrollBoardManager {
     @Resource
     private ContestCalculateRankManager contestCalculateRankManager;
 
+    @Resource
+    private ActiveContestUserFilter activeContestUserFilter;
+
 
     public ContestScrollBoardInfoVO getContestScrollBoardInfo(Long cid) throws StatusFailException {
         Contest contest = contestEntityService.getById(cid);
@@ -166,6 +169,6 @@ public class ContestScrollBoardManager {
         submissions = submissions.stream()
                 .filter(submission -> submission.getSubmitTime().getTime() < contest.getEndTime().getTime())
                 .collect(Collectors.toList());
-        return submissions;
+        return activeContestUserFilter.filterActive(submissions, ContestScrollBoardSubmissionVO::getUid);
     }
 }

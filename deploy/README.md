@@ -1,5 +1,7 @@
 # SXUOJ 后端 Docker 构建与升级
 
+2026-10-20 版本请先看[简明线上更新手册](../docs/upgrade-2026-10-20.md)，按“检查两张表 → 必要时调整旧密钥 → 替换前后端镜像”操作；不要用本地测试 Compose 覆盖线上部署。
+
 这套流程面向**已经运行的 HOJ/SXUOJ Docker Compose 部署**：GitHub Actions 自动测试、打包和发布后端镜像，服务器用一条命令替换 `hoj-backend`。原 Compose 文件、数据库、Redis、Nacos、判题容器、网络、端口和数据卷继续沿用。
 
 ## 1. 自动构建
