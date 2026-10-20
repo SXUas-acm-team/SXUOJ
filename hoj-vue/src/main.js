@@ -27,21 +27,8 @@ import highlight from '@/common/highlight'
 import filters from '@/common/filters.js'
 import VueCropper from 'vue-cropper'
 
-// import ECharts from 'vue-echarts/components/ECharts.vue'
-// import 'echarts/lib/chart/bar'
-// import 'echarts/lib/chart/line'
-// import 'echarts/lib/chart/pie'
-// import 'echarts/lib/component/title'
-// import 'echarts/lib/component/grid'
-// import 'echarts/lib/component/dataZoom'
-// import 'echarts/lib/component/legend'
-// import 'echarts/lib/component/tooltip'
-// import 'echarts/lib/component/toolbox'
-// import 'echarts/lib/component/markPoint'
-// Vue.component('ECharts', ECharts)
-
 // Bundle ECharts locally with the application
-import VueECharts from 'vue-echarts';
+import VueECharts from '@/common/charts';
 Vue.component('ECharts', VueECharts)
 
 

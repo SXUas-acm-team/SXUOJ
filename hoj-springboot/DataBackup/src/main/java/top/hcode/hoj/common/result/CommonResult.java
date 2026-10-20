@@ -1,10 +1,10 @@
 package top.hcode.hoj.common.result;
 
-import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
-@AllArgsConstructor
 public class CommonResult<T> {
 
     private final Integer status;   // 状态码
@@ -12,6 +12,17 @@ public class CommonResult<T> {
     private final T data;   // 返回的数据
 
     private final String msg;    // 自定义信息
+
+    // RestTemplate reads JudgeServer responses with its own ObjectMapper.
+    // Explicit names keep immutable responses readable without compiler metadata.
+    @JsonCreator
+    public CommonResult(@JsonProperty("status") Integer status,
+                        @JsonProperty("data") T data,
+                        @JsonProperty("msg") String msg) {
+        this.status = status;
+        this.data = data;
+        this.msg = msg;
+    }
 
 
     /**

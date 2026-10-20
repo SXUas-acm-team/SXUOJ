@@ -36,3 +36,4 @@ ContestDeletionPasswordTest
 BackendRuntimeSecretsTest
 BackendStartupSecretsCompatibilityTest
 ContestManualPublicationTest
+JudgeTransportCompatibilityTest

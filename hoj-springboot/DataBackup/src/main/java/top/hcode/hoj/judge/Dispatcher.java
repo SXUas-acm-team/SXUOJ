@@ -259,7 +259,7 @@ public class Dispatcher {
 
     private void checkResult(CommonResult<Void> result, Long submitId) {
 
-        Judge judge = new Judge();
+        Judge judge = new Judge().setSubmitId(submitId);
         if (result == null) { // 调用失败
             judge.setSubmitId(submitId);
             judge.setStatus(Constants.Judge.STATUS_SUBMITTED_FAILED.getStatus());
