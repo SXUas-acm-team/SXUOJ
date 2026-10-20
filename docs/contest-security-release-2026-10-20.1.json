@@ -1,0 +1,42 @@
+{
+  "registry": "docker.io",
+  "namespace": "yunyunjuan",
+  "tag": "contest-security-20261020.1",
+  "published_at": "2026-10-20T17:32:28.516294+08:00",
+  "images": {
+    "backend": {
+      "reference": "yunyunjuan/sxuoj-backend:contest-security-20261020.1",
+      "digest": "sha256:6ea302ae4b64ee6802cd20320e1a480309148728b0da6e35f4eca6bd6a48d428",
+      "pinned_reference": "yunyunjuan/sxuoj-backend@sha256:6ea302ae4b64ee6802cd20320e1a480309148728b0da6e35f4eca6bd6a48d428",
+      "image_id": "sha256:6ea302ae4b64ee6802cd20320e1a480309148728b0da6e35f4eca6bd6a48d428",
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "source": {
+    "repository": "https://github.com/SXUas-acm-team/SXUOJ",
+    "branch": "codex/contest-security-20261020",
+    "application_commit": "55768b2e557005a9903749a98a087b267d1bb4d1"
+  },
+  "scope": {
+    "backend_only": true,
+    "database_schema_changes": false,
+    "frontend_unchanged": "yunyunjuan/sxuoj-frontend:contest-security-20261020",
+    "existing_nacos_credentials_preserved": true,
+    "existing_judge_token_preserved": true,
+    "fallback_jwt_key_path": "/hoj/log/backend/.runtime-secrets/jwt.key"
+  },
+  "validation": {
+    "compilation": "passed_in_docker_build",
+    "independent_code_review": "completed",
+    "test_execution": "skipped_at_user_request",
+    "production_startup_verified": false,
+    "prior_http_full_acceptance_status": "not_fully_passed_unchanged"
+  },
+  "publication": {
+    "docker_push_succeeded": true,
+    "registry_manifest_read_back": true,
+    "latest_and_previous_tags_unchanged": true,
+    "ci_skipped_at_user_request": true
+  }
+}
