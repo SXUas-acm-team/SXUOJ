@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM node:22-bookworm-slim AS build
+ARG RUN_FRONTEND_TESTS=true
 WORKDIR /workspace
 COPY hoj-vue/package.json hoj-vue/package-lock.json ./
 RUN --mount=type=cache,id=sxuoj-npm,target=/root/.npm,sharing=locked npm ci --no-audit --no-fund
@@ -9,7 +10,8 @@ COPY hoj-vue/src ./src
 COPY hoj-vue/tests ./tests
 COPY hoj-scrollBoard/js/jquery.min.js /hoj-scrollBoard/js/jquery.min.js
 COPY hoj-scrollBoard/js/scrollboard.js /hoj-scrollBoard/js/scrollboard.js
-RUN npm test && npm run build
+RUN case "$RUN_FRONTEND_TESTS" in true) npm test ;; false) echo 'Frontend test execution skipped by request' ;; *) exit 64 ;; esac \
+    && npm run build
 
 FROM nginx:1.28-alpine AS frontend
 LABEL io.sxuoj.component="frontend"

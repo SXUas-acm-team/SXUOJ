@@ -41,13 +41,14 @@ function createState(component, extra = {}) {
   return state;
 }
 
-test('confidential settings expose one release-time input and no manual mode or action buttons', () => {
+test('saved confidential settings expose immediate release and sealing without changing policy on render', () => {
   const component = load('components/admin/ContestConfidentialSettings.vue');
-  const contest = { confidential: true, auth: 1, releaseAt: null };
+  const contest = { id: 7, confidential: true, auth: 1, releaseAt: null };
   const view = new Vue({ ...component, propsData: { contest } });
   view.$mount();
   assert.equal(view.$el.querySelectorAll('el-date-picker').length, 1);
-  assert.equal(view.$el.querySelectorAll('el-radio-group,el-radio,el-button').length, 0);
+  assert.equal(view.$el.querySelectorAll('el-button').length, 2);
+  assert.equal(view.$el.querySelectorAll('el-radio-group,el-radio').length, 0);
   assert.equal(contest.releaseAt, null, 'rendering an old policy must not silently release it');
   view.setConfidential(true);
   assert.equal(contest.releaseAt, null);
@@ -56,6 +57,30 @@ test('confidential settings expose one release-time input and no manual mode or 
   assert.equal(contest.releaseAt, '2026-10-20T12:00:00Z');
   view.$destroy();
 });
+
+for (const groupContest of [false, true]) {
+  test(`manual publication persists only its own state through the correct route: group=${groupContest}`, async () => {
+    const calls = [];
+    const api = Object.fromEntries(['admin_changeContestConfidentialState', 'changeGroupContestConfidentialState'].map(name =>
+      [name, async (...args) => { calls.push([name, ...args]); return { data: { data: { releaseAt: args[1] ? '2026-10-20T12:00:00Z' : null } } }; }]));
+    const component = load('components/admin/ContestConfidentialSettings.vue', { '@/common/api': api });
+    const contest = { id: 7, title: 'Unsaved title', confidential: true, releaseAt: null };
+    const state = createState(component, { contest, groupContest, $t: key => key,
+      $set: (object, key, value) => { object[key] = value; }, $confirm: async () => {} });
+    await state.changeState(true);
+    assert.equal(contest.releaseAt, '2026-10-20T12:00:00Z');
+    await state.changeState(false);
+    assert.equal(contest.releaseAt, null);
+    assert.equal(contest.title, 'Unsaved title');
+    assert.deepEqual(calls, [[groupContest ? 'changeGroupContestConfidentialState' : 'admin_changeContestConfidentialState', 7, true],
+      [groupContest ? 'changeGroupContestConfidentialState' : 'admin_changeContestConfidentialState', 7, false]]);
+    assert.equal(state.busy, false);
+    state.$confirm = async () => { throw 'cancel'; };
+    await state.changeState(true);
+    assert.equal(calls.length, 2);
+    assert.equal(contest.releaseAt, null);
+  });
+}
 
 test('the requested Chinese contest copy is exact and old password-confidential names are removed', () => {
   const zh = load('i18n/admin/zh-CN.js').m;

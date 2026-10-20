@@ -43,6 +43,23 @@ public class AdminContestController {
     private AdminContestService adminContestService;
 
     @Autowired
+    private top.hcode.hoj.manager.oj.ContestReleaseManager contestReleaseManager;
+
+    @PutMapping("/confidential-state")
+    @RequiresAuthentication
+    @RequiresRoles(value = {"root", "admin", "problem_admin"}, logical = Logical.OR)
+    public CommonResult<Map<String, Object>> changeConfidentialState(@RequestParam("cid") Long cid,
+                                                                    @RequestParam("released") Boolean released) {
+        try {
+            return CommonResult.successResponse(contestReleaseManager.changeState(cid, released, false));
+        } catch (top.hcode.hoj.common.exception.StatusForbiddenException e) {
+            return CommonResult.errorResponse(e.getMessage(), top.hcode.hoj.common.result.ResultStatus.FORBIDDEN);
+        } catch (top.hcode.hoj.common.exception.StatusFailException e) {
+            return CommonResult.errorResponse(e.getMessage());
+        }
+    }
+
+    @Autowired
     private AdminContestProblemService adminContestProblemService;
 
     @Autowired

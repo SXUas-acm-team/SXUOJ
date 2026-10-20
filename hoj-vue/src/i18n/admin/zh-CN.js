@@ -1,4 +1,13 @@
 export const m = {
+  Contest_Manual_Publication: "手动解封 / 封存",
+  Contest_Release_Now: "立即解封",
+  Contest_Seal_Now: "立即封存",
+  Contest_Manual_Publication_Tips: "操作确认后立即生效，不需要再点击保存。仅已保存的保密赛可操作；解封必须在比赛结束后，重新封存会清除定时解封时间。",
+  Contest_Release_Confirm: "确认立即公开这场比赛？所有用户将可以查看比赛内容，登录用户可以赛后提交。",
+  Contest_Seal_Confirm: "确认重新封存并清除定时解封时间？普通用户将无法查看封存的赛后内容。",
+  Contest_Release_Success: "比赛已解封，所有用户可查看。",
+  Contest_Seal_Success: "比赛已重新封存，定时解封时间已清除。",
+
   Current_Account_Password_Required: "请输入当前登录账号的密码。",
   Current_Account_Password: "当前登录账号的密码",
   Delete_Contest_Account_Password_Tips: "删除比赛前，请输入当前登录账号的密码（不是比赛密码）。",

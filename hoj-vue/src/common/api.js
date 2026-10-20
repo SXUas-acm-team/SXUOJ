@@ -1158,6 +1158,10 @@ const ojApi = {
     })
   },
 
+  changeGroupContestConfidentialState(cid, released) {
+    return ajax('/api/group/contest/confidential-state', 'put', { params: { cid, released } })
+  },
+
   deleteGroupContest(cid, gid, password) {
     return ajax("/api/group/contest", 'delete', {
       data: { cid, gid, password }
@@ -1881,6 +1885,10 @@ const adminApi = {
     return ajax('/api/admin/contest', 'put', {
       data
     })
+  },
+
+  admin_changeContestConfidentialState(cid, released) {
+    return ajax('/api/admin/contest/confidential-state', 'put', { params: { cid, released } })
   },
   admin_deleteContest(cid, password) {
     return ajax('/api/admin/contest', 'delete', {

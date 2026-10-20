@@ -1,4 +1,13 @@
 export const m = {
+  Contest_Manual_Publication: "Manual publication",
+  Contest_Release_Now: "Release now",
+  Contest_Seal_Now: "Seal now",
+  Contest_Manual_Publication_Tips: "Confirmed actions take effect immediately for saved confidential contests. Release requires the contest to have ended; sealing clears the scheduled release time.",
+  Contest_Release_Confirm: "Make this contest public now? Anyone can view its content and signed-in users can submit after the contest.",
+  Contest_Seal_Confirm: "Seal the contest again and clear its scheduled release time? Sealed post-contest content will no longer be public.",
+  Contest_Release_Success: "The contest is now public.",
+  Contest_Seal_Success: "The contest is sealed and its release schedule has been cleared.",
+
   Current_Account_Password_Required: "Enter the password of your currently signed-in account.",
   Current_Account_Password: "Current account password",
   Delete_Contest_Account_Password_Tips: "To delete this contest, enter the password of your currently signed-in account, not the contest password.",

@@ -36,6 +36,21 @@ public class GroupContestController {
     private GroupContestService groupContestService;
 
     @Autowired
+    private top.hcode.hoj.manager.oj.ContestReleaseManager contestReleaseManager;
+
+    @PutMapping("/contest/confidential-state")
+    public CommonResult<Map<String, Object>> changeConfidentialState(@RequestParam("cid") Long cid,
+                                                                    @RequestParam("released") Boolean released) {
+        try {
+            return CommonResult.successResponse(contestReleaseManager.changeState(cid, released, true));
+        } catch (top.hcode.hoj.common.exception.StatusForbiddenException e) {
+            return CommonResult.errorResponse(e.getMessage(), top.hcode.hoj.common.result.ResultStatus.FORBIDDEN);
+        } catch (top.hcode.hoj.common.exception.StatusFailException e) {
+            return CommonResult.errorResponse(e.getMessage());
+        }
+    }
+
+    @Autowired
     private GroupContestProblemService groupContestProblemService;
 
     @Autowired

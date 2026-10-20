@@ -35,3 +35,4 @@ ContestRankAccountStateTest
 ContestDeletionPasswordTest
 BackendRuntimeSecretsTest
 BackendStartupSecretsCompatibilityTest
+ContestManualPublicationTest
