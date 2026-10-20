@@ -1,0 +1,53 @@
+{
+  "registry": "docker.io",
+  "namespace": "yunyunjuan",
+  "tag": "contest-security-20261020.2",
+  "images": {
+    "frontend": {
+      "reference": "yunyunjuan/sxuoj-frontend:contest-security-20261020.2",
+      "digest": "sha256:bf0543bf0c5648763c24b1beec8b313ada569ddda4e2915fed0d63f59e779217",
+      "pinned_reference": "yunyunjuan/sxuoj-frontend@sha256:bf0543bf0c5648763c24b1beec8b313ada569ddda4e2915fed0d63f59e779217",
+      "image_id": "sha256:bf0543bf0c5648763c24b1beec8b313ada569ddda4e2915fed0d63f59e779217",
+      "architecture": "amd64",
+      "os": "linux"
+    },
+    "backend": {
+      "reference": "yunyunjuan/sxuoj-backend:contest-security-20261020.2",
+      "digest": "sha256:9c61a80474fb302cb8d6eb42251efb0f3d37b979f025ad7546cc555d3a623bcf",
+      "pinned_reference": "yunyunjuan/sxuoj-backend@sha256:9c61a80474fb302cb8d6eb42251efb0f3d37b979f025ad7546cc555d3a623bcf",
+      "image_id": "sha256:9c61a80474fb302cb8d6eb42251efb0f3d37b979f025ad7546cc555d3a623bcf",
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "published_at": "2026-10-20T17:45:20.803193+08:00",
+  "source": {
+    "repository": "https://github.com/SXUas-acm-team/SXUOJ",
+    "branch": "codex/contest-security-20261020",
+    "application_commit": "9b3b52c9cbef9cb07d4f921b14cf77338748ad72"
+  },
+  "scope": {
+    "manual_release_and_sealing_restored": true,
+    "takes_effect_after_confirmation": true,
+    "scheduled_release_retained": true,
+    "release_requires_ended_contest": true,
+    "only_release_timestamp_updated": true,
+    "database_schema_changes": false,
+    "nacos_startup_changes": false,
+    "previous_startup_compatibility_retained": true
+  },
+  "validation": {
+    "backend_compilation": "passed",
+    "frontend_build": "passed",
+    "source_review": "completed",
+    "test_execution": "skipped_at_user_request",
+    "production_verified": false,
+    "prior_incomplete_full_acceptance_status": "unchanged"
+  },
+  "publication": {
+    "docker_push_succeeded": true,
+    "registry_manifests_read_back": true,
+    "previous_tags_unchanged": true,
+    "ci_skipped_at_user_request": true
+  }
+}
