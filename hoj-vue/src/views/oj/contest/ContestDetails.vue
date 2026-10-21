@@ -142,13 +142,21 @@
           <el-button type="primary" :loading="btnLoading" @click="checkPassword">{{ $t('m.Enter') }}</el-button>
         </el-form>
       </el-card>
-      <el-card v-if="contestAccessReason === 'IDENTITY_REQUIRED' && isAuthenticated" style="margin-bottom:15px">
-        <h3>竞赛入场核验</h3>
-        <p>请输入学号和姓名完成核验。成功后本场比赛不可更换绑定身份，同一学号不能重复绑定其他账号。</p>
-        <el-form @submit.native.prevent="verifyIdentity">
+      <el-card v-if="contestAccessReason === 'IDENTITY_REQUIRED' && isAuthenticated" class="identity-entry">
+        <h3>实名参赛校验</h3>
+        <p class="identity-entry-description">赛时提交代码前，请完成身份核验或使用豁免邀请码</p>
+        <el-radio-group v-model="identityMode" :disabled="identityBusy" class="identity-entry-modes">
+          <el-radio-button label="identity">学号姓名核验</el-radio-button>
+          <el-radio-button label="invitation">豁免邀请码</el-radio-button>
+        </el-radio-group>
+        <el-form label-position="top" @submit.native.prevent="verifyIdentity">
+          <template v-if="identityMode === 'identity'">
           <el-form-item label="学号"><el-input v-model="identityStudentNumber" maxlength="64" autocomplete="off" /></el-form-item>
           <el-form-item label="姓名"><el-input v-model="identityName" maxlength="128" autocomplete="off" /></el-form-item>
-          <el-button type="primary" :loading="identityBusy" @click="verifyIdentity">核验并进入比赛</el-button>
+          <p class="identity-entry-note">核验通过后，本场比赛不能更换绑定身份，同一学号只能绑定一个账号。</p>
+          </template>
+          <el-form-item v-else label="豁免邀请码"><el-input v-model="identityInvitation" type="password" maxlength="64" autocomplete="off" placeholder="请输入管理员提供的邀请码" /></el-form-item>
+          <el-button type="primary" :loading="identityBusy" @click="verifyIdentity">{{ identityMode === 'invitation' ? '验证邀请码' : '核验身份' }}</el-button>
         </el-form>
       </el-card>
       <!-- 判断是否需要密码验证 -->
@@ -369,6 +377,8 @@ export default {
       identityStudentNumber: '',
       identityName: '',
       identityBusy: false,
+      identityMode: 'identity',
+      identityInvitation: '',
     };
   },
   created() {
@@ -479,11 +489,15 @@ export default {
         String(this.$route.params.contestID) === String(cid) && this.userInfo.uid === uid && this.$store.getters.sessionVersion === session;
       this.identityBusy = true;
       try {
-        await api.verifyContestIdentity({ cid, studentNumber: this.identityStudentNumber, name: this.identityName });
+        if (this.identityMode === 'invitation') {
+          await api.acceptContestIdentityInvitation({ cid, password: this.identityInvitation });
+        } else {
+          await api.verifyContestIdentity({ cid, studentNumber: this.identityStudentNumber, name: this.identityName });
+        }
         if (!current()) return;
-        this.identityStudentNumber = ''; this.identityName = '';
+        this.identityStudentNumber = ''; this.identityName = ''; this.identityInvitation = '';
         await this.$store.dispatch('refreshContestAccess');
-        if (current()) myMessage.success('学号姓名核验通过');
+        if (current()) myMessage.success('已获得本场比赛赛时提交权限');
       } catch (_) { /* The shared client displays validation errors. */ }
       finally { if (current()) this.identityBusy = false; }
     },
@@ -596,7 +610,7 @@ export default {
   },
   watch: {
     contestSessionVersion() {
-      this.identityStudentNumber = ''; this.identityName = ''; this.identityBusy = false;
+      this.identityStudentNumber = ''; this.identityName = ''; this.identityInvitation = ''; this.identityBusy = false; this.identityMode = 'identity';
     },
     $route(newVal) {
       this.route_name = newVal.name;
@@ -607,7 +621,7 @@ export default {
       }
       const cid = newVal.params.contestID;
       if (String(cid) !== String(this.contestID)) {
-        this.identityStudentNumber = ''; this.identityName = ''; this.identityBusy = false;
+        this.identityStudentNumber = ''; this.identityName = ''; this.identityInvitation = ''; this.identityBusy = false; this.identityMode = 'identity';
         this.contestRequestVersion += 1;
         this.clearContestTimers();
         this.$store.commit('clearContest');
@@ -628,6 +642,14 @@ export default {
 };
 </script>
 <style scoped>
+.identity-entry { margin-bottom: 20px; border-top: 3px solid #409eff; }
+.identity-entry h3 { margin: 0 0 12px; font-size: 22px; font-weight: 600; color: #303133; }
+.identity-entry-description { margin: 0 0 20px; font-size: 16px; line-height: 1.8; color: #606266; }
+.identity-entry-modes { margin-bottom: 20px; }
+.identity-entry .el-form { max-width: 580px; }
+.identity-entry /deep/ .el-form-item__label { font-size: 16px; line-height: 26px; padding-bottom: 8px; }
+.identity-entry /deep/ .el-input__inner { font-size: 16px; }
+.identity-entry-note { margin: 0 0 18px; font-size: 14px; line-height: 1.8; color: #606266; }
 .panel-title {
   font-size: 1.5rem !important;
   font-weight: 500;

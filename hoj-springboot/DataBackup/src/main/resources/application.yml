@@ -4,6 +4,8 @@ logging:
     org.apache.http.headers: 'OFF'
     top.hcode.hoj.mapper.ContestIdentityBindingMapper: WARN
     top.hcode.hoj.mapper.ContestIdentityConfigMapper: WARN
+    top.hcode.hoj.mapper.ContestIdentityInvitationMapper: WARN
+    top.hcode.hoj.mapper.ContestIdentityExemptionMapper: WARN
 
 mybatis-plus:
   mapper-locations: classpath*:top/hcode/hoj/mapper/xml/**Mapper.xml

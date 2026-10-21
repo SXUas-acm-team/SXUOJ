@@ -198,6 +198,7 @@ const ojApi = {
   getContestIdentityConfig(cid) { return ajax(`/api/contest-identity/${cid}/config`, 'get') },
   saveContestIdentityConfig(cid, data) { return ajax(`/api/contest-identity/${cid}/config`, 'put', { data }) },
   verifyContestIdentity(data) { return ajax('/api/contest-identity/verify', 'post', { data }) },
+  acceptContestIdentityInvitation(data) { return ajax('/api/contest-identity/invitation', 'post', { data }) },
   // Home页的请求
   getWebsiteConfig() {
     return ajax('/api/get-website-config', 'get', {

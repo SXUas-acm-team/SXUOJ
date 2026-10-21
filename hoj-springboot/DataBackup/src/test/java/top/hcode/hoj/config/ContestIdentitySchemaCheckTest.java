@@ -27,6 +27,6 @@ class ContestIdentitySchemaCheckTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(anyString())).thenThrow(new org.springframework.jdbc.BadSqlGrammarException("schema", "SELECT", new java.sql.SQLException()));
         ContestIdentitySchemaCheck check = new ContestIdentitySchemaCheck(); ReflectionTestUtils.setField(check, "jdbcTemplate", jdbc);
-        assertTrue(assertThrows(IllegalStateException.class, () -> check.run(null)).getMessage().contains("两张新表"));
+        assertTrue(assertThrows(IllegalStateException.class, () -> check.run(null)).getMessage().contains("四张新表"));
     }
 }

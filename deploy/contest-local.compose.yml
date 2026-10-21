@@ -53,7 +53,9 @@ services:
       - backend-files:/hoj/file
       - backend-tests:/hoj/testcase
       - backend-logs:/hoj/log/backend
-    networks: [isolated]
+    # Outbound HTTPS is needed by the identity provider; no backend port is published.
+    # MySQL/Redis remain on the internal-only network.
+    networks: [isolated, ingress]
   hoj-frontend:
     image: ${SXUOJ_FRONTEND_IMAGE:?Set the frontend image to test}
     environment:

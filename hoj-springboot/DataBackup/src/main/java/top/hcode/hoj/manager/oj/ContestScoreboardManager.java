@@ -63,7 +63,7 @@ public class ContestScoreboardManager {
         AccountProfile viewer = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         boolean root = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean confidential = contestValidator.isConfidential(contest);
-        if (confidential || identityManager.enabled(contest.getId())) {
+        if (confidential) {
             try { contestValidator.validateContestAuth(contest, viewer, root); }
             catch (StatusFailException e) { throw new StatusForbiddenException(e.getMessage()); }
             if (contestValidator.isReleased(contest) || contestValidator.isContestAdmin(contest, viewer, root)) return;

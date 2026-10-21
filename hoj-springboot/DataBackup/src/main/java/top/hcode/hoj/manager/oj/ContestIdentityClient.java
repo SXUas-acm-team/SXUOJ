@@ -22,6 +22,9 @@ import java.util.Map;
 @Component
 public class ContestIdentityClient {
     public static String validateUrl(String value) throws StatusFailException {
+        if ("https://sf-zt.gwy.fun".equals(value) || "https://sf-zt.gwy.fun/".equals(value)
+                || "https://sf-zt.gwy.fun/cloudxxsaacloud".equals(value) || "https://sf-zt.gwy.fun/cloudxxsaacloud/".equals(value))
+            value = ContestIdentityManager.DEFAULT_URL;
         try {
             URI uri = new URI(value);
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null
@@ -53,7 +56,7 @@ public class ContestIdentityClient {
                 .disableRedirectHandling().disableAutomaticRetries().setDefaultRequestConfig(timeouts).build();
     }
     public boolean verify(String url, String key, String studentNumber, String name) throws StatusFailException {
-        validateUrl(url);
+        url = validateUrl(url);
         try (CloseableHttpClient client = newClient()) {
             HttpPost request = new HttpPost(url);
             request.setHeader("X-API-Key", key);
@@ -76,6 +79,9 @@ public class ContestIdentityClient {
                 }
             }
         } catch (StatusFailException e) { throw e; }
+        catch (UnknownHostException e) { throw new StatusFailException("核验服务域名解析失败或解析到非公网地址，请管理员检查服务器 DNS。"); }
+        catch (javax.net.ssl.SSLException e) { throw new StatusFailException("核验服务 HTTPS 证书校验或连接失败，请管理员检查服务证书与服务器时间。"); }
+        catch (java.net.SocketTimeoutException | org.apache.http.conn.ConnectTimeoutException e) { throw new StatusFailException("核验服务连接超时，请稍后重试或联系管理员检查后端网络。"); }
         catch (Exception e) { throw new StatusFailException("核验服务连接失败或响应异常，请稍后重试。"); }
     }
     static boolean matched(JsonNode result) throws StatusFailException {

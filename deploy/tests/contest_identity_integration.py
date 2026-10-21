@@ -26,9 +26,12 @@ def main():
     name = 'ctest_identity_' + uuid.uuid4().hex[:8]
     people, usernames = {}, {}
     browser_password = secrets.token_urlsafe(24)
+    submit_permission = int(s.db.scalar("SELECT id FROM auth WHERE permission='submit' AND status=0 ORDER BY id LIMIT 1"))
     for actor, role in [('root', 'root'), ('admin', 'admin'), ('student', name), ('second', name)]:
         rows = s.db.query('SELECT id FROM role WHERE role=' + sql_value(role) + ' AND status=0 LIMIT 1')
         role_id = int(rows[0][0]) if rows else s.db.insert('role', {'role': role, 'description': name, 'status': 0})
+        if role == name and not rows:
+            s.db.insert('role_auth', {'role_id': role_id, 'auth_id': submit_permission})
         uid = uuid.uuid4().hex; username = 'idv_' + name.rsplit('_', 1)[-1] + '_' + actor
         s.db.insert('user_info', {'uuid': uid, 'username': username, 'nickname': username, 'realname': 'Self declared',
             'status': 0, 'password': hashlib.md5(browser_password.encode()).hexdigest()})
@@ -52,7 +55,7 @@ def main():
     language_id = int(s.db.scalar("SELECT id FROM language WHERE oj='ME' AND is_spj=0 ORDER BY id LIMIT 1"))
     s.db.insert('problem_language', {'pid': pid, 'lid': language_id})
     path = '/api/contest-identity/' + str(cid) + '/config'
-    config = {'enabled': True, 'replaceRealname': True, 'starPrefixes': '0020',
+    config = {'enabled': True, 'replaceRealname': True, 'starPrefixes': '0020,9999',
         'apiUrl': 'https://sf-zt.gwy.fun/cloudxxsaacloud/v1/identities/verify-name', 'apiKey': 'integration-only-secret'}
     s.denied('anonymous_cannot_read_identity_configuration', path)
     s.denied('ordinary_user_cannot_manage_identity_configuration', path, 'student')
@@ -64,9 +67,48 @@ def main():
     info = s.success('identity_gate_metadata_available', '/api/get-contest-info?cid=' + str(cid), 'student')
     s.check('identity_gate_enabled_in_info', info['identityVerificationEnabled'] is True)
     access = s.success('unverified_access_description', '/api/get-contest-access?cid=' + str(cid), 'student')
-    s.check('unverified_access_closed', access['canViewProblems'] is False and access['canSubmit'] is False and access['accessReason'] == 'IDENTITY_REQUIRED')
-    s.denied('unverified_cannot_list_problems', '/api/get-contest-problem?cid=' + str(cid), 'student')
-    s.denied('unverified_cannot_read_statement', '/api/get-contest-problem-details?cid=' + str(cid) + '&displayId=A', 'student')
+    s.check('unverified_reads_open_but_submission_closed', access['canViewProblems'] is True and access['canSubmit'] is False and access['accessReason'] == 'IDENTITY_REQUIRED')
+    s.success('unverified_can_list_problems', '/api/get-contest-problem?cid=' + str(cid), 'student')
+    s.success('unverified_can_read_statement', '/api/get-contest-problem-details?cid=' + str(cid) + '&displayId=A', 'student')
+    s.success('unverified_can_read_rank', '/api/get-contest-rank', 'student', s.rank_payload(cid))
+    s.success('unverified_can_read_external_info', '/api/get-contest-outsize-info?cid=' + str(cid), 'student')
+    s.outside_rank('unverified_can_read_external_rank', cid, 'student')
+    language = s.db.scalar('SELECT name FROM language WHERE id=' + str(language_id))
+    status, denied = s.request('/api/submit-problem-judge', 'student', {'cid': cid, 'pid': 'A', 'language': language,
+        'isRemote': False, 'code': 'int main(){return 0;}'})
+    s.check('real_submission_endpoint_enforces_identity', denied.get('status') != 200 and '核验' in denied.get('msg', ''))
+    s.check('rejected_submission_not_created', s.db.scalar('SELECT COUNT(*) FROM judge WHERE cid=' + str(cid)) == '0')
+    config.update(apiKey='', invitationPassword='synthetic-invite-one')
+    s.success('admin_sets_invitation', path, 'admin', config, 'PUT')
+    invitation_path = '/api/contest-identity/invitation'
+    s.denied('wrong_invitation_rejected', invitation_path, 'second', {'cid': cid, 'password': 'incorrect-invite'})
+    s.success('valid_invitation_grants_exemption', invitation_path, 'second', {'cid': cid, 'password': 'synthetic-invite-one'})
+    access = s.success('exempt_access', '/api/get-contest-access?cid=' + str(cid), 'second')
+    s.check('exempt_user_can_submit_without_fabricated_identity', access['canSubmit'] is True and s.db.scalar(
+        'SELECT COUNT(*) FROM contest_identity_binding WHERE cid=' + str(cid)) == '0')
+    config['invitationPassword'] = 'synthetic-invite-two'
+    s.success('admin_rotates_invitation', path, 'admin', config, 'PUT')
+    access = s.success('rotated_exemption_access', '/api/get-contest-access?cid=' + str(cid), 'second')
+    s.check('rotation_revokes_old_exemption', access['canSubmit'] is False)
+    s.denied('old_invitation_rejected', invitation_path, 'second', {'cid': cid, 'password': 'synthetic-invite-one'})
+    s.success('new_invitation_accepted', invitation_path, 'second', {'cid': cid, 'password': 'synthetic-invite-two'})
+    # A confidential policy takes precedence over an existing invitation grant.
+    s.db.insert('contest_access_policy', {'cid': cid})
+    access = s.success('confidential_password_access', '/api/get-contest-access?cid=' + str(cid), 'second')
+    s.check('exemption_cannot_bypass_contest_password', access['canViewProblems'] is False and access['accessReason'] == 'PASSWORD_REQUIRED')
+    s.db.query('UPDATE contest SET status=1,end_time=NOW()-INTERVAL 1 MINUTE WHERE id=' + str(cid))
+    access = s.success('sealed_exempt_access', '/api/get-contest-access?cid=' + str(cid), 'second')
+    s.check('exemption_cannot_bypass_sealing', access['canViewProblems'] is False and access['canSubmit'] is False and access['accessReason'] == 'SEALED')
+    s.denied('sealed_contest_rejects_invitation', invitation_path, 'second', {'cid': cid, 'password': 'synthetic-invite-two'})
+    s.db.query('DELETE FROM contest_access_policy WHERE cid=' + str(cid))
+    s.db.query('UPDATE contest SET allow_end_submit=1 WHERE id=' + str(cid))
+    access = s.success('ordinary_post_contest_access', '/api/get-contest-access?cid=' + str(cid), 'student')
+    s.check('unverified_post_contest_submission_allowed', access['canSubmit'] is True and access['identityRequired'] is False)
+    s.db.query('UPDATE contest SET status=0,allow_end_submit=0,end_time=' + sql_value(end.strftime('%Y-%m-%d %H:%M:%S')) + ' WHERE id=' + str(cid))
+    config.update(invitationPassword='', clearInvitationPassword=True)
+    s.success('admin_clears_invitation', path, 'admin', config, 'PUT')
+    s.check('clearing_revokes_all_grants', s.db.scalar('SELECT COUNT(*) FROM contest_identity_exemption WHERE cid=' + str(cid)) == '0')
+    config.update(clearInvitationPassword=False)
     s.denied('malformed_identity_cannot_bind', '/api/contest-identity/verify', 'student', {'cid': cid, 'studentNumber': '00201234', 'name': ''})
     s.check('failed_verification_not_persisted', s.db.scalar('SELECT COUNT(*) FROM contest_identity_binding WHERE cid=' + str(cid)) == '0')
     # Bind only synthetic identities as fixtures, to exercise the real downstream access/rank paths.
@@ -146,7 +188,8 @@ def main():
     s.check('deleted_contest_identity_data_cleaned', s.db.scalar('SELECT COUNT(*) FROM contest_identity_config WHERE cid=' + str(deletion_cid)) == '0')
     # Private browser fixture contains only generated test credentials; never publish it.
     private_fixture = args.env_file.parent / 'identity-browser-fixture-v1.1.0.json'
-    private_fixture.write_text(json.dumps({'username': usernames['admin'], 'password': browser_password, 'cid': cid, 'pid': pid}, ensure_ascii=False), encoding='utf-8')
+    private_fixture.write_text(json.dumps({'username': usernames['admin'], 'password': browser_password, 'cid': cid, 'pid': pid,
+        'people': people, 'usernames': usernames}, ensure_ascii=False), encoding='utf-8')
     result = {'passed': len(s.assertions), 'failed': 0, 'checks': s.assertions,
               'positive_bindings': 'synthetic SQL fixtures; provider success and transactional writer covered by unit tests', 'production_modified': False}
     args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')

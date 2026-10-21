@@ -26,6 +26,8 @@ class ContestIdentityTest {
     private ContestIdentityManager manager;
     private ContestIdentityConfigMapper configs;
     private ContestIdentityBindingMapper bindings;
+    private ContestIdentityInvitationMapper invitations;
+    private ContestIdentityExemptionMapper exemptions;
     private ContestEntityService contests;
     private ContestAccessPolicyManager policies;
     private ContestIdentityClient client;
@@ -50,6 +52,8 @@ class ContestIdentityTest {
         ReflectionTestUtils.setField(RedisUtils.class, "redisTemplate", template);
         RedisUtils redis = new RedisUtils();
         manager = new ContestIdentityManager(); inject(manager, "configs", configs); inject(manager, "bindings", bindings);
+        invitations = mock(ContestIdentityInvitationMapper.class); exemptions = mock(ContestIdentityExemptionMapper.class);
+        inject(manager, "invitations", invitations); inject(manager, "exemptions", exemptions);
         inject(manager, "contests", contests); inject(manager, "policies", policies); inject(manager, "client", client);
         inject(manager, "writer", writer); inject(manager, "secrets", secrets); inject(manager, "redis", redis);
         inject(manager, "groups", mock(GroupValidator.class));
@@ -112,15 +116,54 @@ class ContestIdentityTest {
     @Test void publishedContestDoesNotRequireVerification() {
         when(policies.isReleased(contest)).thenReturn(true); assertFalse(manager.required(contest, null));
     }
-    @Test void serverGateStopsReadAndSubmitUntilVerifiedButAllowsContentAdmins() throws Exception {
+    @Test void identityOnlyStopsRunningContestSubmissionsAndNeverOrdinaryReads() throws Exception {
         ContestValidator validator = new ContestValidator(); inject(validator, "identityManager", manager);
         inject(validator, "contestAccessPolicyManager", policies); inject(validator, "groupValidator", mock(GroupValidator.class));
         inject(validator, "contestRegisterEntityService", mock(ContestRegisterEntityService.class));
-        assertThrows(StatusForbiddenException.class, () -> validator.validateContestAuth(contest, user, false));
+        validator.validateContestAuth(contest, user, false);
         assertThrows(StatusForbiddenException.class, () -> validator.validateJudgeAuth(contest, user, false));
         assertEquals("IDENTITY_REQUIRED", validator.getAccess(contest, user, false).getAccessReason());
+        assertTrue(validator.getAccess(contest, user, false).getCanViewProblems());
+        assertFalse(validator.getAccess(contest, user, false).getCanSubmit());
+        contest.setStatus(1).setAllowEndSubmit(true); when(policies.currentStatus(eq(contest), any())).thenReturn(1);
+        validator.validateJudgeAuth(contest, user, false);
+        assertFalse(manager.required(contest, user));
         when(subject.hasRole("admin")).thenReturn(true);
         validator.validateContestAuth(contest, user, false); assertEquals("ADMIN", validator.getAccess(contest, user, false).getAccessReason());
+    }
+    @Test void invitationIsHashedAndGrantIsBoundToItsCurrentContestVersion() throws Exception {
+        String hash = ContestInvitationPassword.hash("synthetic-invite");
+        assertNotEquals(hash, ContestInvitationPassword.hash("synthetic-invite"));
+        assertTrue(ContestInvitationPassword.matches("synthetic-invite", hash));
+        assertFalse(ContestInvitationPassword.matches("incorrect-invite", hash));
+        ContestIdentityInvitation invitation = new ContestIdentityInvitation(); invitation.setCid(7L); invitation.setPasswordHash(hash);
+        when(invitations.selectById(7L)).thenReturn(invitation);
+        ContestIdentityInvitationDTO dto = new ContestIdentityInvitationDTO(); dto.setCid(7L); dto.setPassword("incorrect-invite");
+        assertThrows(StatusFailException.class, () -> manager.acceptInvitation(dto)); verify(exemptions, never()).insert(any());
+        dto.setPassword("synthetic-invite"); manager.acceptInvitation(dto);
+        org.mockito.ArgumentCaptor<ContestIdentityExemption> captured = org.mockito.ArgumentCaptor.forClass(ContestIdentityExemption.class);
+        verify(exemptions).insert(captured.capture()); assertEquals("student", captured.getValue().getUid());
+        when(exemptions.selectOne(any())).thenReturn(captured.getValue()); assertFalse(manager.required(contest, user));
+        invitation.setPasswordHash(ContestInvitationPassword.hash("rotated-invite")); assertTrue(manager.required(contest, user));
+        assertFalse(new ObjectMapper().writeValueAsString(invitation).contains(hash)); verifyNoInteractions(client, writer);
+    }
+    @Test void confidentialPasswordAndSealingTakePriorityEvenOverAnExemption() throws Exception {
+        ContestValidator validator = new ContestValidator(); inject(validator, "identityManager", manager);
+        inject(validator, "contestAccessPolicyManager", policies); inject(validator, "groupValidator", mock(GroupValidator.class));
+        ContestRegisterEntityService registrations = mock(ContestRegisterEntityService.class);
+        inject(validator, "contestRegisterEntityService", registrations); inject(manager, "registrations", registrations);
+        when(policies.isConfidential(contest)).thenReturn(true);
+        when(policies.getPolicy(7L)).thenReturn(new ContestAccessPolicy());
+        ContestIdentityInvitation invitation = new ContestIdentityInvitation(); invitation.setPasswordHash("version");
+        ContestIdentityExemption grant = new ContestIdentityExemption(); grant.setInvitationHash("version");
+        when(invitations.selectById(7L)).thenReturn(invitation); when(exemptions.selectOne(any())).thenReturn(grant);
+        assertFalse(manager.required(contest, user));
+        assertThrows(StatusForbiddenException.class, () -> validator.validateContestAuth(contest, user, false));
+        assertEquals("PASSWORD_REQUIRED", validator.getAccess(contest, user, false).getAccessReason());
+        when(policies.currentStatus(eq(contest), any())).thenReturn(1);
+        assertEquals("SEALED", validator.getAccess(contest, user, false).getAccessReason());
+        ContestIdentityInvitationDTO dto = new ContestIdentityInvitationDTO(); dto.setCid(7L); dto.setPassword("synthetic-invite");
+        assertThrows(StatusForbiddenException.class, () -> manager.acceptInvitation(dto)); verify(exemptions, never()).insert(any());
     }
     @Test void configDoesNotLeakEncryptedOrPlainSecrets() throws Exception {
         when(subject.hasRole("admin")).thenReturn(true);
@@ -173,6 +216,7 @@ class ContestIdentityTest {
     }
     @Test void endpointsRequireHttpsAndPublicSocketAddresses() throws Exception {
         assertEquals(ContestIdentityManager.DEFAULT_URL, ContestIdentityClient.validateUrl(ContestIdentityManager.DEFAULT_URL));
+        assertEquals(ContestIdentityManager.DEFAULT_URL, ContestIdentityClient.validateUrl("https://sf-zt.gwy.fun/"));
         for (String url : Arrays.asList("http://example/v1/identities/verify-name", "https://u:p@example/v1/identities/verify-name", "https://example/v1/identities/verify-name?key=x")) {
             assertThrows(StatusFailException.class, () -> ContestIdentityClient.validateUrl(url));
         }
@@ -198,6 +242,11 @@ class ContestIdentityTest {
             when(response.getStatusLine()).thenReturn(new org.apache.http.message.BasicStatusLine(new org.apache.http.ProtocolVersion("HTTP", 1, 1), status, "Error"));
             assertThrows(StatusFailException.class, () -> actual.verify(config.getApiUrl(), "private-key", "00201234", "姓名"));
         }
+        doThrow(new java.net.UnknownHostException("private resolver details")).when(transport).execute(any(org.apache.http.client.methods.HttpUriRequest.class));
+        String dnsMessage = assertThrows(StatusFailException.class, () -> actual.verify(config.getApiUrl(), "private-key", "00201234", "姓名")).getMessage();
+        assertTrue(dnsMessage.contains("DNS")); assertFalse(dnsMessage.contains("private resolver details"));
+        doThrow(new javax.net.ssl.SSLException("private certificate details")).when(transport).execute(any(org.apache.http.client.methods.HttpUriRequest.class));
+        assertTrue(assertThrows(StatusFailException.class, () -> actual.verify(config.getApiUrl(), "private-key", "00201234", "姓名")).getMessage().contains("证书"));
     }
     @Test void startupConfigurationParsesWithoutDuplicateKeysAndDisablesSensitiveWireLogs() throws Exception {
         org.yaml.snakeyaml.LoaderOptions options = new org.yaml.snakeyaml.LoaderOptions(); options.setAllowDuplicateKeys(false);

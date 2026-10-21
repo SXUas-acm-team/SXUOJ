@@ -44,7 +44,7 @@ public class ContestScrollBoardManager {
 
     private void validateConfidentialAccess(Contest contest) throws StatusFailException {
         if (!Boolean.TRUE.equals(contest.getVisible())) throw new StatusFailException("比赛不存在！");
-        if (contestValidator.isConfidential(contest) || identityManager.enabled(contest.getId())) {
+        if (contestValidator.isConfidential(contest)) {
             try {
                 contestValidator.validateContestAuth(contest,
                         (AccountProfile) SecurityUtils.getSubject().getPrincipal(),

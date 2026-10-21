@@ -145,7 +145,6 @@ public class ContestValidator {
             if (!hasPasswordAccess(contest, userRolesVo)) {
                 throw new StatusForbiddenException("请先登录并输入比赛密码！");
             }
-            identityManager.requireVerified(contest, userRolesVo);
             return;
         }
         int status = contest.getStatus();
@@ -166,7 +165,6 @@ public class ContestValidator {
                 && !Objects.equals(contest.getAuth(), Constants.Contest.AUTH_PROTECT.getCode())) {
             throw new StatusForbiddenException("比赛权限配置无效！");
         }
-        identityManager.requireVerified(contest, userRolesVo);
     }
 
 
@@ -186,6 +184,7 @@ public class ContestValidator {
             throw new StatusForbiddenException(e.getMessage());
         }
         if (isContestAdmin(contest, user, root)) return;
+        identityManager.requireVerified(contest, user);
         if (isConfidential(contest)) return; // The unified gate already checks time, seal and password.
         if (Objects.equals(contest.getStatus(), Constants.Contest.STATUS_ENDED.getCode())
                 && !Boolean.TRUE.equals(contest.getAllowEndSubmit())) {
@@ -231,16 +230,14 @@ public class ContestValidator {
                 validateContestAuth(contest, user, root);
                 access.setCanViewProblems(true);
             } catch (StatusForbiddenException e) {
-                access.setAccessReason(user == null ? "LOGIN_REQUIRED" :
-                        identityRequired && (!Integer.valueOf(1).equals(contest.getAuth()) || hasPasswordAccess(contest, user))
-                        ? "IDENTITY_REQUIRED" : "PASSWORD_REQUIRED");
+                access.setAccessReason(user == null ? "LOGIN_REQUIRED" : "PASSWORD_REQUIRED");
             }
             if (user != null) {
                 try { validateJudgeAuth(contest, user, root); access.setCanSubmit(true); }
                 catch (StatusForbiddenException ignored) { /* Access is a description, not authorization. */ }
             }
             if (released) access.setAccessReason("RELEASED");
-            else if (Boolean.TRUE.equals(access.getCanViewProblems())) access.setAccessReason("READY");
+            else if (Boolean.TRUE.equals(access.getCanViewProblems())) access.setAccessReason(identityRequired ? "IDENTITY_REQUIRED" : "READY");
         }
         return access;
     }

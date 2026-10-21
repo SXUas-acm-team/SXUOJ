@@ -9,6 +9,7 @@ import top.hcode.hoj.common.result.CommonResult;
 import top.hcode.hoj.manager.oj.ContestIdentityManager;
 import top.hcode.hoj.pojo.dto.ContestIdentityConfigDTO;
 import top.hcode.hoj.pojo.dto.ContestIdentityVerifyDTO;
+import top.hcode.hoj.pojo.dto.ContestIdentityInvitationDTO;
 import java.util.Map;
 
 @RestController
@@ -27,5 +28,9 @@ public class ContestIdentityController {
     @PostMapping("/verify")
     public CommonResult<Void> verify(@RequestBody ContestIdentityVerifyDTO input) throws StatusFailException, StatusForbiddenException {
         manager.verify(input); return CommonResult.successResponse();
+    }
+    @PostMapping("/invitation")
+    public CommonResult<Void> invitation(@RequestBody ContestIdentityInvitationDTO input) throws StatusFailException, StatusForbiddenException {
+        manager.acceptInvitation(input); return CommonResult.successResponse();
     }
 }

@@ -36,14 +36,16 @@ function stateFor(component, extra = {}) {
 }
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 
-test('a public contest with identity enabled stays closed until the server grants access', () => {
+test('an unverified user may read a public contest while its server submission gate remains closed', () => {
   const store = load('store/contest.js');
   const state = { contest: { id: 7, auth: 0, status: 0, identityVerificationEnabled: true }, access: null };
   const getters = { isContestAdmin: false, isContestReleased: false, isContestSealed: false, contestStatus: 0 };
   assert.equal(store.getters.canViewContest(state, getters), false);
   assert.equal(store.getters.canSubmit(state, getters, {}, { isAuthenticated: true }), false);
-  state.access = { canViewProblems: true, canSubmit: true };
+  state.access = { canViewProblems: true, canSubmit: false, accessReason: 'IDENTITY_REQUIRED' };
   assert.equal(store.getters.canViewContest(state, getters), true);
+  assert.equal(store.getters.canSubmit(state, getters, {}, { isAuthenticated: true }), false);
+  state.access.canSubmit = true;
   assert.equal(store.getters.canSubmit(state, getters, {}, { isAuthenticated: true }), true);
   getters.isContestReleased = true; state.access = null;
   assert.equal(store.getters.canViewContest(state, getters), true);
@@ -100,6 +102,29 @@ test('a verification response from the previous login cannot grant the new sessi
   const task = state.verifyIdentity(); state.$store.getters.sessionVersion++;
   component.watch.contestSessionVersion.call(state); pending.resolve(); await task;
   assert.deepEqual(refresh, []); assert.equal(state.identityBusy, false);
+});
+
+test('invitation verification uses its own server endpoint and clears its password afterwards', async () => {
+  const requests = [], refresh = [];
+  const component = load('views/oj/contest/ContestDetails.vue', { '@/common/api': {
+    acceptContestIdentityInvitation: async data => requests.push(data),
+    verifyContestIdentity: () => { throw Error('must not invent a verified identity'); },
+  } });
+  const state = stateFor(component, { contestID: 7, identityMode: 'invitation', identityInvitation: 'synthetic-invite',
+    userInfo: { uid: 'user' }, $route: { params: { contestID: 7 } },
+    $store: { getters: { sessionVersion: 1 }, dispatch: async name => refresh.push(name) },
+  });
+  await state.verifyIdentity();
+  assert.deepEqual(requests, [{ cid: 7, password: 'synthetic-invite' }]);
+  assert.deepEqual(refresh, ['refreshContestAccess']); assert.equal(state.identityInvitation, '');
+});
+
+test('confidential sealing overrides a positive identity or invitation submission grant', () => {
+  const store = load('store/contest.js');
+  const state = { contest: { id: 7, confidential: true, identityVerificationEnabled: true }, access: { canViewProblems: true, canSubmit: true } };
+  const getters = { isContestAdmin: false, isContestReleased: false, isContestSealed: true, contestStatus: 1 };
+  assert.equal(store.getters.canViewContest(state, getters), false);
+  assert.equal(store.getters.canSubmit(state, getters, {}, { isAuthenticated: true }), false);
 });
 
 test.after(() => dom.window.close());

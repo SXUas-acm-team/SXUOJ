@@ -28,6 +28,8 @@ public class ContestIdentityManager {
     public static final String DEFAULT_URL = "https://sf-zt.gwy.fun/cloudxxsaacloud/v1/identities/verify-name";
     @Autowired private ContestIdentityConfigMapper configs;
     @Autowired private ContestIdentityBindingMapper bindings;
+    @Autowired private ContestIdentityInvitationMapper invitations;
+    @Autowired private ContestIdentityExemptionMapper exemptions;
     @Autowired private ContestEntityService contests;
     @Autowired private ContestRegisterEntityService registrations;
     @Autowired private ContestAccessPolicyManager policies;
@@ -46,11 +48,20 @@ public class ContestIdentityManager {
         return uid == null ? null : bindings.selectOne(new QueryWrapper<ContestIdentityBinding>().eq("cid", cid).eq("uid", uid));
     }
     public boolean required(Contest contest, AccountProfile user) {
-        return enabled(contest.getId()) && !policies.isReleased(contest)
-                && binding(contest.getId(), user == null ? null : user.getUid()) == null;
+        return policies.currentStatus(contest, new Date()) == 0
+                && enabled(contest.getId()) && !policies.isReleased(contest)
+                && binding(contest.getId(), user == null ? null : user.getUid()) == null
+                && !exempted(contest.getId(), user == null ? null : user.getUid());
+    }
+    private boolean exempted(Long cid, String uid) {
+        if (uid == null) return false;
+        ContestIdentityInvitation invitation = invitations.selectById(cid);
+        if (invitation == null) return false;
+        ContestIdentityExemption grant = exemptions.selectOne(new QueryWrapper<ContestIdentityExemption>().eq("cid", cid).eq("uid", uid));
+        return grant != null && Objects.equals(invitation.getPasswordHash(), grant.getInvitationHash());
     }
     public void requireVerified(Contest contest, AccountProfile user) throws StatusForbiddenException {
-        if (required(contest, user)) throw new StatusForbiddenException("请先完成本场比赛的学号姓名核验。");
+        if (required(contest, user)) throw new StatusForbiddenException("赛时提交前请完成学号姓名核验，或使用管理员提供的豁免邀请码。");
     }
     public Contest authorizeAdmin(Long cid) throws StatusFailException, StatusForbiddenException {
         if (cid == null || cid <= 0) throw new StatusFailException("比赛ID无效。");
@@ -73,6 +84,7 @@ public class ContestIdentityManager {
         result.put("apiUrl", config == null ? DEFAULT_URL : config.getApiUrl());
         result.put("hasApiKey", config != null && StringUtils.hasText(config.getApiKey())
                 || StringUtils.hasText(System.getenv("IDENTITY_API_KEY")));
+        result.put("hasInvitationPassword", invitations.selectById(cid) != null);
         return result;
     }
     @Transactional(rollbackFor = Exception.class)
@@ -101,6 +113,18 @@ public class ContestIdentityManager {
         config.setEnabled(input.getEnabled()); config.setReplaceRealname(input.getReplaceRealname());
         config.setStarPrefixes(prefixes); config.setApiUrl(url); config.setApiKey(key);
         if (old == null) configs.insert(config); else configs.updateById(config);
+        if (Boolean.TRUE.equals(input.getClearInvitationPassword())) {
+            invitations.deleteById(cid);
+            exemptions.delete(new QueryWrapper<ContestIdentityExemption>().eq("cid", cid));
+        } else if (StringUtils.hasText(input.getInvitationPassword())) {
+            String password = input.getInvitationPassword();
+            if (password.length() < 6 || password.length() > 64 || password.chars().anyMatch(Character::isISOControl))
+                throw new StatusFailException("豁免邀请码须为6至64个字符。");
+            ContestIdentityInvitation invitation = new ContestIdentityInvitation(); invitation.setCid(cid);
+            invitation.setPasswordHash(ContestInvitationPassword.hash(password));
+            if (invitations.selectById(cid) == null) invitations.insert(invitation); else invitations.updateById(invitation);
+            exemptions.delete(new QueryWrapper<ContestIdentityExemption>().eq("cid", cid));
+        }
     }
     public static String normalizePrefixes(String value) throws StatusFailException {
         if (!StringUtils.hasText(value)) return "";
@@ -118,6 +142,41 @@ public class ContestIdentityManager {
         if (attempts == 1 && !redis.expire(key, 60)) throw new StatusFailException("核验限流服务不可用，请稍后重试。");
         if (attempts > limit) throw new StatusFailException("核验请求过于频繁，请一分钟后重试。");
     }
+    @Transactional(rollbackFor = Exception.class)
+    public void acceptInvitation(ContestIdentityInvitationDTO input) throws StatusFailException, StatusForbiddenException {
+        AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
+        if (user == null) throw new StatusForbiddenException("请先登录。");
+        if (input == null || input.getCid() == null || input.getPassword() == null
+                || input.getPassword().length() < 6 || input.getPassword().length() > 64)
+            throw new StatusFailException("请输入有效的豁免邀请码。");
+        // Same contest lock as settings changes: rotation and grant creation cannot race.
+        Contest contest = contests.getByIdForUpdate(input.getCid());
+        validateEntry(contest, user);
+        if (!enabled(contest.getId()) || policies.currentStatus(contest, new Date()) != 0)
+            throw new StatusFailException("本场比赛当前无需豁免核验。");
+        reserve("CONTEST_INVITATION_USER:" + user.getUid(), 5);
+        reserve("CONTEST_INVITATION_SERVICE", 100);
+        ContestIdentityInvitation invitation = invitations.selectById(contest.getId());
+        if (invitation == null || !ContestInvitationPassword.matches(input.getPassword(), invitation.getPasswordHash()))
+            throw new StatusFailException("豁免邀请码无效，请联系比赛管理员。");
+        exemptions.delete(new QueryWrapper<ContestIdentityExemption>().eq("cid", contest.getId()).eq("uid", user.getUid()));
+        ContestIdentityExemption grant = new ContestIdentityExemption(); grant.setCid(contest.getId()); grant.setUid(user.getUid());
+        grant.setInvitationHash(invitation.getPasswordHash()); exemptions.insert(grant);
+    }
+    private void validateEntry(Contest contest, AccountProfile user) throws StatusFailException, StatusForbiddenException {
+        if (contest == null || !Boolean.TRUE.equals(contest.getVisible())) throw new StatusFailException("比赛不存在。");
+        if (policies.isConfidential(contest) && policies.currentStatus(contest, new Date()) != 0)
+            throw new StatusForbiddenException("保密赛当前不允许入场。");
+        if (Boolean.TRUE.equals(contest.getIsGroup()) && !policies.isConfidential(contest)
+                && !ContentAdmin.allowed() && !groups.isGroupMember(user.getUid(), contest.getGid()))
+            throw new StatusForbiddenException("您不是比赛所属团队成员。");
+        if (Integer.valueOf(1).equals(contest.getAuth()) || policies.isConfidential(contest)) {
+            ContestRegister registration = registrations.getOne(new QueryWrapper<ContestRegister>()
+                    .eq("cid", contest.getId()).eq("uid", user.getUid()), false);
+            if (registration == null || Integer.valueOf(1).equals(registration.getStatus()))
+                throw new StatusForbiddenException("请先输入比赛密码。");
+        }
+    }
     public void verify(ContestIdentityVerifyDTO input) throws StatusFailException, StatusForbiddenException {
         AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         if (user == null) throw new StatusForbiddenException("请先登录。");
@@ -128,17 +187,9 @@ public class ContestIdentityManager {
         if (!number.matches("[A-Za-z0-9_.@-]{1,64}") || name.isEmpty() || name.length() > 128
                 || name.chars().anyMatch(Character::isISOControl)) throw new StatusFailException("请填写有效的学号和姓名。");
         Contest contest = contests.getById(input.getCid());
-        if (contest == null || !Boolean.TRUE.equals(contest.getVisible())) throw new StatusFailException("比赛不存在。");
+        validateEntry(contest, user);
         ContestIdentityConfig config = configs.selectById(input.getCid());
         if (config == null || !Boolean.TRUE.equals(config.getEnabled())) throw new StatusFailException("本场比赛未开启入场核验。");
-        if (policies.isConfidential(contest) && policies.currentStatus(contest, new Date()) == 1) throw new StatusFailException("比赛已结束，无需入场核验。");
-        if (Boolean.TRUE.equals(contest.getIsGroup()) && !policies.isConfidential(contest)
-                && !ContentAdmin.allowed() && !groups.isGroupMember(user.getUid(), contest.getGid())) throw new StatusForbiddenException("您不是比赛所属团队成员。");
-        if (Integer.valueOf(1).equals(contest.getAuth())) {
-            ContestRegister registration = registrations.getOne(new QueryWrapper<ContestRegister>()
-                    .eq("cid", contest.getId()).eq("uid", user.getUid()), false);
-            if (registration == null || Integer.valueOf(1).equals(registration.getStatus())) throw new StatusForbiddenException("请先输入比赛密码。");
-        }
         ContestIdentityBinding old = binding(contest.getId(), user.getUid());
         if (old != null) {
             if (number.equals(old.getStudentNumber()) && name.equals(old.getVerifiedName())) return;
@@ -167,6 +218,8 @@ public class ContestIdentityManager {
         }
     }
     public void delete(Long cid) {
+        exemptions.delete(new QueryWrapper<ContestIdentityExemption>().eq("cid", cid));
+        invitations.deleteById(cid);
         bindings.delete(new QueryWrapper<ContestIdentityBinding>().eq("cid", cid));
         configs.deleteById(cid);
     }

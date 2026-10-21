@@ -1,5 +1,5 @@
 -- Run against the existing HOJ database before starting v1.1.0.
--- Adds two tables only; existing business tables and data are unchanged.
+-- Adds four tables only; existing business tables and data are unchanged.
 CREATE TABLE IF NOT EXISTS contest_identity_config (
   cid BIGINT UNSIGNED NOT NULL PRIMARY KEY,
   enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -10,6 +10,20 @@ CREATE TABLE IF NOT EXISTS contest_identity_config (
   gmt_create DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   gmt_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_identity_config_contest FOREIGN KEY (cid) REFERENCES contest(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE IF NOT EXISTS contest_identity_invitation (
+  cid BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  password_hash VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  CONSTRAINT fk_identity_invitation_contest FOREIGN KEY (cid) REFERENCES contest(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE IF NOT EXISTS contest_identity_exemption (
+  cid BIGINT UNSIGNED NOT NULL,
+  uid VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  invitation_hash VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  PRIMARY KEY (cid, uid),
+  CONSTRAINT fk_identity_exemption_contest FOREIGN KEY (cid) REFERENCES contest(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE IF NOT EXISTS contest_identity_binding (
