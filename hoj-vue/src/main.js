@@ -46,7 +46,8 @@ Vue.use(MuseUI)
 
 import { plugin as safeHtmlPlugin, secureMarkdownRenderer } from '@/common/security'
 import hljs from 'highlight.js'
-import 'github-markdown-css/github-markdown.css'
+// The application uses a light theme, including Markdown previews.
+import 'github-markdown-css/github-markdown-light.css'
 Vue.use(safeHtmlPlugin)
 
 import router from './router'
