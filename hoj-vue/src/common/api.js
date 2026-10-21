@@ -233,6 +233,29 @@ const ojApi = {
       params
     })
   },
+  uploadTestcaseZip(options) {
+    if (localApiPath({ url: options.action }) !== '/api/file/upload-testcase-zip') {
+      return Promise.reject(new Error('Invalid testcase upload endpoint'));
+    }
+    const data = new FormData();
+    data.append(options.filename || 'file', options.file);
+    const controller = new AbortController();
+    const upload = axios({
+      url: options.action,
+      method: 'post',
+      data,
+      signal: controller.signal,
+      onUploadProgress(event) {
+        if (options.onProgress && event.total > 0) {
+          options.onProgress({ loaded: event.loaded, total: event.total, percent: event.loaded * 100 / event.total });
+        }
+      },
+    }).then(response => response.data);
+    // Element UI handles the promise's success/error callbacks and calls abort
+    // when a pending upload is removed. Shared Axios handles token refresh.
+    upload.abort = () => controller.abort();
+    return upload;
+  },
 
   getRecentUpdatedProblemList(){
     return ajax('/api/get-recent-updated-problem', 'get', {

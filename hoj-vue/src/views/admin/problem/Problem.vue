@@ -701,6 +701,7 @@
                 <el-upload
                   :action="uploadFileUrl+'?mode='+problem.judgeCaseMode"
                   name="file"
+                  :http-request="uploadTestcase"
                   :show-file-list="true"
                   :on-success="uploadSucceeded"
                   :on-error="uploadFailed"
@@ -1443,6 +1444,9 @@ export default {
     },
     changeSampleVisible(index, isOpen) {
       this.problemSamples[index]["isOpen"] = isOpen;
+    },
+    uploadTestcase(options) {
+      return api.uploadTestcaseZip(options);
     },
     uploadSucceeded(response) {
       if (response.status != 200) {

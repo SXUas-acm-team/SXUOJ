@@ -274,21 +274,36 @@ public class AdminContestProblemManager {
 
     @Transactional(rollbackFor = Exception.class)
     public ContestProblem setContestProblem(ContestProblem contestProblem) throws StatusFailException {
-        requireContestOwner(contestProblem.getCid());
+        if (contestProblem == null) throw new StatusFailException("比赛题目信息不能为空！");
+        ContestProblem stored = null;
         if (contestProblem.getId() != null) {
-            ContestProblem stored = contestProblemEntityService.getById(contestProblem.getId());
-            if (stored == null || !Objects.equals(stored.getCid(), contestProblem.getCid())) {
+            stored = contestProblemEntityService.getById(contestProblem.getId());
+            if (stored == null
+                    || (contestProblem.getCid() != null && !Objects.equals(stored.getCid(), contestProblem.getCid()))
+                    || (contestProblem.getPid() != null && !Objects.equals(stored.getPid(), contestProblem.getPid()))) {
                 throw new StatusFailException("题目与比赛不匹配！");
             }
         }
-        boolean isOk = contestProblemEntityService.saveOrUpdate(contestProblem);
+        Long cid = stored == null ? contestProblem.getCid() : stored.getCid();
+        Long pid = stored == null ? contestProblem.getPid() : stored.getPid();
+        if (cid == null || pid == null) throw new StatusFailException("比赛题目信息不完整！");
+        requireContestOwner(cid);
+        String displayId = contestProblem.getDisplayId() == null && stored != null
+                ? stored.getDisplayId() : contestProblem.getDisplayId();
+        ContestProblem update = new ContestProblem().setId(contestProblem.getId())
+                .setDisplayId(contestProblem.getDisplayId()).setDisplayTitle(contestProblem.getDisplayTitle())
+                .setColor(contestProblem.getColor());
+        if (stored == null) update.setCid(cid).setPid(pid);
+        boolean isOk = contestProblemEntityService.saveOrUpdate(update);
         if (isOk) {
-            contestProblemEntityService.syncContestRecord(contestProblem.getPid(), contestProblem.getCid(), contestProblem.getDisplayId());
+            if (displayId != null) contestProblemEntityService.syncContestRecord(pid, cid, displayId);
             // 获取当前登录的用户
             AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
             log.info("[{}],[{}],cid:[{}],ContestProblem:[{}],operatorUid:[{}],operatorUsername:[{}]",
-                    "Admin_Contest", "Update_Problem", contestProblem.getCid(), contestProblem, userRolesVo.getUid(), userRolesVo.getUsername());
-            return contestProblem;
+                    "Admin_Contest", "Update_Problem", cid, update, userRolesVo.getUid(), userRolesVo.getUsername());
+            return new ContestProblem().setId(update.getId()).setCid(cid).setPid(pid).setDisplayId(displayId)
+                    .setDisplayTitle(update.getDisplayTitle() == null && stored != null ? stored.getDisplayTitle() : update.getDisplayTitle())
+                    .setColor(update.getColor());
         } else {
             throw new StatusFailException("更新失败");
         }

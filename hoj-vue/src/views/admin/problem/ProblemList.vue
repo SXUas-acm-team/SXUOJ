@@ -640,6 +640,7 @@ export default {
     changeContestProblemColor(id, color) {
       let data = {
         id: id,
+        cid: this.query.contestId,
         color: color,
       };
       api.admin_setContestProblemInfo(data).then((res) => {

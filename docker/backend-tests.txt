@@ -37,3 +37,4 @@ BackendRuntimeSecretsTest
 BackendStartupSecretsCompatibilityTest
 ContestManualPublicationTest
 JudgeTransportCompatibilityTest
+ContestColorUpdateTest
