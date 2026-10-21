@@ -36,7 +36,7 @@ public class ContestReleaseManager {
         if (contest == null) throw new StatusFailException("比赛不存在！");
         AccountProfile operator = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         if (operator == null) throw new StatusForbiddenException("请先登录！");
-        boolean root = SecurityUtils.getSubject().hasRole("root");
+        boolean root = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean owner = operator.getUid().equals(contest.getUid());
         if (groupRoute) {
             if (contest.getGid() == null) throw new StatusForbiddenException("不可操作非团队内的比赛！");

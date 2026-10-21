@@ -1,3 +1,10 @@
+logging:
+  level:
+    org.apache.http.wire: 'OFF'
+    org.apache.http.headers: 'OFF'
+    top.hcode.hoj.mapper.ContestIdentityBindingMapper: WARN
+    top.hcode.hoj.mapper.ContestIdentityConfigMapper: WARN
+
 mybatis-plus:
   mapper-locations: classpath*:top/hcode/hoj/mapper/xml/**Mapper.xml
   type-aliases-package: top.hcode.hoj.pojo.entity

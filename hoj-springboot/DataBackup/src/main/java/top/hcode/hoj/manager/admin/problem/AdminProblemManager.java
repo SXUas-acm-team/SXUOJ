@@ -107,7 +107,7 @@ public class AdminProblemManager {
             // 获取当前登录的用户
             AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-            boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+            boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
             boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
             // 只有超级管理员和题目管理员、题目创建者才能操作
             if (!isRoot && !isProblemAdmin && !userRolesVo.getUsername().equals(problem.getAuthor())) {
@@ -160,7 +160,7 @@ public class AdminProblemManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         // 只有超级管理员和题目管理员、题目创建者才能操作
         if (!isRoot && !isProblemAdmin && !userRolesVo.getUsername().equals(problemDto.getProblem().getAuthor())) {
@@ -250,7 +250,7 @@ public class AdminProblemManager {
 
     public void changeProblemAuth(Problem problem) throws StatusFailException, StatusForbiddenException {
         // 普通管理员只能将题目变成隐藏题目和比赛题目
-        boolean root = SecurityUtils.getSubject().hasRole("root");
+        boolean root = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         boolean problemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
 

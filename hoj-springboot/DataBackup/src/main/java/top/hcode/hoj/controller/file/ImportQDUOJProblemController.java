@@ -3,6 +3,7 @@ package top.hcode.hoj.controller.file;
 
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresRoles;
+import org.apache.shiro.authz.annotation.Logical;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,7 +34,7 @@ public class ImportQDUOJProblemController {
      * @Return
      * @Since 2021/5/27
      */
-    @RequiresRoles("root")
+    @RequiresRoles(value = {"root", "admin"}, logical = Logical.OR)
     @RequiresAuthentication
     @ResponseBody
     @PostMapping("/import-qdoj-problem")

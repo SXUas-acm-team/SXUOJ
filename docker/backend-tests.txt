@@ -38,3 +38,6 @@ BackendStartupSecretsCompatibilityTest
 ContestManualPublicationTest
 JudgeTransportCompatibilityTest
 ContestColorUpdateTest
+ContestIdentityTest
+ContestIdentitySchemaCheckTest
+AdminLoginPublicAccessTest

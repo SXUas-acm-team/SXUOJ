@@ -113,7 +113,7 @@ public class DiscussionManager {
                     .like("description", key));
         }
 
-        boolean isAdmin = SecurityUtils.getSubject().hasRole("root")
+        boolean isAdmin = top.hcode.hoj.utils.ContentAdmin.allowed()
                 || SecurityUtils.getSubject().hasRole("problem_admin")
                 || SecurityUtils.getSubject().hasRole("admin");
 
@@ -155,7 +155,7 @@ public class DiscussionManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         String uid = null;
 
@@ -211,7 +211,7 @@ public class DiscussionManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -264,7 +264,7 @@ public class DiscussionManager {
                 .setAvatar(userRolesVo.getAvatar())
                 .setUid(userRolesVo.getUid());
 
-        if (SecurityUtils.getSubject().hasRole("root")) {
+        if (top.hcode.hoj.utils.ContentAdmin.allowed()) {
             discussion.setRole("root");
         } else if (SecurityUtils.getSubject().hasRole("admin")
                 || SecurityUtils.getSubject().hasRole("problem_admin")) {
@@ -304,7 +304,7 @@ public class DiscussionManager {
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -342,7 +342,7 @@ public class DiscussionManager {
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         if (!isRoot
                 && !discussion.getUid().equals(userRolesVo.getUid())
@@ -353,7 +353,7 @@ public class DiscussionManager {
 
         UpdateWrapper<Discussion> discussionUpdateWrapper = new UpdateWrapper<Discussion>().eq("id", did);
         // 如果不是是管理员,则需要附加当前用户的uid条件
-        if (!SecurityUtils.getSubject().hasRole("root")
+        if (!top.hcode.hoj.utils.ContentAdmin.allowed()
                 && !SecurityUtils.getSubject().hasRole("admin")
                 && !SecurityUtils.getSubject().hasRole("problem_admin")) {
             discussionUpdateWrapper.eq("uid", userRolesVo.getUid());
@@ -377,7 +377,7 @@ public class DiscussionManager {
         }
 
         if (discussion.getGid() != null) {
-            boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+            boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
             if (!isRoot && !discussion.getUid().equals(userRolesVo.getUid())
                     && !groupValidator.isGroupMember(userRolesVo.getUid(), discussion.getGid())) {
                 throw new StatusForbiddenException("对不起，您无权限操作！");

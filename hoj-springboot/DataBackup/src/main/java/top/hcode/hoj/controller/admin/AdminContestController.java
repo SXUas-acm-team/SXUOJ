@@ -85,7 +85,7 @@ public class AdminContestController {
 
     @DeleteMapping("")
     @RequiresAuthentication
-    @RequiresRoles(value = "root") // 只有超级管理员能删除比赛
+    @RequiresRoles(value = {"root", "admin"}, logical = Logical.OR) // 只有超级管理员能删除比赛
     public CommonResult<Void> deleteContest(@RequestBody(required = false) DeleteContestDTO request, HttpServletRequest httpRequest) {
 
         if (httpRequest.getQueryString() != null && !httpRequest.getQueryString().isEmpty()) {
@@ -155,7 +155,7 @@ public class AdminContestController {
 
     @DeleteMapping("/problem")
     @RequiresAuthentication
-    @RequiresRoles(value = {"root", "problem_admin"}, logical = Logical.OR)
+    @RequiresRoles(value = {"root", "admin", "problem_admin"}, logical = Logical.OR)
     public CommonResult<Void> deleteProblem(@RequestParam("pid") Long pid,
                                             @RequestParam(value = "cid", required = false) Long cid) {
         return adminContestProblemService.deleteProblem(pid, cid);

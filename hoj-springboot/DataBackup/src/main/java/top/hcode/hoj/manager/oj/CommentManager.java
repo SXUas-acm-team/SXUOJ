@@ -108,7 +108,7 @@ public class CommentManager {
         // 如果有登录，则获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         if (cid == null && did != null) {
             QueryWrapper<Discussion> discussionQueryWrapper = new QueryWrapper<>();
@@ -187,7 +187,7 @@ public class CommentManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -238,7 +238,7 @@ public class CommentManager {
                 .setFromName(userRolesVo.getUsername())
                 .setFromUid(userRolesVo.getUid());
 
-        if (SecurityUtils.getSubject().hasRole("root")) {
+        if (top.hcode.hoj.utils.ContentAdmin.allowed()) {
             comment.setFromRole("root");
         } else if (SecurityUtils.getSubject().hasRole("admin")
                 || SecurityUtils.getSubject().hasRole("problem_admin")) {
@@ -297,7 +297,7 @@ public class CommentManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -360,7 +360,7 @@ public class CommentManager {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         Comment target = commentEntityService.getById(cid);
         if (target == null) throw new StatusFailException("评论不存在！");
-        boolean root = SecurityUtils.getSubject().hasRole("root");
+        boolean root = top.hcode.hoj.utils.ContentAdmin.allowed();
         if (target.getCid() != null) {
             try {
                 contestValidator.validateContestAuth(contestEntityService.getById(target.getCid()), userRolesVo, root);
@@ -430,7 +430,7 @@ public class CommentManager {
 
         // 如果有登录，则获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Comment storedComment = commentEntityService.getById(commentId);
         if (storedComment == null) throw new StatusFailException("评论不存在！");
@@ -478,7 +478,7 @@ public class CommentManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -548,7 +548,7 @@ public class CommentManager {
                 .setFromName(userRolesVo.getUsername())
                 .setFromUid(userRolesVo.getUid());
 
-        if (SecurityUtils.getSubject().hasRole("root")) {
+        if (top.hcode.hoj.utils.ContentAdmin.allowed()) {
             reply.setFromRole("root");
         } else if (SecurityUtils.getSubject().hasRole("admin")
                 || SecurityUtils.getSubject().hasRole("problem_admin")) {
@@ -609,7 +609,7 @@ public class CommentManager {
 
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 

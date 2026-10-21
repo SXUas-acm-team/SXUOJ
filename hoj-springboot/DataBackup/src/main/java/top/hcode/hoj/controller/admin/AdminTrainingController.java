@@ -51,7 +51,7 @@ public class AdminTrainingController {
 
     @DeleteMapping("")
     @RequiresAuthentication
-    @RequiresRoles(value = "root") // 只有超级管理员能删除训练
+    @RequiresRoles(value = {"root", "admin"}, logical = Logical.OR) // 只有超级管理员能删除训练
     public CommonResult<Void> deleteTraining(@RequestParam("tid") Long tid) {
         return adminTrainingService.deleteTraining(tid);
     }
@@ -94,14 +94,14 @@ public class AdminTrainingController {
 
     @PutMapping("/problem")
     @RequiresAuthentication
-    @RequiresRoles(value = {"root", "problem_admin"}, logical = Logical.OR)
+    @RequiresRoles(value = {"root", "admin", "problem_admin"}, logical = Logical.OR)
     public CommonResult<Void> updateProblem(@RequestBody TrainingProblem trainingProblem) {
         return adminTrainingProblemService.updateProblem(trainingProblem);
     }
 
     @DeleteMapping("/problem")
     @RequiresAuthentication
-    @RequiresRoles(value = {"root", "problem_admin"}, logical = Logical.OR)
+    @RequiresRoles(value = {"root", "admin", "problem_admin"}, logical = Logical.OR)
     public CommonResult<Void> deleteProblem(@RequestParam("pid") Long pid,
                                             @RequestParam(value = "tid", required = false) Long tid) {
 

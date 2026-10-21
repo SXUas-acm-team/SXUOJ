@@ -71,6 +71,7 @@ class ConfidentialContestAccessTest {
         registrations = mock(ContestRegisterEntityService.class);
         groupValidator = mock(GroupValidator.class);
         validator = new ContestValidator();
+        org.springframework.test.util.ReflectionTestUtils.setField(validator, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(validator, "contestAccessPolicyManager", policyManager);
         inject(validator, "contestRegisterEntityService", registrations);
         inject(validator, "groupValidator", groupValidator);
@@ -199,6 +200,7 @@ class ConfidentialContestAccessTest {
         ContestProblemEntityService problems = mock(ContestProblemEntityService.class);
         when(contests.getById(7L)).thenReturn(contest);
         ContestManager manager = new ContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestEntityService", contests); inject(manager, "contestValidator", validator);
         inject(manager, "contestProblemEntityService", problems);
         assertThrows(StatusForbiddenException.class, () -> manager.getContestProblem(7L, false));
@@ -216,6 +218,7 @@ class ConfidentialContestAccessTest {
         ContestVO info = new ContestVO(); info.setId(7L); info.setOpenRank(true); info.setStatus(1);
         when(contests.getContestInfoById(7L)).thenReturn(info);
         ContestScoreboardManager manager = new ContestScoreboardManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestEntityService", contests); inject(manager, "contestValidator", validator);
         inject(manager, "contestProblemEntityService", problems);
         assertThrows(StatusForbiddenException.class, () -> manager.getContestOutsideInfo(7L));
@@ -229,6 +232,7 @@ class ConfidentialContestAccessTest {
         ContestProblemEntityService problems = mock(ContestProblemEntityService.class);
         when(contests.getById(7L)).thenReturn(contest);
         ContestManager manager = new ContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestEntityService", contests); inject(manager, "contestValidator", validator);
         inject(manager, "contestProblemEntityService", problems);
         assertThrows(StatusForbiddenException.class, () -> manager.getContestProblemDetails(7L, "A", false));
@@ -243,6 +247,7 @@ class ConfidentialContestAccessTest {
         when(contests.getById(7L)).thenReturn(contest);
         ContestRankManager ranks = mock(ContestRankManager.class);
         ContestManager manager = new ContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestEntityService", contests); inject(manager, "contestValidator", validator);
         inject(manager, "contestRankManager", ranks);
         ContestRankDTO request = new ContestRankDTO(); request.setCid(7L);
@@ -258,6 +263,7 @@ class ConfidentialContestAccessTest {
         ContestRecordEntityService records = mock(ContestRecordEntityService.class);
         when(contests.getById(7L)).thenReturn(contest);
         ContestManager manager = new ContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestEntityService", contests); inject(manager, "contestValidator", validator);
         inject(manager, "contestRecordEntityService", records);
         assertFalse(manager.getContestAccess(7L).getCanViewProblems());
@@ -323,6 +329,7 @@ class ConfidentialContestAccessTest {
     @Test void registrationLocksAuthoritativePasswordAndIgnoresLegacyWhitelist() throws Exception {
         ContestEntityService contests = mock(ContestEntityService.class);
         ContestManager manager = new ContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestEntityService", contests); inject(manager, "contestValidator", validator);
         inject(manager, "contestRegisterEntityService", registrations); inject(manager, "contestAccessPolicyManager", policyManager);
         when(contests.getByIdForUpdate(7L)).thenReturn(contest);
@@ -341,6 +348,7 @@ class ConfidentialContestAccessTest {
         ContestEntityService contests = mock(ContestEntityService.class);
         ContestAccessPolicyManager policyMock = mock(ContestAccessPolicyManager.class);
         AdminContestManager manager = new AdminContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestEntityService", contests); inject(manager, "contestValidator", mock(ContestValidator.class));
         inject(manager, "contestRegisterEntityService", registrations); inject(manager, "contestAccessPolicyManager", policyMock);
         when(contests.getByIdForUpdate(7L)).thenReturn(contest);

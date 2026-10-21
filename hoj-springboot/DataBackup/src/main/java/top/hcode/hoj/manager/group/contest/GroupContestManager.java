@@ -44,6 +44,8 @@ import java.util.Objects;
 @Component
 public class GroupContestManager {
 
+    @Autowired private top.hcode.hoj.manager.oj.ContestIdentityManager identityManager;
+
     @Autowired
     private ContestAccessPolicyManager contestAccessPolicyManager;
 
@@ -70,7 +72,7 @@ public class GroupContestManager {
     public IPage<ContestVO> getContestList(Integer limit, Integer currentPage, Long gid) throws StatusNotFoundException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Group group = groupEntityService.getById(gid);
 
@@ -91,7 +93,7 @@ public class GroupContestManager {
     public IPage<Contest> getAdminContestList(Integer limit, Integer currentPage, Long gid) throws StatusNotFoundException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Group group = groupEntityService.getById(gid);
 
@@ -112,7 +114,7 @@ public class GroupContestManager {
     public AdminContestVO getContest(Long cid) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Contest contest = contestEntityService.getById(cid);
 
@@ -171,7 +173,7 @@ public class GroupContestManager {
 
         contestValidator.validateContest(adminContestVo);
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Long gid = adminContestVo.getGid();
 
@@ -224,7 +226,7 @@ public class GroupContestManager {
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Long cid = adminContestVo.getId();
 
@@ -299,7 +301,7 @@ public class GroupContestManager {
             throw new StatusFailException("请在JSON请求正文中提供比赛ID及当前登录账号密码！");
         }
         Long cid = request.getCid();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Contest contest = contestEntityService.getByIdForUpdate(cid);
 
@@ -329,6 +331,7 @@ public class GroupContestManager {
         }
         contestDeletionPasswordValidator.validate(userRolesVo, request.getPassword());
         contestAccessPolicyManager.deletePolicy(cid);
+        identityManager.delete(cid);
         boolean isOk = contestEntityService.removeById(cid);
         if (!isOk) {
             throw new StatusFailException("删除失败");
@@ -338,7 +341,7 @@ public class GroupContestManager {
     public void changeContestVisible(Long cid, Boolean visible) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Contest contest = contestEntityService.getById(cid);
 

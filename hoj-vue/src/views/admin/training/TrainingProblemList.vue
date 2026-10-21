@@ -85,13 +85,13 @@
             <el-select
               v-model="row.auth"
               @change="changeProblemAuth(row)"
-              :disabled="!isSuperAdmin && !isProblemAdmin"
+              :disabled="!isContentAdmin && !isProblemAdmin"
               size="small"
             >
               <el-option
                 :label="$t('m.Public_Problem')"
                 :value="1"
-                :disabled="!isSuperAdmin && !isProblemAdmin"
+                :disabled="!isContentAdmin && !isProblemAdmin"
               ></el-option>
               <el-option
                 :label="$t('m.Private_Problem')"
@@ -112,7 +112,7 @@
               :content="$t('m.Edit')"
               placement="top"
               v-if="
-                isSuperAdmin ||
+                isContentAdmin ||
                   isProblemAdmin ||
                   row.author == userInfo.username
               "
@@ -130,7 +130,7 @@
               effect="dark"
               :content="$t('m.Download_Testcase')"
               placement="top"
-              v-if="isSuperAdmin || isProblemAdmin"
+              v-if="isContentAdmin || isProblemAdmin"
             >
               <el-button
                 icon="el-icon-download"
@@ -155,7 +155,7 @@
               effect="dark"
               :content="$t('m.Delete')"
               placement="top"
-              v-if="isSuperAdmin || isProblemAdmin"
+              v-if="isContentAdmin || isProblemAdmin"
             >
               <el-button
                 icon="el-icon-delete-solid"
@@ -271,7 +271,7 @@ export default {
     this.init();
   },
   computed: {
-    ...mapGetters(['userInfo', 'isSuperAdmin', 'isProblemAdmin']),
+    ...mapGetters(['userInfo', 'isContentAdmin', 'isProblemAdmin']),
   },
   methods: {
     init() {

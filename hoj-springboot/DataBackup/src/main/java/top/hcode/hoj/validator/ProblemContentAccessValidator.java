@@ -55,7 +55,7 @@ public class ProblemContentAccessValidator {
     public void validateProblemAccess(Long pid, Long currentCid) throws StatusForbiddenException {
         validateProblemAccess(pid, currentCid,
                 (AccountProfile) SecurityUtils.getSubject().getPrincipal(),
-                SecurityUtils.getSubject().hasRole("root"));
+                top.hcode.hoj.utils.ContentAdmin.allowed());
     }
 
     public void validateProblemAccess(Long pid, Long currentCid, AccountProfile viewer, boolean root)
@@ -96,7 +96,7 @@ public class ProblemContentAccessValidator {
     /** Legacy online-debug requests carry only a pid and the context type. */
     public void validateContestDebugAccess(Long pid) throws StatusForbiddenException {
         List<Contest> protectedBy = getUnreleasedContests(pid);
-        if (protectedBy.isEmpty() || SecurityUtils.getSubject().hasRole("root")) return;
+        if (protectedBy.isEmpty() || top.hcode.hoj.utils.ContentAdmin.allowed()) return;
         AccountProfile viewer = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         for (Contest contest : protectedBy) {
             try {

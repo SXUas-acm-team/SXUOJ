@@ -94,9 +94,11 @@ class ContestDeletionPasswordTest {
         contests = mock(ContestEntityService.class); policies = mock(ContestAccessPolicyManager.class);
         contest = new Contest().setId(7L).setUid("other-owner").setPwd("contest-pass").setIsGroup(false);
         when(contests.getByIdForUpdate(7L)).thenReturn(contest); when(contests.removeById(7L)).thenReturn(true);
-        admin = new AdminContestManager(); inject(admin, "contestEntityService", contests);
+        admin = new AdminContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(admin, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class)); inject(admin, "contestEntityService", contests);
         inject(admin, "contestAccessPolicyManager", policies); inject(admin, "contestDeletionPasswordValidator", passwordValidator);
-        group = new GroupContestManager(); inject(group, "contestEntityService", contests);
+        group = new GroupContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(group, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class)); inject(group, "contestEntityService", contests);
         inject(group, "contestAccessPolicyManager", policies); inject(group, "contestDeletionPasswordValidator", passwordValidator);
         GroupEntityService groups = mock(GroupEntityService.class);
         when(groups.getById(9L)).thenReturn(new Group().setId(9L).setStatus(0)); inject(group, "groupEntityService", groups);

@@ -285,7 +285,7 @@
               "><i class="el-icon-folder-opened"></i> {{ $t('m.Category') }}</a>
             <span
               style="float:right"
-              v-if="isSuperAdmin"
+              v-if="isContentAdmin"
             >
               <a @click="upsertCategoryList">
                 <i
@@ -803,7 +803,7 @@ export default {
       "isAuthenticated",
       "userInfo",
       "isAdminRole",
-      "isSuperAdmin",
+      "isContentAdmin",
     ]),
   },
 };

@@ -3,6 +3,7 @@ package top.hcode.hoj.controller.file;
 
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresRoles;
+import org.apache.shiro.authz.annotation.Logical;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,7 +35,7 @@ public class ImportFpsProblemController {
      * @Return
      * @Since 2021/10/06
      */
-    @RequiresRoles("root")
+    @RequiresRoles(value = {"root", "admin"}, logical = Logical.OR)
     @RequiresAuthentication
     @ResponseBody
     @PostMapping("/import-fps-problem")

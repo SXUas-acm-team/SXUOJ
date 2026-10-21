@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 @Component
 public class ContestCalculateRankManager {
 
+    @Autowired private ContestIdentityManager identityManager;
+
     @Resource
     private UserInfoEntityService userInfoEntityService;
 
@@ -145,6 +147,7 @@ public class ContestCalculateRankManager {
 
         // 需要打星的用户名列表
         HashMap<String, Boolean> starAccountMap = starAccountToMap(contest.getStarAccount());
+        identityManager.decorateRanks(contest.getId(), orderResultList, ACMContestRankVO::getUid, ACMContestRankVO::getUsername, ACMContestRankVO::setRealname, starAccountMap);
 
         Queue<ContestAwardConfigVO> awardConfigVoList = null;
         boolean isNeedSetAward = contest.getAwardType() != null && contest.getAwardType() > 0;
@@ -435,6 +438,7 @@ public class ContestCalculateRankManager {
 
         // 需要打星的用户名列表
         HashMap<String, Boolean> starAccountMap = starAccountToMap(contest.getStarAccount());
+        identityManager.decorateRanks(contest.getId(), orderResultList, OIContestRankVO::getUid, OIContestRankVO::getUsername, OIContestRankVO::setRealname, starAccountMap);
 
         Queue<ContestAwardConfigVO> awardConfigVoList = null;
         boolean isNeedSetAward = contest.getAwardType() != null && contest.getAwardType() > 0;

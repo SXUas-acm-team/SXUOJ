@@ -377,6 +377,7 @@
             </el-col>
 
             <ContestConfidentialSettings :contest="contest" :group-contest="true" />
+          <ContestIdentitySettings :contest="contest" />
 
             <template v-if="contest.openAccountLimit && !contest.confidential">
               <el-form :model="formRule">
@@ -639,12 +640,14 @@ import moment from "moment";
 import { mapGetters } from "vuex";
 import Editor from "@/components/admin/Editor.vue";
 import ContestConfidentialSettings from '@/components/admin/ContestConfidentialSettings.vue';
+import ContestIdentitySettings from '@/components/admin/ContestIdentitySettings.vue';
 import { confidentialFormError } from '@/common/contestConfidentialForm';
 const RankBox = () => import("@/components/oj/common/RankBox");
 export default {
   name: "GroupContest",
   components: {
     ContestConfidentialSettings,
+    ContestIdentitySettings,
     RankBox,
     Editor,
   },

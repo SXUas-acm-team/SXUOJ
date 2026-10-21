@@ -79,7 +79,7 @@ class Database:
     TABLES = {"user_info", "user_role", "user_record", "role", "auth", "role_auth", "problem", "problem_count",
               "problem_language", "contest", "contest_problem", "announcement", "contest_announcement", "category",
               "discussion", "judge", "contest_record", "language", "group", "group_member",
-              "contest_access_policy", "contest_protected_resource"}
+              "contest_access_policy", "contest_protected_resource", "contest_identity_config", "contest_identity_binding"}
 
     def __init__(self, container, password, database):
         self.container, self.password, self.database = container, password, database

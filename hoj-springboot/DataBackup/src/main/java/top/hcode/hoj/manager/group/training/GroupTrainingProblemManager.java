@@ -60,7 +60,7 @@ public class GroupTrainingProblemManager {
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Training training = trainingEntityService.getById(tid);
 
@@ -98,7 +98,7 @@ public class GroupTrainingProblemManager {
         }
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Training training = trainingEntityService.getById(trainingProblem.getTid());
 
@@ -134,7 +134,7 @@ public class GroupTrainingProblemManager {
     public void deleteTrainingProblem(Long pid, Long tid) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Training training = trainingEntityService.getById(tid);
 
@@ -172,7 +172,7 @@ public class GroupTrainingProblemManager {
     public void addProblemFromPublic(TrainingProblemDTO trainingProblemDto) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Long pid = trainingProblemDto.getPid();
 
@@ -241,7 +241,7 @@ public class GroupTrainingProblemManager {
     public void addProblemFromGroup(String problemId, Long tid) throws StatusNotFoundException, StatusForbiddenException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Training training = trainingEntityService.getById(tid);
 

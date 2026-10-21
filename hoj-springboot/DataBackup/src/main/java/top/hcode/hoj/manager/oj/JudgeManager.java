@@ -356,7 +356,7 @@ public class JudgeManager {
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed(); // 是否为超级管理员
 
         validateSubmissionVisibility(judge, userRolesVo, isRoot);
         // Network addresses and internal judge host names are not public submission metadata.
@@ -509,7 +509,7 @@ public class JudgeManager {
         limit = top.hcode.hoj.utils.RequestLimits.pageSize(limit, 30);
         if (gid != null) {
             AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-            if (!SecurityUtils.getSubject().hasRole("root")
+            if (!top.hcode.hoj.utils.ContentAdmin.allowed()
                     && (user == null || !groupValidator.isGroupMember(user.getUid(), gid))) {
                 throw new StatusAccessDeniedException("请先加入该团队！");
             }
@@ -565,7 +565,7 @@ public class JudgeManager {
         for (Judge judge : judgeList) {
             try {
                 validateSubmissionVisibility(judge, (AccountProfile) SecurityUtils.getSubject().getPrincipal(),
-                        SecurityUtils.getSubject().hasRole("root"));
+                        top.hcode.hoj.utils.ContentAdmin.allowed());
             } catch (StatusAccessDeniedException e) {
                 continue;
             }
@@ -596,7 +596,7 @@ public class JudgeManager {
         }
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed(); // 是否为超级管理员
 
         Contest contest = contestEntityService.getById(submitIdListDto.getCid());
         try {
@@ -653,7 +653,7 @@ public class JudgeManager {
         }
         AccountProfile viewer = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         problemContentAccessValidator.validateProblemAccess(judge.getPid(), judge.getCid());
-        boolean privileged = SecurityUtils.getSubject().hasRole("root");
+        boolean privileged = top.hcode.hoj.utils.ContentAdmin.allowed();
         if (judge.getCid() != null && judge.getCid() != 0) {
             Contest current = contestEntityService.getById(judge.getCid());
             privileged = privileged || (viewer != null && current != null
@@ -665,7 +665,7 @@ public class JudgeManager {
         if (!privileged && (viewer == null || !Objects.equals(viewer.getUid(), judge.getUid()))) {
             throw new StatusForbiddenException("只能查看自己的测试点结果！");
         }
-        if (!SecurityUtils.getSubject().hasRole("root") && judge.getGid() != null && !isConfidentialSubmission(judge)
+        if (!top.hcode.hoj.utils.ContentAdmin.allowed() && judge.getGid() != null && !isConfidentialSubmission(judge)
                 && (viewer == null || !groupValidator.isGroupMember(viewer.getUid(), judge.getGid()))) {
             throw new StatusForbiddenException("无权访问该团队测试点结果！");
         }
@@ -693,7 +693,7 @@ public class JudgeManager {
             if (userRolesVo == null) { // 没有登录
                 wrapper.select("time", "memory", "score", "status", "user_output", "group_num", "seq", "mode");
             } else {
-                boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
+                boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed(); // 是否为超级管理员
                 if (!isRoot
                         && !SecurityUtils.getSubject().hasRole("admin")
                         && !SecurityUtils.getSubject().hasRole("problem_admin")) { // 不是管理员
@@ -704,7 +704,7 @@ public class JudgeManager {
             if (userRolesVo == null) {
                 throw new StatusForbiddenException("您还未登录！不可查看比赛提交的测试点详情！");
             }
-            boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
+            boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed(); // 是否为超级管理员
             if (!isRoot) {
                 Contest contest = contestEntityService.getById(judge.getCid());
                 // 如果不是比赛管理员 需要受到规则限制

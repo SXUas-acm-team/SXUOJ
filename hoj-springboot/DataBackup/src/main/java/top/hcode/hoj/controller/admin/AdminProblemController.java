@@ -49,7 +49,7 @@ public class AdminProblemController {
 
     @DeleteMapping("")
     @RequiresAuthentication
-    @RequiresRoles(value = {"root", "problem_admin"}, logical = Logical.OR)
+    @RequiresRoles(value = {"root", "admin", "problem_admin"}, logical = Logical.OR)
     public CommonResult<Void> deleteProblem(@RequestParam("pid") Long pid) {
         return adminProblemService.deleteProblem(pid);
     }

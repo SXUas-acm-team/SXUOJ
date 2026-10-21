@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import top.hcode.hoj.common.result.CommonResult;
+import top.hcode.hoj.annotation.AnonApi;
 
 import top.hcode.hoj.pojo.dto.LoginDTO;
 
@@ -28,6 +29,7 @@ public class AdminAccountController {
     private AdminAccountService adminAccountService;
 
     @PostMapping("/login")
+    @AnonApi
     public CommonResult<UserInfoVO> login(@Validated @RequestBody LoginDTO loginDto){
        return adminAccountService.login(loginDto);
     }

@@ -11,9 +11,9 @@ module.exports = {
     window.addEventListener('focus', this.refreshContestPermission)
     this.contestAccessTimer = setInterval(() => {
       const contest = this.$store.state.contest.contest
-      if (!contest.confidential) return
+      if (!contest.confidential && !contest.identityVerificationEnabled) return
       const wasSealed = this.$store.getters.isContestSealed
-      this.$store.commit('nowAdd1s')
+      if (contest.confidential || this.$options.name !== 'ContestDetails') this.$store.commit('nowAdd1s')
       this.contestAccessTicks += 1
       if (wasSealed !== this.$store.getters.isContestSealed || this.contestAccessTicks % 15 === 0) {
         this.refreshContestPermission()

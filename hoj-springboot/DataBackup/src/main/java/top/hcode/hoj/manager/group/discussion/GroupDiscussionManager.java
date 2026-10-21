@@ -70,7 +70,7 @@ public class GroupDiscussionManager {
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Group group = groupEntityService.getById(gid);
 
@@ -112,7 +112,7 @@ public class GroupDiscussionManager {
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Group group = groupEntityService.getById(gid);
 
@@ -152,7 +152,7 @@ public class GroupDiscussionManager {
         commonValidator.validateNotEmpty(discussion.getGid(), "讨论所属团队ID");
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -255,7 +255,7 @@ public class GroupDiscussionManager {
         Group group = groupEntityService.getById(gid);
 
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -287,7 +287,7 @@ public class GroupDiscussionManager {
     public void deleteDiscussion(Long did) throws StatusForbiddenException, StatusNotFoundException, StatusFailException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Discussion discussion = discussionEntityService.getById(did);
         if (discussion == null) {

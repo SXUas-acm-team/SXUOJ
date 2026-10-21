@@ -46,6 +46,8 @@ import java.util.stream.Collectors;
 @Component
 public class ContestManager {
 
+    @Autowired private ContestIdentityManager identityManager;
+
     @Autowired
     private ContestEntityService contestEntityService;
 
@@ -132,9 +134,10 @@ public class ContestManager {
     public ContestVO getContestInfo(Long cid) throws StatusFailException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         ContestVO contestInfo = contestEntityService.getContestInfoById(cid);
+        if (contestInfo != null) contestInfo.setIdentityVerificationEnabled(identityManager.enabled(cid));
         if (contestInfo == null) {
             throw new StatusFailException("对不起，该比赛不存在!");
         }
@@ -177,7 +180,7 @@ public class ContestManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Contest contest = contestEntityService.getByIdForUpdate(cid);
 
@@ -225,14 +228,14 @@ public class ContestManager {
             throw new StatusForbiddenException("请您先登录！");
         }
         return contestValidator.getAccess(contest, user,
-                SecurityUtils.getSubject().hasRole("root"));
+                top.hcode.hoj.utils.ContentAdmin.allowed());
     }
 
 
     public List<ContestProblemVO> getContestProblem(Long cid, Boolean isContainsContestEndJudge) throws StatusFailException, StatusForbiddenException {
 
         AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean root = SecurityUtils.getSubject().hasRole("root");
+        boolean root = top.hcode.hoj.utils.ContentAdmin.allowed();
         Contest contest = contestEntityService.getById(cid);
         // Open ranking is never a bypass for password or post-contest sealing.
         contestValidator.validateContestAuth(contest, user, root);
@@ -261,7 +264,7 @@ public class ContestManager {
         Contest contest = contestEntityService.getById(cid);
 
         // 超级管理员或者该比赛的创建者，则为比赛管理者
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         // 需要对该比赛做判断，是否处于开始或结束状态才可以获取题目列表，同时若是私有赛需要判断是否已注册（比赛管理员包括超级管理员可以直接获取）
         contestValidator.validateContestAuth(contest, userRolesVo, isRoot);
@@ -336,7 +339,7 @@ public class ContestManager {
         validateAuthenticatedQuery(contest, userRolesVo);
 
         // 是否为超级管理员或者该比赛的创建者，则为比赛管理者
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         // 需要对该比赛做判断，是否处于开始或结束状态才可以获取题目，同时若是私有赛需要判断是否已注册（比赛管理员包括超级管理员可以直接获取）
         contestValidator.validateContestAuth(contest, userRolesVo, isRoot);
@@ -453,7 +456,7 @@ public class ContestManager {
         validateAuthenticatedQuery(contest, userRolesVo);
 
         // 是否为超级管理员或者该比赛的创建者，则为比赛管理者
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         // 需要对该比赛做判断，是否处于开始或结束状态才可以获取题目，同时若是私有赛需要判断是否已注册（比赛管理员包括超级管理员可以直接获取）
         contestValidator.validateContestAuth(contest, userRolesVo, isRoot);
@@ -552,7 +555,7 @@ public class ContestManager {
         validateAuthenticatedQuery(contest, userRolesVo);
 
         // 超级管理员或者该比赛的创建者，则为比赛管理者
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         // 需要对该比赛做判断，是否处于开始或结束状态才可以获取题目，同时若是私有赛需要判断是否已注册（比赛管理员包括超级管理员可以直接获取）
         contestValidator.validateContestAuth(contest, userRolesVo, isRoot);
@@ -602,7 +605,7 @@ public class ContestManager {
         validateAuthenticatedQuery(contest, userRolesVo);
 
         // 超级管理员或者该比赛的创建者，则为比赛管理者
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         // 需要对该比赛做判断，是否处于开始或结束状态才可以获取题目，同时若是私有赛需要判断是否已注册（比赛管理员包括超级管理员可以直接获取）
         contestValidator.validateContestAuth(contest, userRolesVo, isRoot);
@@ -623,7 +626,7 @@ public class ContestManager {
             validateAuthenticatedQuery(contestEntityService.getById(cid),
                     (AccountProfile) SecurityUtils.getSubject().getPrincipal());
             contestValidator.validateContestAuth(contestEntityService.getById(cid),
-                    (AccountProfile) SecurityUtils.getSubject().getPrincipal(), SecurityUtils.getSubject().hasRole("root"));
+                    (AccountProfile) SecurityUtils.getSubject().getPrincipal(), top.hcode.hoj.utils.ContentAdmin.allowed());
         } catch (StatusFailException | StatusForbiddenException e) {
             return Collections.emptyList();
         }
@@ -670,7 +673,7 @@ public class ContestManager {
         }
 
         // 超级管理员或者该比赛的创建者，则为比赛管理者
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         // 需要对该比赛做判断，是否处于开始或结束状态才可以获取题目，同时若是私有赛需要判断是否已注册（比赛管理员包括超级管理员可以直接获取）
         contestValidator.validateContestAuth(contest, userRolesVo, isRoot);

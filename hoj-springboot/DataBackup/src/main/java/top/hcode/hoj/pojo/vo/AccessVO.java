@@ -18,4 +18,5 @@ public class AccessVO {
     private Boolean canSubmit;
     private String accessReason;
     private Boolean released;
+    private Boolean identityRequired;
 }

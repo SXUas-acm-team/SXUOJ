@@ -62,11 +62,16 @@ class ContestColorUpdateTest {
         assertThrows(StatusFailException.class, () -> manager.setContestProblem(new ContestProblem().setId(11L).setPid(4L)));
         verify(problems, never()).saveOrUpdate(any(ContestProblem.class));
     }
-    @Test void unrelatedAdminCannotManageAnotherOwnersContest() {
+    @Test void unrelatedProblemAdminCannotManageAnotherOwnersContest() {
         AccountProfile other = new AccountProfile(); other.setUid("other"); when(subject.getPrincipal()).thenReturn(other);
-        when(subject.hasRole("admin")).thenReturn(true);
+        when(subject.hasRole("problem_admin")).thenReturn(true);
         assertThrows(StatusFailException.class, () -> manager.setContestProblem(new ContestProblem().setId(11L).setColor("red")));
         verify(problems, never()).saveOrUpdate(any(ContestProblem.class));
+    }
+    @Test void globalContentAdminCanManageAnotherOwnersContest() throws Exception {
+        AccountProfile other = new AccountProfile(); other.setUid("other"); when(subject.getPrincipal()).thenReturn(other);
+        when(subject.hasRole("admin")).thenReturn(true);
+        assertEquals("red", manager.setContestProblem(new ContestProblem().setId(11L).setColor("red")).getColor());
     }
     @Test void missingRecordAndMissingAssociationAreRejected() {
         assertThrows(StatusFailException.class, () -> manager.setContestProblem(new ContestProblem().setId(99L)));

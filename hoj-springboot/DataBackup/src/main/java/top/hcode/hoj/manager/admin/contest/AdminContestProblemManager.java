@@ -64,7 +64,7 @@ public class AdminContestProblemManager {
     private void requireContestOwner(Long cid) throws StatusFailException {
         Contest contest = cid == null ? null : contestEntityService.getById(cid);
         AccountProfile user = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        if (contest == null || user == null || (!SecurityUtils.getSubject().hasRole("root")
+        if (contest == null || user == null || (!top.hcode.hoj.utils.ContentAdmin.allowed()
                 && !Objects.equals(user.getUid(), contest.getUid())
                 && !(Boolean.TRUE.equals(contest.getIsGroup()) && groupValidator.isGroupRoot(user.getUid(), contest.getGid())))) {
             throw new StatusFailException("无权管理该比赛！");
@@ -166,7 +166,7 @@ public class AdminContestProblemManager {
             // 获取当前登录的用户
             AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-            boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+            boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
             boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
             // 只有超级管理员和题目管理员、题目创建者才能操作
             if (!isRoot && !isProblemAdmin && !userRolesVo.getUsername().equals(problem.getAuthor())) {
@@ -237,7 +237,7 @@ public class AdminContestProblemManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         // 只有超级管理员和题目管理员、题目创建者才能操作
         if (!isRoot && !isProblemAdmin && !userRolesVo.getUsername().equals(problemDto.getProblem().getAuthor())) {

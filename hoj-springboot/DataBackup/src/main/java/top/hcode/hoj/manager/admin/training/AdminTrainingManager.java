@@ -87,7 +87,7 @@ public class AdminTrainingManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         // 是否为超级管理员
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         // 只有超级管理员和训练拥有者才能操作
         if (!isRoot && !userRolesVo.getUsername().equals(training.getAuthor())) {
             throw new StatusForbiddenException("对不起，你无权限操作！");
@@ -155,7 +155,7 @@ public class AdminTrainingManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         // 是否为超级管理员
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         // 只有超级管理员和训练拥有者才能操作
         Training oldTraining = trainingEntityService.getById(training.getId());
         if (oldTraining == null) throw new StatusFailException("该训练不存在！");
@@ -213,7 +213,7 @@ public class AdminTrainingManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         // 是否为超级管理员
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         // 只有超级管理员和训练拥有者才能操作
         Training existing = trainingEntityService.getById(tid);
         if (existing == null) throw new StatusFailException("该训练不存在！");

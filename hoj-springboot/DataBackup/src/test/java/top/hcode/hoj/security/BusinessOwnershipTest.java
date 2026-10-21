@@ -113,14 +113,16 @@ class BusinessOwnershipTest {
     }
     @Test void cloneCannotCopyAnotherOwnersContestSecrets() {
         when(subject.hasRole("problem_admin")).thenReturn(true);
-        AdminContestManager manager = new AdminContestManager(); ContestEntityService contests = mock(ContestEntityService.class);
+        AdminContestManager manager = new AdminContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class)); ContestEntityService contests = mock(ContestEntityService.class);
         inject(manager, "contestEntityService", contests);
         when(contests.getById(7L)).thenReturn(new Contest().setId(7L).setUid("victim").setPwd("secret").setTitle("contest"));
         assertThrows(StatusSystemErrorException.class, () -> manager.cloneContest(7L));
         verify(contests, never()).save(any(Contest.class));
     }
     @Test void contestProblemResponseScrubsSpecialJudgeAndJudgeOnlyFiles() throws Exception {
-        ContestManager manager = new ContestManager(); ContestEntityService contests = mock(ContestEntityService.class);
+        ContestManager manager = new ContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class)); ContestEntityService contests = mock(ContestEntityService.class);
         ContestProblemEntityService assignments = mock(ContestProblemEntityService.class); ProblemEntityService problems = mock(ProblemEntityService.class);
         ProblemLanguageEntityService problemLanguages = mock(ProblemLanguageEntityService.class); LanguageEntityService languages = mock(LanguageEntityService.class);
         CodeTemplateEntityService templates = mock(CodeTemplateEntityService.class); UserInfoEntityService users = mock(UserInfoEntityService.class);

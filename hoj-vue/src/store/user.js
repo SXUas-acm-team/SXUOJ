@@ -34,6 +34,8 @@ const getters = {
       return false;
     }
   },
+  isContentAdmin: (state, getters) => Array.isArray(getters.userInfo.roleList) &&
+    (getters.userInfo.roleList.includes(USER_TYPE.ADMIN) || getters.userInfo.roleList.includes(USER_TYPE.SUPER_ADMIN)),
   isSuperAdmin: (state, getters) => {
     if(getters.userInfo.roleList){
       return getters.userInfo.roleList.indexOf(USER_TYPE.SUPER_ADMIN) !=-1

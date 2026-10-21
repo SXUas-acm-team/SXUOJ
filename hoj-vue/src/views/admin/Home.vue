@@ -50,12 +50,12 @@
             $t('m.Admin_Tag')
           }}</el-menu-item>
            <el-menu-item index="/admin/group-problem/apply"
-           v-if="isSuperAdmin || isProblemAdmin"
+           v-if="isContentAdmin || isProblemAdmin"
            >{{$t('m.Admin_Group_Apply_Problem')}}
            </el-menu-item>
           <el-menu-item
             index="/admin/problem/batch-operation"
-            v-if="isSuperAdmin || isProblemAdmin"
+            v-if="isContentAdmin || isProblemAdmin"
             >{{ $t('m.Export_Import_Problem') }}</el-menu-item
           >
         </el-submenu>
@@ -318,7 +318,7 @@
               }}</mu-list-item-title>
             </mu-list-item>
             <mu-list-item
-              v-if="isSuperAdmin || isProblemAdmin"
+              v-if="isContentAdmin || isProblemAdmin"
               button
               :ripple="false"
               slot="nested"
@@ -330,7 +330,7 @@
             </mu-list-item>
 
             <mu-list-item
-              v-if="isSuperAdmin || isProblemAdmin"
+              v-if="isContentAdmin || isProblemAdmin"
               button
               :ripple="false"
               slot="nested"
@@ -595,7 +595,7 @@ export default {
     }
   },
   computed: {
-    ...mapGetters([
+    ...mapGetters(['isContentAdmin',
       'userInfo',
       'isSuperAdmin',
       'isProblemAdmin',
@@ -682,7 +682,8 @@ img {
   margin-left: 15%;
   padding-right: 30px;
   line-height: 50px;
-  height: 50px;
+  min-height: 50px;
+  height: auto;
   background: #f9fafc;
 }
 .footer {

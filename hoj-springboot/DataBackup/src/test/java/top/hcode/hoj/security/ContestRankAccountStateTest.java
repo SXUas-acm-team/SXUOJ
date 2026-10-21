@@ -49,7 +49,8 @@ class ContestRankAccountStateTest {
         when(users.getSuperAdminUidList()).thenAnswer(call -> new ArrayList<String>());
         filter = new ActiveContestUserFilter(); inject(filter, "userInfoEntityService", users);
         records = mock(ContestRecordEntityService.class);
-        calculator = new ContestCalculateRankManager(); inject(calculator, "userInfoEntityService", users);
+        calculator = new ContestCalculateRankManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(calculator, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class)); inject(calculator, "userInfoEntityService", users);
         inject(calculator, "activeContestUserFilter", filter); inject(calculator, "contestRecordEntityService", records);
         oldRedis = ReflectionTestUtils.getField(RedisUtils.class, "redisTemplate");
         template = mock(RedisTemplate.class); values = mock(ValueOperations.class);
@@ -140,7 +141,8 @@ class ContestRankAccountStateTest {
         ContestScrollBoardSubmissionVO blocked = new ContestScrollBoardSubmissionVO(); blocked.setUid("alice"); blocked.setSubmitTime(new Date(100));
         ContestScrollBoardSubmissionVO enabled = new ContestScrollBoardSubmissionVO(); enabled.setUid("bob"); enabled.setSubmitTime(new Date(200));
         when(judges.getContestScrollBoardSubmission(eq(7L), anyList())).thenReturn(Arrays.asList(blocked, enabled));
-        ContestScrollBoardManager scroll = new ContestScrollBoardManager(); inject(scroll, "contestEntityService", contests);
+        ContestScrollBoardManager scroll = new ContestScrollBoardManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(scroll, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class)); inject(scroll, "contestEntityService", contests);
         inject(scroll, "contestValidator", mock(ContestValidator.class)); inject(scroll, "judgeEntityService", judges);
         inject(scroll, "contestCalculateRankManager", calculator); inject(scroll, "activeContestUserFilter", filter);
         List<ContestScrollBoardSubmissionVO> feed = scroll.getContestScrollBoardSubmission(7L, false);

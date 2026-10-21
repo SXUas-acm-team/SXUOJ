@@ -60,7 +60,7 @@ public class TestCaseManager {
     public Map<Object, Object> uploadTestcaseZip(MultipartFile file, Long gid, String mode) throws StatusFailException, StatusSystemErrorException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -189,7 +189,7 @@ public class TestCaseManager {
     public void downloadTestcase(Long pid, HttpServletResponse response) throws StatusFailException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
 
         Problem problem = problemEntityService.getById(pid);

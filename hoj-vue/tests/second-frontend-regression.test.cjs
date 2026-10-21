@@ -290,7 +290,7 @@ test('contest registration suppresses double clicks and a changed session can re
   });
   const state = createState(component, { contestID: '1', contestPassword: 'secret',
     $route: { params: { contestID: '1' } }, userInfo: { uid: 'u1' },
-    $store: { getters: { sessionVersion: 1 }, commit() { grants++; } },
+    $store: { getters: { sessionVersion: 1 }, commit() { grants++; }, dispatch: async () => {} },
   });
   const old = state.checkPassword();
   state.checkPassword();

@@ -123,7 +123,7 @@ public class TrainingManager {
     public TrainingVO getTraining(Long tid) throws StatusFailException, StatusAccessDeniedException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         Training training = trainingEntityService.getById(tid);
         if (training == null || !training.getStatus()) {
@@ -206,7 +206,7 @@ public class TrainingManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        if (Boolean.TRUE.equals(training.getIsGroup()) && !SecurityUtils.getSubject().hasRole("root")
+        if (Boolean.TRUE.equals(training.getIsGroup()) && !top.hcode.hoj.utils.ContentAdmin.allowed()
                 && !groupValidator.isGroupMember(userRolesVo.getUid(), training.getGid())) {
             throw new StatusForbiddenException("无权注册该团队训练！");
         }

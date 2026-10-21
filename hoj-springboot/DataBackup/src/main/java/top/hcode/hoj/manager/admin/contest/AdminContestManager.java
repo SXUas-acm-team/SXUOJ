@@ -43,6 +43,8 @@ import java.util.Objects;
 @Slf4j(topic = "hoj")
 public class AdminContestManager {
 
+    @Autowired private top.hcode.hoj.manager.oj.ContestIdentityManager identityManager;
+
     @Autowired
     private ContestEntityService contestEntityService;
 
@@ -85,7 +87,7 @@ public class AdminContestManager {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
         // 是否为超级管理员
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
 
         // 只有超级管理员和比赛拥有者才能操作
         if (!isRoot && !userRolesVo.getUid().equals(contest.getUid())) {
@@ -123,8 +125,8 @@ public class AdminContestManager {
     @Transactional(rollbackFor = Exception.class)
     public void deleteContest(DeleteContestDTO request) throws StatusFailException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        if (userRolesVo == null || !SecurityUtils.getSubject().hasRole("root")) {
-            throw new StatusForbiddenException("对不起，只有超级管理员可以删除全站比赛！");
+        if (userRolesVo == null || !top.hcode.hoj.utils.ContentAdmin.allowed()) {
+            throw new StatusForbiddenException("对不起，只有管理员可以删除全站比赛！");
         }
         if (request == null || request.getCid() == null) {
             throw new StatusFailException("请在JSON请求正文中提供比赛ID及当前登录账号密码！");
@@ -134,6 +136,7 @@ public class AdminContestManager {
         if (stored == null) throw new StatusFailException("删除失败，该比赛不存在！");
         contestDeletionPasswordValidator.validate(userRolesVo, request.getPassword());
         contestAccessPolicyManager.deletePolicy(cid);
+        identityManager.delete(cid);
         boolean isOk = contestEntityService.removeById(cid);
         /*
         contest的id为其他表的外键的表中的对应数据都会被一起删除！
@@ -183,7 +186,7 @@ public class AdminContestManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        if (!SecurityUtils.getSubject().hasRole("root") && !Objects.equals(contest.getUid(), userRolesVo.getUid())) {
+        if (!top.hcode.hoj.utils.ContentAdmin.allowed() && !Objects.equals(contest.getUid(), userRolesVo.getUid())) {
             throw new StatusSystemErrorException("无权克隆其他用户的比赛！");
         }
         boolean confidential = contestAccessPolicyManager.isConfidential(contest);
@@ -213,7 +216,7 @@ public class AdminContestManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         // 是否为超级管理员
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         // 只有超级管理员和比赛拥有者才能操作
         Contest storedContest = contestEntityService.getByIdForUpdate(adminContestVo.getId());
         if (storedContest == null) throw new StatusFailException("比赛不存在！");
@@ -261,7 +264,7 @@ public class AdminContestManager {
         // 获取当前登录的用户
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         // 是否为超级管理员
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         // 只有超级管理员和比赛拥有者才能操作
         Contest storedContest = contestEntityService.getById(cid);
         if (storedContest == null) throw new StatusFailException("比赛不存在！");

@@ -90,7 +90,7 @@ public class ProtectedProblemResourceManager {
         if (contest == null || !contestAccessPolicyManager.isConfidential(contest)
                 || contestAccessPolicyManager.isReleased(contest)) return content;
         AccountProfile viewer = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean root = SecurityUtils.getSubject().hasRole("root");
+        boolean root = top.hcode.hoj.utils.ContentAdmin.allowed();
         try {
             contestValidator.validateContestAuth(contest, viewer, root);
         } catch (StatusFailException | StatusForbiddenException e) {

@@ -47,12 +47,14 @@ class BackendAuthorizationTest {
     }
     @Test void groupOutsiderCannotSubmitEvenAfterContestEnds() {
         ContestValidator validator = new ContestValidator();
+        org.springframework.test.util.ReflectionTestUtils.setField(validator, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(validator, "contestAccessPolicyManager", mock(ContestAccessPolicyManager.class));
         inject(validator, "groupValidator", mock(GroupValidator.class));
         assertThrows(StatusForbiddenException.class, () -> validator.validateJudgeAuth(contest(Constants.Contest.STATUS_ENDED.getCode()), user.getUid()));
     }
     @Test void anonymousPrivateContestReadIsDeniedWithoutNullDereference() {
         ContestValidator validator = new ContestValidator();
+        org.springframework.test.util.ReflectionTestUtils.setField(validator, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(validator, "contestAccessPolicyManager", mock(ContestAccessPolicyManager.class));
         inject(validator, "groupValidator", mock(GroupValidator.class));
         Contest privateContest = contest(Constants.Contest.STATUS_RUNNING.getCode()).setIsGroup(false).setAuth(1);
@@ -60,6 +62,7 @@ class BackendAuthorizationTest {
     }
     @Test void externalRankCannotReadPrivateContestOrScheduledContest() throws Exception {
         ContestValidator validator = new ContestValidator();
+        org.springframework.test.util.ReflectionTestUtils.setField(validator, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(validator, "contestAccessPolicyManager", mock(ContestAccessPolicyManager.class));
         ContestEntityService service = mock(ContestEntityService.class);
         inject(validator, "contestEntityService", service);

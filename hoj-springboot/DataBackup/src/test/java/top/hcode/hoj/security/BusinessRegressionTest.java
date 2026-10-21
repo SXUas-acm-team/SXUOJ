@@ -382,6 +382,7 @@ class BusinessRegressionTest {
 
     private GroupContestManager groupContestManager(ContestEntityService contests) {
         GroupContestManager manager = new GroupContestManager();
+        org.springframework.test.util.ReflectionTestUtils.setField(manager, "identityManager", org.mockito.Mockito.mock(top.hcode.hoj.manager.oj.ContestIdentityManager.class));
         inject(manager, "contestAccessPolicyManager", mock(top.hcode.hoj.manager.oj.ContestAccessPolicyManager.class));
         inject(manager, "contestEntityService", contests);
         inject(manager, "groupEntityService", groups);

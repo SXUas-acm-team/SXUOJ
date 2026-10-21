@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.shiro.SecurityUtils;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import top.hcode.hoj.common.exception.StatusFailException;
 import top.hcode.hoj.common.exception.StatusForbiddenException;
 import top.hcode.hoj.common.exception.StatusNotFoundException;
@@ -35,6 +36,8 @@ import java.util.Objects;
 @Component
 public class ContestScoreboardManager {
 
+    @Autowired private ContestIdentityManager identityManager;
+
     @Resource
     private ContestEntityService contestEntityService;
 
@@ -58,9 +61,9 @@ public class ContestScoreboardManager {
 
     private void validateOutsideAccess(Contest contest) throws StatusForbiddenException {
         AccountProfile viewer = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
-        boolean root = SecurityUtils.getSubject().hasRole("root");
+        boolean root = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean confidential = contestValidator.isConfidential(contest);
-        if (confidential) {
+        if (confidential || identityManager.enabled(contest.getId())) {
             try { contestValidator.validateContestAuth(contest, viewer, root); }
             catch (StatusFailException e) { throw new StatusForbiddenException(e.getMessage()); }
             if (contestValidator.isReleased(contest) || contestValidator.isContestAdmin(contest, viewer, root)) return;
@@ -76,6 +79,7 @@ public class ContestScoreboardManager {
     public ContestOutsideInfoVO getContestOutsideInfo(Long cid) throws StatusNotFoundException, StatusForbiddenException {
 
         ContestVO contestInfo = contestEntityService.getContestInfoById(cid);
+        if (contestInfo != null) contestInfo.setIdentityVerificationEnabled(identityManager.enabled(cid));
         Contest definition = contestEntityService.getById(cid);
 
         if (contestInfo == null || definition == null || !Boolean.TRUE.equals(definition.getVisible())) {
@@ -141,7 +145,7 @@ public class ContestScoreboardManager {
 
         if (userRolesVo != null) {
             currentUid = userRolesVo.getUid();
-            isRoot = SecurityUtils.getSubject().hasRole("root");
+            isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
             // 不是比赛创建者或者超管无权限开启强制实时榜单
             if (!isRoot && !contest.getUid().equals(currentUid)) {
                 forceRefresh = false;

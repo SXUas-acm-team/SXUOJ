@@ -37,7 +37,7 @@ const getters = {
   },
   isContestAdmin: (state, getters, _, rootGetters) => {
     return rootGetters.isAuthenticated &&
-      (state.contest.author === rootGetters.userInfo.username || rootGetters.isSuperAdmin || state.groupContestAuth == 5 ||
+      (state.contest.author === rootGetters.userInfo.username || rootGetters.isSuperAdmin || rootGetters.isContentAdmin || state.groupContestAuth == 5 ||
         !!(state.access && state.access.accessReason === 'ADMIN'))
   },
   isContainsAfterContestJudge: (state, getters) => {
@@ -51,7 +51,7 @@ const getters = {
     if (state.contest.id == null) return false
     if (getters.isContestAdmin || getters.isContestReleased) return true
     if (getters.isContestSealed || getters.contestStatus === CONTEST_STATUS.SCHEDULED) return false
-    if (state.contest.confidential) return !!(state.access && state.access.canViewProblems)
+    if (state.contest.confidential || state.contest.identityVerificationEnabled) return !!(state.access && state.access.canViewProblems)
     return state.contest.auth !== CONTEST_TYPE.PRIVATE || state.intoAccess
   },
   contestAccessReason: (state, getters) => getters.isContestSealed ? 'SEALED' :
@@ -60,7 +60,7 @@ const getters = {
      if (getters.isContestAdmin) return true
      if (getters.isContestReleased) return rootGetters.isAuthenticated
      if (getters.isContestSealed) return false
-     if (state.contest.confidential) return !!(state.access && state.access.canSubmit) && rootGetters.isAuthenticated
+     if (state.contest.confidential || state.contest.identityVerificationEnabled) return !!(state.access && state.access.canSubmit) && rootGetters.isAuthenticated
      return state.intoAccess||state.submitAccess || state.contest.auth === CONTEST_TYPE.PUBLIC ||getters.isContestAdmin
   },
   contestMenuDisabled: (state, getters) => {
@@ -87,7 +87,7 @@ const getters = {
   },
   problemSubmitDisabled: (state, getters, _, rootGetters) => {
     if (!rootGetters.isAuthenticated) return true
-    if (state.contest.confidential) return !getters.canSubmit
+    if (state.contest.confidential || state.contest.identityVerificationEnabled) return !getters.canSubmit
     // 比赛结束不可交题, 除非开启了允许
     if (getters.contestStatus === CONTEST_STATUS.ENDED) {
       return !state.contest.allowEndSubmit
@@ -299,9 +299,9 @@ const actions = {
       if (contest.gid && context.rootGetters.isAuthenticated) {
         dispatch('getGroupContestAuth', { gid: contest.gid }).catch(() => {})
       }
-      if (contest.confidential || contest.auth === CONTEST_TYPE.PRIVATE || contest.auth === CONTEST_TYPE.PROTECTED) {
+      if (contest.confidential || contest.identityVerificationEnabled || contest.auth === CONTEST_TYPE.PRIVATE || contest.auth === CONTEST_TYPE.PROTECTED) {
         const access = dispatch('getContestAccess', { auth: contest.auth })
-        if (contest.confidential) return access.then(() => res).catch(() => res)
+        if (contest.confidential || contest.identityVerificationEnabled) return access.then(() => res).catch(() => res)
         access.catch(() => {})
       }
       return res
@@ -317,7 +317,7 @@ const actions = {
         if (Array.isArray(res.data.data.problemList)) {
           context.commit('changeContestProblems', { contestProblems: res.data.data.problemList })
         }
-        if (contest.confidential) return context.dispatch('getContestAccess').then(() => res)
+        if (contest.confidential || contest.identityVerificationEnabled) return context.dispatch('getContestAccess').then(() => res)
       }
       return res
     })
@@ -346,7 +346,7 @@ const actions = {
       }
       return res
     }, err => {
-      if (request.current() && context.state.contest.confidential) context.commit('denyContestAccess')
+      if (request.current() && (context.state.contest.confidential || context.state.contest.identityVerificationEnabled)) context.commit('denyContestAccess')
       throw err
     })
   },
@@ -358,7 +358,7 @@ const actions = {
       context.commit('now', { now: moment(res.data.data.now) })
       return context.dispatch('getContestAccess').then(() => res)
     }).catch(err => {
-      if (request.current() && context.state.contest.confidential) context.commit('denyContestAccess')
+      if (request.current() && (context.state.contest.confidential || context.state.contest.identityVerificationEnabled)) context.commit('denyContestAccess')
       throw err
     })
   },

@@ -177,7 +177,7 @@ public class ProblemManager {
         boolean isSealRank = false;
         if (!isACMContest && CollectionUtil.isNotEmpty(judges)) {
             isSealRank = contestValidator.isSealRank(userRolesVo.getUid(), contest, false,
-                    SecurityUtils.getSubject().hasRole("root"));
+                    top.hcode.hoj.utils.ContentAdmin.allowed());
         }
         for (Judge judge : judges) {
 
@@ -269,7 +269,7 @@ public class ProblemManager {
             throw new StatusForbiddenException("该题号对应题目并非公开题目，不支持访问！");
         }
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
         if (problem.getIsGroup() && !isRoot) {
             if (gid == null) {
@@ -343,12 +343,12 @@ public class ProblemManager {
         if (cid != 0) {
             Contest contest = contestEntityService.getById(cid);
             try {
-                contestValidator.validateContestAuth(contest, userRolesVo, SecurityUtils.getSubject().hasRole("root"));
+                contestValidator.validateContestAuth(contest, userRolesVo, top.hcode.hoj.utils.ContentAdmin.allowed());
             } catch (StatusFailException e) {
                 throw new StatusForbiddenException("该比赛不可访问！");
             }
             if (contest == null || contestValidator.isSealRank(userRolesVo.getUid(), contest, false,
-                    SecurityUtils.getSubject().hasRole("root"))) {
+                    top.hcode.hoj.utils.ContentAdmin.allowed())) {
                 LastAcceptedCodeVO hidden = new LastAcceptedCodeVO();
                 hidden.setCode("");
                 return hidden;
@@ -378,7 +378,7 @@ public class ProblemManager {
     private String buildCode(Judge judge) {
         if (judge.getCid() == 0) {
             // 比赛外的提交代码 如果不是超管或题目管理员，需要检查网站是否开启隐藏代码功能
-            boolean isRoot = SecurityUtils.getSubject().hasRole("root"); // 是否为超级管理员
+            boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed(); // 是否为超级管理员
             boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");// 是否为题目管理员
             if (!isRoot && !isProblemAdmin) {
                 try {

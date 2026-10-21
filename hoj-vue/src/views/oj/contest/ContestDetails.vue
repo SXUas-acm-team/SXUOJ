@@ -142,6 +142,15 @@
           <el-button type="primary" :loading="btnLoading" @click="checkPassword">{{ $t('m.Enter') }}</el-button>
         </el-form>
       </el-card>
+      <el-card v-if="contestAccessReason === 'IDENTITY_REQUIRED' && isAuthenticated" style="margin-bottom:15px">
+        <h3>竞赛入场核验</h3>
+        <p>请输入学号和姓名完成核验。成功后本场比赛不可更换绑定身份，同一学号不能重复绑定其他账号。</p>
+        <el-form @submit.native.prevent="verifyIdentity">
+          <el-form-item label="学号"><el-input v-model="identityStudentNumber" maxlength="64" autocomplete="off" /></el-form-item>
+          <el-form-item label="姓名"><el-input v-model="identityName" maxlength="128" autocomplete="off" /></el-form-item>
+          <el-button type="primary" :loading="identityBusy" @click="verifyIdentity">核验并进入比赛</el-button>
+        </el-form>
+      </el-card>
       <!-- 判断是否需要密码验证 -->
 
       <el-tabs v-if="!contestMenuDisabled" @tab-click="tabClick" v-model="route_name">
@@ -284,7 +293,7 @@
           name="ContestRejudgeAdmin"
           lazy
           :disabled="contestMenuDisabled"
-          v-if="isSuperAdmin"
+          v-if="isContentAdmin"
         >
           <span slot="label"
             ><i class="el-icon-refresh" aria-hidden="true"></i>&nbsp;{{
@@ -357,6 +366,9 @@ export default {
       RULE_TYPE: {},
       btnLoading: false,
       contestPassword: '',
+      identityStudentNumber: '',
+      identityName: '',
+      identityBusy: false,
     };
   },
   created() {
@@ -457,6 +469,24 @@ export default {
         return time.secondFormat(this.contest.duration);
       }
     },
+    async verifyIdentity() {
+      if (this.identityBusy) return;
+      const cid = this.contestID;
+      const version = this.contestRequestVersion;
+      const uid = this.userInfo.uid;
+      const session = this.$store.getters.sessionVersion;
+      const current = () => !this.contestViewDestroyed && version === this.contestRequestVersion &&
+        String(this.$route.params.contestID) === String(cid) && this.userInfo.uid === uid && this.$store.getters.sessionVersion === session;
+      this.identityBusy = true;
+      try {
+        await api.verifyContestIdentity({ cid, studentNumber: this.identityStudentNumber, name: this.identityName });
+        if (!current()) return;
+        this.identityStudentNumber = ''; this.identityName = '';
+        await this.$store.dispatch('refreshContestAccess');
+        if (current()) myMessage.success('学号姓名核验通过');
+      } catch (_) { /* The shared client displays validation errors. */ }
+      finally { if (current()) this.identityBusy = false; }
+    },
     checkPassword() {
       if (this.btnLoading) return;
       if (this.contestPassword === '') {
@@ -476,7 +506,7 @@ export default {
           if (!current()) return;
           myMessage.success(this.$i18n.t('m.Register_contest_successfully'));
            this.$store.commit('contestIntoAccess', { intoAccess: true });
-           if (this.contest && this.contest.confidential) this.$store.dispatch('getContestAccess').catch(() => {});
+           this.$store.dispatch('getContestAccess').catch(() => {});
           this.btnLoading = false;
         },
         (res) => {
@@ -519,7 +549,7 @@ export default {
       'isShowContestSetting',
       'BeginToNowDuration',
       'isContestAdmin',
-      'isSuperAdmin',
+      'isContentAdmin',
       'ContestRealTimePermission',
       'passwordFormVisible',
       'userInfo',
@@ -565,6 +595,9 @@ export default {
     },
   },
   watch: {
+    contestSessionVersion() {
+      this.identityStudentNumber = ''; this.identityName = ''; this.identityBusy = false;
+    },
     $route(newVal) {
       this.route_name = newVal.name;
       if (newVal.name == 'ContestProblemDetails') {
@@ -574,6 +607,7 @@ export default {
       }
       const cid = newVal.params.contestID;
       if (String(cid) !== String(this.contestID)) {
+        this.identityStudentNumber = ''; this.identityName = ''; this.identityBusy = false;
         this.contestRequestVersion += 1;
         this.clearContestTimers();
         this.$store.commit('clearContest');

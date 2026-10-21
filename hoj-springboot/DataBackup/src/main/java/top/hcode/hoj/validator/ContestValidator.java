@@ -47,6 +47,9 @@ public class ContestValidator {
     @Resource
     private ContestAccessPolicyManager contestAccessPolicyManager;
 
+    @Resource
+    private top.hcode.hoj.manager.oj.ContestIdentityManager identityManager;
+
     public boolean isConfidential(Contest contest) {
         return contestAccessPolicyManager.isConfidential(contest);
     }
@@ -57,7 +60,7 @@ public class ContestValidator {
 
     public boolean isContestAdmin(Contest contest, AccountProfile user, boolean root) {
         String uid = user == null ? null : user.getUid();
-        return root || (uid != null && Objects.equals(contest.getUid(), uid))
+        return root || top.hcode.hoj.utils.ContentAdmin.allowed() || (uid != null && Objects.equals(contest.getUid(), uid))
                 || (uid != null && Boolean.TRUE.equals(contest.getIsGroup())
                 && groupValidator.isGroupRoot(uid, contest.getGid()));
     }
@@ -142,6 +145,7 @@ public class ContestValidator {
             if (!hasPasswordAccess(contest, userRolesVo)) {
                 throw new StatusForbiddenException("请先登录并输入比赛密码！");
             }
+            identityManager.requireVerified(contest, userRolesVo);
             return;
         }
         int status = contest.getStatus();
@@ -162,6 +166,7 @@ public class ContestValidator {
                 && !Objects.equals(contest.getAuth(), Constants.Contest.AUTH_PROTECT.getCode())) {
             throw new StatusForbiddenException("比赛权限配置无效！");
         }
+        identityManager.requireVerified(contest, userRolesVo);
     }
 
 
@@ -210,6 +215,8 @@ public class ContestValidator {
         boolean released = confidential && isReleased(contest);
         access.setReleased(released);
         boolean admin = isContestAdmin(contest, user, root);
+        boolean identityRequired = !admin && !released && identityManager.required(contest, user);
+        access.setIdentityRequired(identityRequired);
         int status = confidential ? contestAccessPolicyManager.currentStatus(contest, new Date()) : contest.getStatus();
         access.setCanViewProblems(false);
         access.setCanSubmit(false);
@@ -224,7 +231,9 @@ public class ContestValidator {
                 validateContestAuth(contest, user, root);
                 access.setCanViewProblems(true);
             } catch (StatusForbiddenException e) {
-                access.setAccessReason(user == null ? "LOGIN_REQUIRED" : "PASSWORD_REQUIRED");
+                access.setAccessReason(user == null ? "LOGIN_REQUIRED" :
+                        identityRequired && (!Integer.valueOf(1).equals(contest.getAuth()) || hasPasswordAccess(contest, user))
+                        ? "IDENTITY_REQUIRED" : "PASSWORD_REQUIRED");
             }
             if (user != null) {
                 try { validateJudgeAuth(contest, user, root); access.setCanSubmit(true); }

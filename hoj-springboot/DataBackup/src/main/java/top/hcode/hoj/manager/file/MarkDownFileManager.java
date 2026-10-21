@@ -40,7 +40,7 @@ public class MarkDownFileManager {
     public Map<Object, Object> uploadMDImg(MultipartFile image, Long gid) throws StatusFailException, StatusSystemErrorException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 
@@ -102,7 +102,7 @@ public class MarkDownFileManager {
             throw new StatusForbiddenException("错误：不支持删除！");
         }
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
 
         Long gid = file.getGid();
@@ -125,7 +125,7 @@ public class MarkDownFileManager {
     public Map<Object, Object> uploadMd(MultipartFile file, Long gid) throws StatusFailException, StatusSystemErrorException, StatusForbiddenException {
         AccountProfile userRolesVo = (AccountProfile) SecurityUtils.getSubject().getPrincipal();
 
-        boolean isRoot = SecurityUtils.getSubject().hasRole("root");
+        boolean isRoot = top.hcode.hoj.utils.ContentAdmin.allowed();
         boolean isProblemAdmin = SecurityUtils.getSubject().hasRole("problem_admin");
         boolean isAdmin = SecurityUtils.getSubject().hasRole("admin");
 

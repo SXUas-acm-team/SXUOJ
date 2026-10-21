@@ -73,7 +73,7 @@ jobs:
   publish:
     name: Publish backend image
     needs: verify
-    if: github.event_name != 'pull_request' && vars.DOCKERHUB_USERNAME != ''
+    if: startsWith(github.ref, 'refs/tags/v') && vars.DOCKERHUB_USERNAME != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -88,7 +88,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
         run: |
           echo "name=${DOCKERHUB_USERNAME,,}/sxuoj-backend" >> "$GITHUB_OUTPUT"
-          echo "release_tag=${GITHUB_REF_NAME#codex/}" >> "$GITHUB_OUTPUT"
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "Use a version tag such as v1.1.0" >&2; exit 1; }
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -96,19 +96,14 @@ jobs:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Create commit, release and default-branch tags
+      - name: Create version image tag
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ steps.image.outputs.name }}
           flavor: latest=false
           tags: |
-            type=sha,format=long
-            type=raw,value=${{ steps.image.outputs.release_tag }},enable=${{ startsWith(github.ref, 'refs/heads/codex/contest-security-') }}
             type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
       - name: Push main backend image (judge runtime is managed separately)
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:

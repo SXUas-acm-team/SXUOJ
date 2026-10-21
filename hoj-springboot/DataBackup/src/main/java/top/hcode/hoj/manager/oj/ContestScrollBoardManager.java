@@ -37,16 +37,18 @@ import java.util.stream.Collectors;
 @Component
 public class ContestScrollBoardManager {
 
+    @Resource private ContestIdentityManager identityManager;
+
     @Resource
     private ContestValidator contestValidator;
 
     private void validateConfidentialAccess(Contest contest) throws StatusFailException {
         if (!Boolean.TRUE.equals(contest.getVisible())) throw new StatusFailException("比赛不存在！");
-        if (contestValidator.isConfidential(contest)) {
+        if (contestValidator.isConfidential(contest) || identityManager.enabled(contest.getId())) {
             try {
                 contestValidator.validateContestAuth(contest,
                         (AccountProfile) SecurityUtils.getSubject().getPrincipal(),
-                        SecurityUtils.getSubject().hasRole("root"));
+                        top.hcode.hoj.utils.ContentAdmin.allowed());
             } catch (StatusForbiddenException e) { throw new StatusFailException(e.getMessage()); }
         }
     }
@@ -117,6 +119,7 @@ public class ContestScrollBoardManager {
         info.setBalloonColor(balloonColor);
         info.setRankShowName(contest.getRankShowName());
         info.setStarUserList(starAccountToList(contest.getStarAccount()));
+        info.getStarUserList().addAll(identityManager.automaticStarAccounts(cid));
         info.setStartTime(contest.getStartTime());
         info.setSealRankTime(contest.getSealRankTime());
 
@@ -169,6 +172,11 @@ public class ContestScrollBoardManager {
         submissions = submissions.stream()
                 .filter(submission -> submission.getSubmitTime().getTime() < contest.getEndTime().getTime())
                 .collect(Collectors.toList());
-        return activeContestUserFilter.filterActive(submissions, ContestScrollBoardSubmissionVO::getUid);
+        submissions = activeContestUserFilter.filterActive(submissions, ContestScrollBoardSubmissionVO::getUid);
+        HashMap<String, Boolean> automaticStars = new HashMap<>();
+        identityManager.decorateRanks(cid, submissions, ContestScrollBoardSubmissionVO::getUid,
+                ContestScrollBoardSubmissionVO::getUsername, ContestScrollBoardSubmissionVO::setRealname, automaticStars);
+        if (removeStar) submissions.removeIf(row -> automaticStars.containsKey(top.hcode.hoj.utils.RequestLimits.normalizeAccount(row.getUsername())));
+        return submissions;
     }
 }

@@ -18,6 +18,8 @@ import java.util.Date;
 @Data
 public class ContestVO implements Serializable {
 
+    private Boolean identityVerificationEnabled;
+
     @TableId(value = "比赛id", type = IdType.AUTO)
     private Long id;
 
