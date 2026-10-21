@@ -1,0 +1,24 @@
+{
+  "tag": "contest-security-20261021.1",
+  "source_commit": "928519aa0900d36045ee63825a5161faa22480ff",
+  "frontend": {
+    "reference": "yunyunjuan/sxuoj-frontend:contest-security-20261021.1",
+    "digest": "sha256:81fc9568273d8eecf0ddb4a6a86548e403797d967f3118141ad9465ac7d3d308",
+    "platform": "linux/amd64"
+  },
+  "backend": {
+    "reference": "yunyunjuan/sxuoj-backend:contest-security-20261021",
+    "changed": false
+  },
+  "database_migration_required": false,
+  "validation": {
+    "frontend_tests_passed": 120,
+    "production_build_passed": true,
+    "local_frontend_healthy": true,
+    "real_problem_computed_style": {
+      "background_color": "rgb(255, 255, 255)",
+      "color": "rgb(31, 35, 40)",
+      "color_scheme": "light"
+    }
+  }
+}
