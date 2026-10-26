@@ -69,7 +69,14 @@ public class AdminUserManager {
         return userRoleEntityService.getUserList(limit, currentPage, keyword, onlyAdmin);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void editUser(AdminEditUserDTO adminEditUserDto) throws StatusFailException {
+
+        if (adminEditUserDto == null || adminEditUserDto.getType() == null
+                || adminEditUserDto.getStatus() == null || adminEditUserDto.getSetNewPwd() == null
+                || !StringUtils.hasText(adminEditUserDto.getUid()) || !StringUtils.hasText(adminEditUserDto.getUsername())) {
+            throw new StatusFailException("用户信息不完整，请刷新后重试。");
+        }
 
         String username = adminEditUserDto.getUsername();
         String uid = adminEditUserDto.getUid();
@@ -125,6 +132,12 @@ public class AdminUserManager {
         QueryWrapper<UserRole> userRoleQueryWrapper = new QueryWrapper<>();
         userRoleQueryWrapper.eq("uid", uid);
         UserRole userRole = userRoleEntityService.getOne(userRoleQueryWrapper, false);
+        if (userRole == null || userRole.getRoleId() == null) {
+            throw new StatusFailException("用户角色不存在，请刷新后重试。");
+        }
+        if (type != userRole.getRoleId().longValue() && (type < 1000 || type > 1008)) {
+            throw new StatusFailException("请选择有效的用户角色。");
+        }
         boolean changeUserRole = false;
         int oldType = userRole.getRoleId().intValue();
         if (userRole.getRoleId().intValue() != type) {

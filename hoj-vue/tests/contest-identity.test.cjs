@@ -36,6 +36,24 @@ function stateFor(component, extra = {}) {
 }
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 
+test('scheduled identity entry uses its independent gate and keeps password entry first', () => {
+  const component = load('views/oj/contest/ContestDetails.vue');
+  const state = { isAuthenticated: true, passwordFormVisible: false,
+    $store: { state: { contest: { access: { identityRequired: true, accessReason: 'SCHEDULED', canSubmit: false } } } } };
+  assert.equal(component.computed.identityEntryVisible.call(state), true);
+  state.passwordFormVisible = true;
+  assert.equal(component.computed.identityEntryVisible.call(state), false);
+  state.passwordFormVisible = false; state.$store.state.contest.access.identityRequired = false;
+  assert.equal(component.computed.identityEntryVisible.call(state), false);
+});
+
+test('administrator selection normalizes serialized role IDs and custom roles do not become default users', () => {
+  const component = load('views/admin/general/User.vue');
+  assert.equal(component.methods.getRole([{ id: '1001' }]), 1001);
+  assert.equal(component.methods.getRole([{ id: '584510778' }]), 584510778);
+  assert.equal(component.methods.getRole([]), null);
+});
+
 test('an unverified user may read a public contest while its server submission gate remains closed', () => {
   const store = load('store/contest.js');
   const state = { contest: { id: 7, auth: 0, status: 0, identityVerificationEnabled: true }, access: null };

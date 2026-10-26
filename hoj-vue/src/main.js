@@ -51,6 +51,7 @@ import 'github-markdown-css/github-markdown-light.css'
 Vue.use(safeHtmlPlugin)
 
 import router from './router'
+import { startFrontendUpdates } from '@/common/frontendUpdates'
 
 Object.keys(filters).forEach(key => {   // 注册全局过滤器
   Vue.filter(key, filters[key])
@@ -85,3 +86,12 @@ new Vue({
   i18n,
   render: h => h(App)
 }).$mount('#app')
+
+if (process.env.NODE_ENV === 'production') {
+  startFrontendUpdates({ version: process.env.VUE_APP_BUILD_VERSION, router,
+    onDeferred() {
+      Vue.prototype.$notify.info({ title: '网站已更新',
+        message: '保存当前编辑并离开此页面后，将自动加载新版。', duration: 0 });
+    },
+  })
+}

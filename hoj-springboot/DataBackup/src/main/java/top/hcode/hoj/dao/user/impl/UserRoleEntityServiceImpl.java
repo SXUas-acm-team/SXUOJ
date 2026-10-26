@@ -113,7 +113,7 @@ public class UserRoleEntityServiceImpl extends ServiceImpl<UserRoleMapper, UserR
     }
 
 
-    private final static List<String> ChineseRole = Arrays.asList("超级管理员", "普通管理员",
+    private final static List<String> ChineseRole = Arrays.asList("超级管理员", "管理员",
             "普通用户(默认)", "普通用户(禁止提交)", "普通用户(禁止发讨论)", "普通用户(禁言)", "普通用户(禁止提交&禁止发讨论)",
             "用户(禁止提交&禁言)", "题目管理员");
 
@@ -125,17 +125,21 @@ public class UserRoleEntityServiceImpl extends ServiceImpl<UserRoleMapper, UserR
     @Override
     public String getAuthChangeContent(int oldType, int newType) {
         String msg = "您好，您的权限产生了变更，由【" +
-                ChineseRole.get(oldType - 1000) +
+                roleLabel(oldType, ChineseRole, "自定义角色") +
                 "】变更为【" +
-                ChineseRole.get(newType - 1000) +
+                roleLabel(newType, ChineseRole, "自定义角色") +
                 "】。部分权限可能与之前有所不同，请您注意！" +
                 "\n\n" +
                 "Hello, your permission has been changed from 【" +
-                EnglishRole.get(oldType - 1000) +
+                roleLabel(oldType, EnglishRole, "Custom role") +
                 "】 to 【" +
-                EnglishRole.get(newType - 1000) +
+                roleLabel(newType, EnglishRole, "Custom role") +
                 "】. Some permissions may be different from before. Please note!";
         return msg;
+    }
+
+    private static String roleLabel(int type, List<String> labels, String fallback) {
+        return type >= 1000 && type <= 1008 ? labels.get(type - 1000) : fallback;
     }
 
 }

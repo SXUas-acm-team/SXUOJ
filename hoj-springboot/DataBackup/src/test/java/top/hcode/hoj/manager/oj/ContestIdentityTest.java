@@ -116,6 +116,27 @@ class ContestIdentityTest {
     @Test void publishedContestDoesNotRequireVerification() {
         when(policies.isReleased(contest)).thenReturn(true); assertFalse(manager.required(contest, null));
     }
+    @Test void scheduledContestAllowsIdentityAndInvitationWithoutOpeningProblems() throws Exception {
+        contest.setStatus(-1);
+        when(policies.currentStatus(eq(contest), any())).thenReturn(-1);
+        when(policies.isConfidential(contest)).thenReturn(true);
+        ContestRegisterEntityService registrations = mock(ContestRegisterEntityService.class);
+        when(registrations.getOne(any(Wrapper.class), eq(false))).thenReturn(new ContestRegister().setStatus(0));
+        inject(manager, "registrations", registrations);
+        assertTrue(manager.required(contest, user));
+        when(client.verify(config.getApiUrl(), "private-key", "00201234", "姓名")).thenReturn(true);
+        manager.verify(input); verify(writer).bind(config, "student", "00201234", "姓名");
+        ContestIdentityInvitation invitation = new ContestIdentityInvitation();
+        invitation.setPasswordHash(ContestInvitationPassword.hash("scheduled-invite"));
+        when(invitations.selectById(7L)).thenReturn(invitation);
+        ContestIdentityInvitationDTO dto = new ContestIdentityInvitationDTO(); dto.setCid(7L); dto.setPassword("scheduled-invite");
+        manager.acceptInvitation(dto); verify(exemptions).insert(any());
+        ContestValidator validator = new ContestValidator(); inject(validator, "identityManager", manager);
+        inject(validator, "contestAccessPolicyManager", policies); inject(validator, "contestRegisterEntityService", registrations);
+        AccessVO access = validator.getAccess(contest, user, false);
+        assertTrue(access.getIdentityRequired()); assertFalse(access.getCanViewProblems()); assertFalse(access.getCanSubmit());
+        assertEquals("SCHEDULED", access.getAccessReason());
+    }
     @Test void identityOnlyStopsRunningContestSubmissionsAndNeverOrdinaryReads() throws Exception {
         ContestValidator validator = new ContestValidator(); inject(validator, "identityManager", manager);
         inject(validator, "contestAccessPolicyManager", policies); inject(validator, "groupValidator", mock(GroupValidator.class));

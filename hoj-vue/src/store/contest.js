@@ -54,6 +54,10 @@ const getters = {
     if (state.contest.confidential || state.contest.identityVerificationEnabled) return !!(state.access && state.access.canViewProblems)
     return state.contest.auth !== CONTEST_TYPE.PRIVATE || state.intoAccess
   },
+  canViewContestDescription: (state, getters) => {
+    if (state.contest.id == null) return false
+    return state.contest.confidential ? getters.canViewContest : true
+  },
   contestAccessReason: (state, getters) => getters.isContestSealed ? 'SEALED' :
     (state.access && state.access.accessReason) || (getters.contestStatus === CONTEST_STATUS.SCHEDULED ? 'SCHEDULED' : 'PASSWORD_REQUIRED'),
   canSubmit:(state, getters, _, rootGetters)=>{

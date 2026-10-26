@@ -21,7 +21,12 @@ location /api/ {
 }
 
 location = /index.html {
-    add_header Cache-Control 'no-store';
+    add_header Cache-Control 'no-store' always;
+}
+
+location = /version.json {
+    try_files $uri =404;
+    add_header Cache-Control 'no-store' always;
 }
 
 location /assets/ {
@@ -35,4 +40,5 @@ location = /scrollBoard {
 
 location / {
     try_files $uri $uri/ /index.html;
+    add_header Cache-Control 'no-store' always;
 }

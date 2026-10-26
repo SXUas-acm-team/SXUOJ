@@ -58,6 +58,86 @@ function createState(component, extra = {}) {
   return state;
 }
 
+test('ordinary scheduled contests show their overview while problems and submissions remain locked', () => {
+  for (const auth of [0, 1, 2]) {
+    const f = fixture({ confidential: false, status: -1, auth, description: '赛前参赛说明' });
+    assert.equal(f.getters.canViewContestDescription, true);
+    assert.equal(f.getters.canViewContest, false);
+    assert.equal(f.getters.contestMenuDisabled, true);
+    assert.equal(f.getters.problemSubmitDisabled, true);
+  }
+  const f = fixture({ confidential: false, status: -1, identityVerificationEnabled: true });
+  assert.equal(f.getters.canViewContestDescription, true);
+  assert.equal(f.getters.canViewContest, false);
+  const details = load('views/oj/contest/ContestDetails.vue');
+  assert.equal(details.computed.activeContestTab.get.call({ contestMenuDisabled: true, route_name: 'ContestProblemList' }), 'ContestDetails');
+});
+
+test('confidential overviews stay hidden before start, without entry permission, and after sealing', () => {
+  const f = fixture({ status: -1 });
+  f.state.access = { canViewProblems: true };
+  assert.equal(f.getters.canViewContestDescription, false);
+  f.state.contest.status = 0; f.state.access = null;
+  assert.equal(f.getters.canViewContestDescription, false);
+  f.state.access = { canViewProblems: true };
+  assert.equal(f.getters.canViewContestDescription, true);
+  f.state.contest.status = 1;
+  assert.equal(f.getters.canViewContestDescription, false);
+  f.state.contest.released = true;
+  assert.equal(f.getters.canViewContestDescription, true);
+});
+
+test('the actual overview template renders ordinary pre-contest text and hides confidential text', () => {
+  const Vue = require('vue/dist/vue.common.js');
+  Vue.config.productionTip = false;
+  Vue.config.devtools = false;
+  const template = compiler.parseComponent(fs.readFileSync(path.join(__dirname, '../src/views/oj/contest/ContestDetails.vue'), 'utf8')).template.content;
+  const overview = template.match(/<el-tabs\b[^>]*>[\s\S]*?<\/el-tab-pane>/)[0] + '</el-tabs>';
+  const render = compiler.compileToFunctions(overview);
+  const details = load('views/oj/contest/ContestDetails.vue');
+  const stub = { render(h) { return h('section', this.$slots.default); } };
+  for (const confidential of [false, true]) {
+    const f = fixture({ confidential, status: -1, description: '赛前简介内容' });
+    const vm = new Vue({ ...render,
+      components: { ElTabs: stub, ElTabPane: stub, ElCard: stub,
+        Markdown: { props: ['content'], render(h) { return h('p', this.content); } } },
+      data: () => ({ canViewContestDescription: f.getters.canViewContestDescription,
+        contestMenuDisabled: true, route_name: 'ContestProblemList', contest: f.state.contest }),
+      computed: { activeContestTab: details.computed.activeContestTab },
+      methods: { $t: value => value, tabClick() {} },
+    }).$mount();
+    assert.equal(vm.$el.textContent.includes('赛前简介内容'), !confidential);
+    vm.$destroy();
+  }
+});
+
+test('ordinary overview descriptions refresh without a page reload', async () => {
+  const f = fixture({ confidential: false, status: -1, description: '旧说明' }, true, {
+    getContest: async () => response({ id: 1, confidential: false, auth: 0, status: -1, description: '新说明', now: '2026-10-19T06:59:59Z' }),
+    getContestAccess: async () => response({ canViewProblems: false, canSubmit: false }),
+  });
+  await f.context.dispatch('refreshContestAccess');
+  assert.equal(f.state.contest.description, '新说明');
+  assert.equal(f.getters.canViewContestDescription, true);
+  assert.equal(f.getters.contestMenuDisabled, true);
+});
+
+test('an ordinary contest checks for updated description and status every minute', async t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const f = fixture({ confidential: false, status: -1 });
+  let refreshes = 0;
+  const mixin = load('common/contestAccessPolling.js');
+  const state = createState(mixin, { $options: { name: 'ContestDetails' },
+    $route: { name: 'ContestDetails', params: { contestID: '1' } },
+    $store: { state: { contest: f.state }, getters: f.getters, commit: f.context.commit,
+      dispatch: async () => { refreshes++; } } });
+  mixin.mounted.call(state);
+  t.mock.timers.tick(59000); assert.equal(refreshes, 0);
+  t.mock.timers.tick(1000); await flush(); assert.equal(refreshes, 1);
+  mixin.beforeDestroy.call(state);
+  t.mock.timers.tick(60000); assert.equal(refreshes, 1);
+});
+
 test('a confidential contest requires server password permission and ignores stale entry grants at the end', () => {
   const f = fixture();
   f.state.intoAccess = true;

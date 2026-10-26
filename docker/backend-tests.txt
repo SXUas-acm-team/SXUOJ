@@ -39,5 +39,6 @@ ContestManualPublicationTest
 JudgeTransportCompatibilityTest
 ContestColorUpdateTest
 ContestIdentityTest
+CustomRoleEditTest
 ContestIdentitySchemaCheckTest
 AdminLoginPublicAccessTest

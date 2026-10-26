@@ -142,9 +142,9 @@
           <el-button type="primary" :loading="btnLoading" @click="checkPassword">{{ $t('m.Enter') }}</el-button>
         </el-form>
       </el-card>
-      <el-card v-if="contestAccessReason === 'IDENTITY_REQUIRED' && isAuthenticated" class="identity-entry">
+      <el-card v-if="identityEntryVisible" class="identity-entry">
         <h3>实名参赛校验</h3>
-        <p class="identity-entry-description">赛时提交代码前，请完成身份核验或使用豁免邀请码</p>
+        <p class="identity-entry-description">可在赛前完成身份核验或验证豁免邀请码，比赛开始后即可提交代码</p>
         <el-radio-group v-model="identityMode" :disabled="identityBusy" class="identity-entry-modes">
           <el-radio-button label="identity">学号姓名核验</el-radio-button>
           <el-radio-button label="invitation">豁免邀请码</el-radio-button>
@@ -161,7 +161,7 @@
       </el-card>
       <!-- 判断是否需要密码验证 -->
 
-      <el-tabs v-if="!contestMenuDisabled" @tab-click="tabClick" v-model="route_name">
+      <el-tabs v-if="canViewContestDescription" @tab-click="tabClick" v-model="activeContestTab">
         <el-tab-pane name="ContestDetails" lazy>
           <span slot="label"
             ><i class="el-icon-s-home"></i>&nbsp;{{ $t('m.Overview') }}</span
@@ -547,12 +547,21 @@ export default {
     },
   },
   computed: {
+    activeContestTab: {
+      get() { return this.contestMenuDisabled ? 'ContestDetails' : this.route_name; },
+      set(value) { this.route_name = value; },
+    },
+    identityEntryVisible() {
+      return this.isAuthenticated && !this.passwordFormVisible &&
+        !!(this.$store.state.contest.access && this.$store.state.contest.access.identityRequired);
+    },
     ...mapState({
       contest: (state) => state.contest.contest,
       now: (state) => state.contest.now,
     }),
     ...mapGetters([
       'contestMenuDisabled',
+      'canViewContestDescription',
       'isAuthenticated',
       'isContestReleased',
       'isContestSealed',

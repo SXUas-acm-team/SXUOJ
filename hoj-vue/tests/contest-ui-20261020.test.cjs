@@ -108,6 +108,7 @@ for (const [name, allowed, admin, released, authenticated] of [
     Object.assign(computed, {
       contest: () => ({ id: 1, auth: 1, confidential: true, type: 0, title: 'Contest', description: 'Hidden synopsis' }),
       contestMenuDisabled: () => !allowed, isContestAdmin: () => admin, isSuperAdmin: () => admin,
+      canViewContestDescription: () => allowed, activeContestTab: component.computed.activeContestTab,
       isAuthenticated: () => authenticated, isContestReleased: () => released,
       passwordFormVisible: () => !allowed, userInfo: () => ({ uid: authenticated ? 'viewer' : null }),
       websiteConfig: () => ({ openContestComment: true }), timeStep: () => 1, progressValue: () => 0,

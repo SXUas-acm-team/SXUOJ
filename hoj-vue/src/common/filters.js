@@ -12,7 +12,7 @@ function parseRole(num){
   if(num==1000){
     return '超级管理员'
   }else if(num==1001){
-    return '普通管理员'
+    return '管理员'
   }else if(num==1002){
     return '用户(默认)'
   }else if(num==1003){
@@ -28,6 +28,7 @@ function parseRole(num){
   }else if(num==1008){
     return '题目管理员'
   }
+  return '自定义角色'
 }
 function parseContestType(num){
   if(num==0){

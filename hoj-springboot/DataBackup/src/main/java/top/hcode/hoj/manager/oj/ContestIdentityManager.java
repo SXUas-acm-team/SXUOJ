@@ -48,7 +48,7 @@ public class ContestIdentityManager {
         return uid == null ? null : bindings.selectOne(new QueryWrapper<ContestIdentityBinding>().eq("cid", cid).eq("uid", uid));
     }
     public boolean required(Contest contest, AccountProfile user) {
-        return policies.currentStatus(contest, new Date()) == 0
+        return policies.currentStatus(contest, new Date()) <= 0
                 && enabled(contest.getId()) && !policies.isReleased(contest)
                 && binding(contest.getId(), user == null ? null : user.getUid()) == null
                 && !exempted(contest.getId(), user == null ? null : user.getUid());
@@ -152,7 +152,7 @@ public class ContestIdentityManager {
         // Same contest lock as settings changes: rotation and grant creation cannot race.
         Contest contest = contests.getByIdForUpdate(input.getCid());
         validateEntry(contest, user);
-        if (!enabled(contest.getId()) || policies.currentStatus(contest, new Date()) != 0)
+        if (!enabled(contest.getId()) || policies.currentStatus(contest, new Date()) > 0)
             throw new StatusFailException("本场比赛当前无需豁免核验。");
         reserve("CONTEST_INVITATION_USER:" + user.getUid(), 5);
         reserve("CONTEST_INVITATION_SERVICE", 100);
@@ -165,7 +165,7 @@ public class ContestIdentityManager {
     }
     private void validateEntry(Contest contest, AccountProfile user) throws StatusFailException, StatusForbiddenException {
         if (contest == null || !Boolean.TRUE.equals(contest.getVisible())) throw new StatusFailException("比赛不存在。");
-        if (policies.isConfidential(contest) && policies.currentStatus(contest, new Date()) != 0)
+        if (policies.isConfidential(contest) && policies.currentStatus(contest, new Date()) > 0)
             throw new StatusForbiddenException("保密赛当前不允许入场。");
         if (Boolean.TRUE.equals(contest.getIsGroup()) && !policies.isConfidential(contest)
                 && !ContentAdmin.allowed() && !groups.isGroupMember(user.getUid(), contest.getGid()))

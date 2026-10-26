@@ -436,6 +436,8 @@
           <el-col :span="24">
             <el-form-item :label="$t('m.User_Type')">
               <el-select v-model="selectUser.type" size="small">
+                <el-option v-if="selectUser.type != null && (selectUser.type < 1000 || selectUser.type > 1008)"
+                  label="自定义角色" :value="selectUser.type" :key="selectUser.type"></el-option>
                 <el-option
                   label="超级管理员"
                   :value="1000"
@@ -447,7 +449,7 @@
                   :key="1008"
                 ></el-option>
                 <el-option
-                  label="普通管理员"
+                  label="管理员"
                   :value="1001"
                   :key="1001"
                 ></el-option>
@@ -724,7 +726,7 @@ export default {
       this.currentChange(1);
     },
     getRole(roles) {
-      return roles[0]['id'];
+      return roles && roles.length ? Number(roles[0].id) : null;
     },
     // 打开用户对话框
     openUserDialog(row) {

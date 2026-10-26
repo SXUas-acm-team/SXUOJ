@@ -10,6 +10,7 @@ import hashlib
 import json
 from pathlib import Path
 import secrets
+import time
 import uuid
 from contest_integration import Suite, IntegrationError, sql_value
 
@@ -74,6 +75,7 @@ def main():
     s.success('unverified_can_read_external_info', '/api/get-contest-outsize-info?cid=' + str(cid), 'student')
     s.outside_rank('unverified_can_read_external_rank', cid, 'student')
     language = s.db.scalar('SELECT name FROM language WHERE id=' + str(language_id))
+    student_attempt_time = time.monotonic()
     status, denied = s.request('/api/submit-problem-judge', 'student', {'cid': cid, 'pid': 'A', 'language': language,
         'isRemote': False, 'code': 'int main(){return 0;}'})
     s.check('real_submission_endpoint_enforces_identity', denied.get('status') != 200 and '核验' in denied.get('msg', ''))
@@ -86,6 +88,8 @@ def main():
     access = s.success('exempt_access', '/api/get-contest-access?cid=' + str(cid), 'second')
     s.check('exempt_user_can_submit_without_fabricated_identity', access['canSubmit'] is True and s.db.scalar(
         'SELECT COUNT(*) FROM contest_identity_binding WHERE cid=' + str(cid)) == '0')
+    s.success('exempt_user_can_really_submit', '/api/submit-problem-judge', 'second',
+        {'cid': cid, 'pid': 'A', 'language': language, 'isRemote': False, 'code': 'int main(){return 0;}'})
     config['invitationPassword'] = 'synthetic-invite-two'
     s.success('admin_rotates_invitation', path, 'admin', config, 'PUT')
     access = s.success('rotated_exemption_access', '/api/get-contest-access?cid=' + str(cid), 'second')
@@ -124,6 +128,10 @@ def main():
             s.check(label, False)
     access = s.success('verified_access_description', '/api/get-contest-access?cid=' + str(cid), 'student')
     s.check('verified_user_can_view_and_submit', access['canViewProblems'] is True and access['canSubmit'] is True)
+    # The rejected attempt above also consumes the ordinary per-user submission interval.
+    time.sleep(max(0, 11 - (time.monotonic() - student_attempt_time)))
+    s.success('verified_user_can_really_submit', '/api/submit-problem-judge', 'student',
+        {'cid': cid, 'pid': 'A', 'language': language, 'isRemote': False, 'code': 'int main(){return 0;}'})
     s.success('verified_can_list_problems', '/api/get-contest-problem?cid=' + str(cid), 'student')
     s.success('verified_can_read_statement', '/api/get-contest-problem-details?cid=' + str(cid) + '&displayId=A', 'student')
     s.denied('identity_cannot_be_rebound', '/api/contest-identity/verify', 'student', {'cid': cid, 'studentNumber': 'other', 'name': '其他姓名'})

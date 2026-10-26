@@ -123,6 +123,15 @@ def main():
         assets = re.findall(rb'(?:src|href)=["\'](/assets/[^"\']+)', body)
         passed("new_image_has_hashed_assets", bool(assets))
         passed("hashed_asset_is_served", request(host_port, assets[0].decode())[0] == 200)
+        status, headers, manifest = request(host_port, '/version.json?test=uncached')
+        version = json.loads(manifest)['version']
+        passed("version_manifest_is_valid_and_not_cached", status == 200
+               and bool(re.fullmatch('[a-f0-9]{32}', version)) and headers.get('Cache-Control') == 'no-store')
+        app_script = next(asset.decode() for asset in assets if b'/js/app.' in asset and asset.endswith(b'.js'))
+        passed("version_manifest_matches_running_application", version.encode() in request(host_port, app_script)[2])
+        status, headers, body = request(host_port, '/contest/7/problems')
+        passed("deep_links_use_uncached_html", status == 200 and b'<html' in body.lower()
+               and headers.get('Cache-Control') == 'no-store')
         status, headers, body = request(host_port, "/api/ping")
         upstream_body = json.loads(body)
         passed("legacy_backend_environment_is_honored", status == 200 and upstream_body["source"] == "test-upstream")
@@ -132,6 +141,7 @@ def main():
         passed("scrollboard_redirect_keeps_query", status == 302 and "/scrollBoard/?cid=7&removeStar=true" in headers.get("Location", ""))
         passed("scrollboard_html_is_packaged", b"Scroll Board - HOJ" in request(host_port, "/scrollBoard/")[2])
         passed("scrollboard_script_is_packaged", request(host_port, "/scrollBoard/js/scrollboard.js")[0] == 200)
+        passed("unversioned_scrollboard_script_is_not_cached", request(host_port, "/scrollBoard/js/scrollboard.js")[1].get('Cache-Control') == 'no-store')
         passed("scrollboard_styles_are_packaged", request(host_port, "/scrollBoard/css/scrollboard.css")[0] == 200)
         for suffix, changes in (("injection", {"BACKEND_UPSTREAM": "upstream:8089;return 200;"}),
                                 ("bad-port", {"BACKEND_SERVER_PORT": "0"}),
