@@ -1,6 +1,23 @@
 # SXUOJ 后端 Docker 构建与升级
 
-2026-10-20 版本请先看[简明线上更新手册](../docs/upgrade-2026-10-20.md)，按“检查两张表 → 必要时调整旧密钥 → 替换前后端镜像”操作；不要用本地测试 Compose 覆盖线上部署。
+线上更新按“检查数据库表 → 替换前后端镜像”操作；原 Compose、`.env`、密码、挂载和评测机继续沿用。不要用本地测试 Compose 覆盖线上部署。
+
+数据库迁移文件均在本目录：
+
+- [contest-security-schema.sql](contest-security-schema.sql)：保密赛权限与题目资源保护表。
+- [contest-identity-v1.1.0.sql](contest-identity-v1.1.0.sql)：实名核验配置、身份绑定、豁免邀请码与豁免记录四张表。
+
+在 OJ 正在使用的数据库中执行相应 SQL；已经建好且结构一致的表无需重建。缺表时后端会拒绝启动。所有新表都就绪后，只修改原 Compose 中前后端服务的 `image` 为要部署的明确版本，并在原目录执行：
+
+```bash
+docker compose pull hoj-backend hoj-frontend
+docker compose up -d --no-deps --force-recreate hoj-backend hoj-frontend
+docker compose ps hoj-backend hoj-frontend
+```
+
+原来使用的 `-f`、`--env-file`、`-p` 参数继续带上。只修改仓库源码、未发布新镜像时，不会更新线上容器。
+
+实名核验接口地址和 API 密钥在比赛设置中填写；密钥不会进入公开源码。后端的 `/hoj/log/backend/.runtime-secrets/identity.key` 应随日志卷保留并与数据库一同备份，多实例部署需共享同一份加密密钥。后端需要能解析核验域名并访问 HTTPS。
 
 这套流程面向**已经运行的 HOJ/SXUOJ Docker Compose 部署**：GitHub Actions 自动测试、打包和发布后端镜像，服务器用一条命令替换 `hoj-backend`。原 Compose 文件、数据库、Redis、Nacos、判题容器、网络、端口和数据卷继续沿用。
 
@@ -65,7 +82,7 @@ chmod 600 /opt/hoj/.env /opt/hoj/backend.env
 
 ## 4. 一键替换后端镜像
 
-本次比赛保密版本必须先按[比赛保密权限生产升级手册](../docs/contest-security-upgrade-2026-10-19.md)迁移并复检两张新表，再更新后端和前端。部署脚本不执行 SQL 迁移；缺表时新后端会拒绝启动。建议使用已验证的版本标签或 digest，避免直接跟随 `latest`。
+更新前必须执行并复检本目录相应的数据库迁移，再更新后端和前端。部署脚本不执行 SQL 迁移；缺表时新后端会拒绝启动。建议使用已验证的版本标签或 digest，避免直接跟随 `latest`。
 
 先做只读检查（不拉镜像、不创建快照、不重建容器）：
 
@@ -91,7 +108,7 @@ python3 deploy/backend.py update \
 
 ## 5. 回滚与日常管理
 
-启用过任何保密比赛后（包括验收赛），回退目标必须具备同样的保密鉴权能力。旧后端会忽略新表并可能暴露封存内容；更新失败时的自动恢复目标也受此限制。若恢复点仍是旧后端，先维护阻断，再按[生产升级手册的回退限制](../docs/contest-security-upgrade-2026-10-19.md#9-回滚与维护阻断)处理，不能直接执行下面的回滚命令。
+启用过保密比赛或实名参赛校验后（包括验收赛），回退目标必须具备同样的权限校验能力。旧后端会忽略新表并可能暴露封存内容或绕过赛时核验；更新失败时的自动恢复目标也受此限制。若恢复点仍是旧后端，先停止相关比赛的对外访问，再协调回退，不能直接执行下面的回滚命令。保留数据库新表和加密密钥文件。
 
 ```bash
 python3 deploy/backend.py status \

@@ -37,8 +37,7 @@ deploy/*.env
 /main/
 /main.zip
 /sxuoj-frontend*.tar
-extand/*.xls
-extand/*.xlsx
+/.tmp-identity/
 SECURITY_REMEDIATION.md
 hoj-springboot/local.ps1
 hoj-springboot/security-deployment.md

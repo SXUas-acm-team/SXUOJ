@@ -4,6 +4,6 @@
 
 后端自动打包、Docker 镜像发布、环境变量导入和旧 Compose 一键升级/回滚：参见 [部署指南](deploy/README.md)。
 
-主分支已统一此前功能和修复，具体见 [分支合并记录](docs/repository-merge-2026-10-21.md)。最近更新见 [Markdown 浅色预览更新说明](docs/update-2026-10-21.1.md)。
+`master` 为统一维护的主分支，已包含比赛保密权限、实名参赛校验、认证姓名和多学号前缀打星，以及管理员权限、赛前简介和前端缓存更新修复。
 
-`v1.1.0` 新增比赛学号姓名入场核验、认证姓名及学号前缀打星，并扩展普通管理员的内容管理权限。更新请看 [v1.1.0 简明更新手册](docs/upgrade-v1.1.0.md)；提交和版本号约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+数据库建表与镜像更新步骤统一见 [部署指南](deploy/README.md)；提交和版本号约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
